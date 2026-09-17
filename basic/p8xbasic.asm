@@ -238,6 +238,14 @@ TOK_RGB   = $B1          ; ($B0 was SCREEN: unassigned)
 TOK_IMAGE = $B2
 TOK_GL    = $B3
 TOK_GLRD  = $FB          ; GLRD: a bare factor; $B4.. are the GL verbs (glvtab.inc)
+; Layer-visibility statements. The GL verbs fill $B4..$F5 (GLV0..GLV0+GLVN-1) and
+; GLRD owns $FB, so the four layer keywords take the free top tokens $FC..$FF.
+; They are NOT in STMTTAB (that ends at $B3) nor in the GL-verb block; STMT and
+; CKLEAD route them explicitly (see st_layer / ckd_lyr).
+TOK_TEXTON = $FC         ; TEXTON     -> TXEN 1  (text overlay ON)
+TOK_TEXTOFF= $FD         ; TEXTOFF    -> TXEN 0
+TOK_GRAPHON= $FE         ; GRAPHICSON -> GXEN 1  (drawing bitmap VISIBLE)
+TOK_GRAPHOFF=$FF         ; GRAPHICSOFF-> GXEN 0
 NTOK      = 52           ; tokens $80..$B3 have STMTTAB / FACTAB entries
 
 ; relation bits (REL) and operator masks (RELM)
@@ -279,6 +287,10 @@ bs_go:  LDA  #$03            ; ACIA master reset
         JSR  GLPUT           ;   which the native camera would near-clip
         LDA  #0
         JSR  GLPUT
+        JSR  GLPUT
+        LDA  #$57            ; GXEN 0: the drawing bitmap starts HIDDEN, so a fresh
+        JSR  GLPUT           ;   BASIC shows only the text overlay -- GRAPHICSON
+        LDA  #0              ;   reveals it (the two planes then compose)
         JSR  GLPUT
 bnr_ng: LDP1 #BANNER
         JSR  PUTS
@@ -346,8 +358,14 @@ STMT:   JSR  SKIPSP
         JNC  st_low
         LDB  #GLVN
         CMP
-        JC   st_what         ; past the verb block (GLRD, unassigned)
+        JC   st_layer        ; past the verb block: GLRD/unassigned, or a layer token
         JMP  DOGLV           ; verb index in A
+st_layer:                    ; token >= GLV0+GLVN: only $FC..$FF are legal (layer)
+        LDA  (P2)
+        LDB  #TOK_TEXTON
+        SUB
+        JNC  st_what         ; < $FC -> genuinely unassigned ("?")
+        JMP  DOLAYER         ; $FC..$FF -> TEXTON/TEXTOFF/GRAPHICSON/GRAPHICSOFF
 st_low: LDA  (P2)
         LDB  #$80
         SUB
@@ -422,7 +440,15 @@ st_help:INP2
 
 ; BYE - leave BASIC. Under P8X/OS: back to the shell that ran us, stack
 ; restored, CWD and redirection intact. Disk boot / standalone: the reset vector.
-DOBYE:  LDA  #>MONITOR
+DOBYE:  LDA  GLIDR           ; leaving BASIC: restore the drawing bitmap VISIBLE.
+        LDB  #'G'            ;   BASIC hid it (GXEN 0 default); the OS/shell and
+        CMP                  ;   other apps expect it on, so re-enable on the way out.
+        JNZ  by_go
+        LDA  #$57
+        JSR  GLPUT
+        LDA  #1
+        JSR  GLPUT
+by_go:  LDA  #>MONITOR
         JZ   by_rst
         LPW3 SPSAV
         RTS
@@ -1529,6 +1555,35 @@ glv_vw: LDA  GLCNT
         JSR  GLVSEP
         JSR  GLPW
         JMP  glv_vw
+
+; ---- the layer-visibility statements (tokens $FC..$FF, no arguments) ---------
+; TEXTON/TEXTOFF flip the text overlay (TXEN $50); GRAPHICSON/GRAPHICSOFF flip
+; the drawing bitmap's visibility (GXEN $57). Each emits its opcode then a 1/0
+; enable byte -- no expression args. The token is stashed in GLOP (GLPUT clobbers
+; only GLTMP + A), then decoded: bit1 of the token picks the plane ($FC/$FD = text,
+; $FE/$FF = graphics), bit0 picks OFF. The bitmap keeps accepting draws while
+; hidden (visibility is scanout-only), so GRAPHICSOFF hides without erasing.
+DOLAYER:LDA  (P2)            ; the layer token $FC..$FF
+        STA  GLOP            ; survives GLPUT (which only touches GLTMP + A)
+        INP2                 ; consume it
+        JSR  GCHECK          ; a display fitted? (else "?" and unwind)
+        LDA  GLOP
+        LDB  #TOK_GRAPHON    ; $FE
+        CMP
+        JC   dl_gx           ; >= $FE -> GRAPHICS visibility (GXEN $57)
+        LDA  #$50            ; else the TEXT overlay (TXEN $50)
+        JMP  dl_op
+dl_gx:  LDA  #$57
+dl_op:  JSR  GLPUT           ; the opcode
+        LDA  GLOP
+        LDB  #1
+        AND
+        JNZ  dl_off          ; odd token ($FD/$FF) -> OFF
+        LDA  #1
+        JMP  dl_put
+dl_off: LDA  #0
+dl_put: JSR  GLPUT           ; the enable byte (1 = on, 0 = off)
+        JMP  glv_dn          ; drain the busy bit, then RTS
 
 ; GLVSEP - the comma rule + an expression: the first argument follows the
 ;   keyword bare, every later one needs its comma. Result in RESULT.
@@ -3474,8 +3529,14 @@ CKLEAD: LDA  #0
         JNC  ckd_low
         LDB  #GLVN
         CMP
-        JC   ckd_bad         ; GLRD / unassigned
+        JC   ckd_lyr         ; past the verb block: GLRD/unassigned, or a layer token
 ckd_ok: CLC                  ; a GL verb
+        RTS
+ckd_lyr:LDA  (P2)            ; $FC..$FF (layer statements) may lead; below that = illegal
+        LDB  #TOK_TEXTON
+        SUB
+        JNC  ckd_bad         ; < $FC -> GLRD / unassigned
+        CLC
         RTS
 ckd_low:LDA  (P2)
         LDB  #$80
@@ -3617,6 +3678,14 @@ KWTAB:
         .byte $FB
         .ascii "GL"
         .byte $B3
+        .ascii "TEXTON"
+        .byte $FC
+        .ascii "TEXTOFF"
+        .byte $FD
+        .ascii "GRAPHICSON"
+        .byte $FE
+        .ascii "GRAPHICSOFF"
+        .byte $FF
         .byte $00
 
         .include "glvtab.inc"
@@ -3742,6 +3811,8 @@ MHELP:  .byte CR,LF
         .ascii "  raw: MOVE3 x,y,0 then TEXT s$ (TSIZE COMPOUNDS, MDIDEN resets)"
         .byte CR,LF
         .ascii "  IMAGE x,y,f$   draw a P8I file, bottom-left at x,y"
+        .byte CR,LF
+        .ascii "  LAYERS: GRAPHICSON/OFF (drawing, default OFF)  TEXTON/OFF (text overlay)"
         .byte CR,LF
         .ascii "  + the PGC verbs native: MOVE DRAW POLY RECT AREA TEXT"
         .byte CR,LF

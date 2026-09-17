@@ -55,7 +55,10 @@ python3 "$ROOT/tools/p8xfs.py" put bgfx.img bgfx.bin --name /bin/bgfx.bin \
 # composite over the framebuffer these pixel probes check.
 GCONEN=$(python3 "$ROOT/tools/memaddr.py" GCONEN)
 LAB=$(printf 'E %s\r00.G 014E\r' "$GCONEN")
-printf '%sB\rbgfx\r10 COLOR 0,63,0\r20 CLS\r30 BOX 20,20,120,120,FILL\r40 COLOR RGB(31,0,0)\r50 BOX 200,20,300,120,NOFILL\r60 COLOR 0,0,31\r70 LINE 20,240,458,240\r80 END\rRUN\rLIST\rFILL\rBYE\r' "$LAB" \
+# BASIC cold-starts with the drawing bitmap HIDDEN (GXEN 0 default); a program
+# that wants its pixels on the panel says GRAPHICSON. The PPM probes below read
+# the COMPOSITED scanout, so without it every drawn pixel would read back black.
+printf '%sB\rbgfx\r5 GRAPHICSON\r10 COLOR 0,63,0\r20 CLS\r30 BOX 20,20,120,120,FILL\r40 COLOR RGB(31,0,0)\r50 BOX 200,20,300,120,NOFILL\r60 COLOR 0,0,31\r70 LINE 20,240,458,240\r80 END\rRUN\rLIST\rFILL\rBYE\r' "$LAB" \
     > bgfx.in
 ../p8xemu -N -i bgfx.in -c bgfx.img -l 120000000 -g bgfx.ppm eeprom.bin > bgfx.out 2>/dev/null || true
 
@@ -116,7 +119,7 @@ PY
 # hands them back THROUGH BASIC'S SIGNED INTEGERS -- $F81F magenta prints as
 # -2017, which is the documented wart (STAGE6-DESIGN.md), asserted here so it
 # stays a wart and not a surprise.
-printf '%sB\rbgfx\r10 CLS\r20 COLOR RGB(31,0,0)\r40 BOX 10,10,80,80,FILL\r50 COLOR RGB(31,0,31)\r60 CIRCLE 240,136,100,FILL\r70 COLOR RGB(0,63,0)\r80 CIRCLE 240,136,120\r90 PIXELW 400,40\r100 PRINT PIXELR(240,136)\r110 PRINT PIXELR(400,40)\r120 PRINT PIXELR(0,271)\r130 PRINT PIXELR(14,14)\r140 END\rRUN\rLIST\rBYE\r' "$LAB" \
+printf '%sB\rbgfx\r5 GRAPHICSON\r10 CLS\r20 COLOR RGB(31,0,0)\r40 BOX 10,10,80,80,FILL\r50 COLOR RGB(31,0,31)\r60 CIRCLE 240,136,100,FILL\r70 COLOR RGB(0,63,0)\r80 CIRCLE 240,136,120\r90 PIXELW 400,40\r100 PRINT PIXELR(240,136)\r110 PRINT PIXELR(400,40)\r120 PRINT PIXELR(0,271)\r130 PRINT PIXELR(14,14)\r140 END\rRUN\rLIST\rBYE\r' "$LAB" \
     > bgfx2.in
 ../p8xemu -N -i bgfx2.in -c bgfx.img -l 120000000 -g bgfx2.ppm eeprom.bin > bgfx2.out 2>/dev/null || true
 
@@ -214,7 +217,7 @@ PY
 # pure GL emission) -- must place text EXACTLY even after hostile state
 # (a stale TSIZE/TANGLE and a RESETF), because it resets the matrix and
 # camera itself.
-printf '%sB\rbgfx\r10 CLS\r20 COLOR RGB(31,0,0)\r30 MOVE3 10,10,0 : TEXT "A"\r40 COLOR RGB(0,63,0)\r50 MOVE3 40,10,0 : TEXT "a"\r60 COLOR RGB(0,0,31)\r70 TSIZE 512\r80 MOVE3 30,20,0 : TEXT "A"\r90 MDIDEN\r100 COLOR RGB(31,0,0)\r110 MOVE3 470,80,0 : TEXT "WW"\r120 MOVE3 5,110,0 : TEXT ""\r122 TSIZE 20 : TANGLE 45 : RESETF\r124 COLOR RGB(31,0,31)\r126 GTEXT 200,150,1,"A"\r128 GTEXT 260,140,2,"A"\r130 END\rRUN\rLIST\rBYE\r' "$LAB" \
+printf '%sB\rbgfx\r5 GRAPHICSON\r10 CLS\r20 COLOR RGB(31,0,0)\r30 MOVE3 10,10,0 : TEXT "A"\r40 COLOR RGB(0,63,0)\r50 MOVE3 40,10,0 : TEXT "a"\r60 COLOR RGB(0,0,31)\r70 TSIZE 512\r80 MOVE3 30,20,0 : TEXT "A"\r90 MDIDEN\r100 COLOR RGB(31,0,0)\r110 MOVE3 470,80,0 : TEXT "WW"\r120 MOVE3 5,110,0 : TEXT ""\r122 TSIZE 20 : TANGLE 45 : RESETF\r124 COLOR RGB(31,0,31)\r126 GTEXT 200,150,1,"A"\r128 GTEXT 260,140,2,"A"\r130 END\rRUN\rLIST\rBYE\r' "$LAB" \
     > bgfx4.in
 ../p8xemu -N -i bgfx4.in -c bgfx.img -l 400000000 -g bgfx4.ppm eeprom.bin > bgfx4.out 2>/dev/null || true
 
@@ -346,7 +349,7 @@ MKPIC
 python3 "$ROOT/tools/p8xfs.py" put bgfx.img pic.p8i  --name /PIC.P8I  >/dev/null
 python3 "$ROOT/tools/p8xfs.py" put bgfx.img junk.bin --name /JUNK.BIN >/dev/null
 
-printf '%sB\rbgfx\r10 CLS\r20 IMAGE 100,217,"/PIC.P8I"\r30 IMAGE 476,-2,"/PIC.P8I"\r40 IMAGE 0,0,"/JUNK.BIN"\r50 IMAGE 0,0,"/NOPE"\r60 END\rRUN\rLIST\rBYE\r' "$LAB" \
+printf '%sB\rbgfx\r5 GRAPHICSON\r10 CLS\r20 IMAGE 100,217,"/PIC.P8I"\r30 IMAGE 476,-2,"/PIC.P8I"\r40 IMAGE 0,0,"/JUNK.BIN"\r50 IMAGE 0,0,"/NOPE"\r60 END\rRUN\rLIST\rBYE\r' "$LAB" \
     > bgfx8.in
 ../p8xemu -N -i bgfx8.in -c bgfx.img -l 200000000 -g bgfx8.ppm eeprom.bin > bgfx8.out 2>/dev/null || true
 
@@ -399,4 +402,66 @@ if bad:
 print("BASIC-GFX TEST: image ok (placement, colours, header rejects, clipping)")
 PY
 
-echo "BASIC-GFX TEST: PASS (draw, pixelw, circle, ellipse, rgb, pixelr, text, full screen, image)"
+# --- part 7: GRAPHICS layer visibility (GXEN) --------------------------------
+# The new TEXTON/TEXTOFF/GRAPHICSON/GRAPHICSOFF statements flip the two scanout
+# layers. BASIC cold-starts with the drawing bitmap HIDDEN (GRAPHICS default OFF);
+# drawing still lands in bitmap RAM -- visibility is scanout-only. NOTE these two
+# runs deliberately END WITHOUT BYE: BYE restores GXEN 1 for the OS on the way
+# out (as it must), so the frame is dumped at the -l cap while the program's own
+# layer state still stands.
+#
+# 7a: draw a red box with NO GRAPHICSON. Default OFF, so the composited panel
+#     (PPM) reads BLACK at the box centre -- yet PIXELR reads the box's red back
+#     from bitmap RAM: the draw happened, into a hidden layer.
+printf '%sB\rbgfx\r10 CLS\r20 COLOR RGB(31,0,0)\r30 BOX 40,40,160,160,FILL\r40 PRINT "P";PIXELR(100,100)\r50 END\rRUN\r' "$LAB" \
+    > bgfx9.in
+../p8xemu -N -i bgfx9.in -c bgfx.img -l 60000000 -g bgfx9.ppm eeprom.bin > bgfx9.out 2>/dev/null || true
+
+python3 - <<'PY' || exit 1
+import sys
+bad = []
+out = open("bgfx9.out","rb").read().replace(b"\r", b"")
+# PIXELR(100,100) reads bitmap RAM, unaffected by GXEN: $F800 red = -2048 signed.
+if b"\nP-2048\n" not in out:
+    i = out.find(b"RUN")
+    bad.append("default-off: PIXELR is not -2048 (red drew into RAM); saw %r" % out[i:i+40])
+d  = open("bgfx9.ppm","rb").read(); px = d[d.index(b"255\n")+4:]; W = 480
+def fb(x,y): i=(y*W+x)*3; return tuple(px[i:i+3])
+# window (100,100) -> screen (100,171), inside the box. Default OFF -> black.
+if fb(100,171) != (0,0,0):
+    bad.append("default GRAPHICS OFF but box centre composited as %s (hidden bitmap leaked)" % (fb(100,171),))
+if bad:
+    print("BASIC-GFX TEST: FAIL")
+    for b in bad: print("  " + b)
+    sys.exit(1)
+print("BASIC-GFX TEST: default graphics OFF ok (draws into hidden RAM, scanout black)")
+PY
+
+# 7b: the same box WITH GRAPHICSON now shows red; the four layer keywords all
+#     round-trip through LIST (KWTAB entries present). GRAPHICSOFF/GRAPHICSON and
+#     TEXTON/TEXTOFF are toggled mid-program to prove each tokenises and runs; the
+#     program leaves the bitmap visible (last statement is GRAPHICSON).
+printf '%sB\rbgfx\r5 GRAPHICSON\r10 CLS\r20 COLOR RGB(31,0,0)\r30 BOX 40,40,160,160,FILL\r40 TEXTON\r50 TEXTOFF\r60 GRAPHICSOFF\r65 GRAPHICSON\r70 END\rRUN\rLIST\r' "$LAB" \
+    > bgfx10.in
+../p8xemu -N -i bgfx10.in -c bgfx.img -l 60000000 -g bgfx10.ppm eeprom.bin > bgfx10.out 2>/dev/null || true
+
+python3 - <<'PY' || exit 1
+import sys
+bad = []
+out = open("bgfx10.out","rb").read().replace(b"\r", b"")
+for kw in [b"5 GRAPHICSON", b"40 TEXTON", b"50 TEXTOFF", b"60 GRAPHICSOFF", b"65 GRAPHICSON"]:
+    if out.count(kw) < 2:                # once typed, once from LIST
+        bad.append("LIST did not round-trip %r" % kw.decode())
+d  = open("bgfx10.ppm","rb").read(); px = d[d.index(b"255\n")+4:]; W = 480
+def fb(x,y): i=(y*W+x)*3; return tuple(px[i:i+3])
+# GRAPHICSON: the same box centre now composites its red to the panel.
+if fb(100,171) != (255,0,0):
+    bad.append("GRAPHICSON but box centre composited as %s, want red - reveal failed" % (fb(100,171),))
+if bad:
+    print("BASIC-GFX TEST: FAIL")
+    for b in bad: print("  " + b)
+    sys.exit(1)
+print("BASIC-GFX TEST: GRAPHICSON reveal ok (box visible; TEXT*/GRAPHICS* round-trip)")
+PY
+
+echo "BASIC-GFX TEST: PASS (draw, pixelw, circle, ellipse, rgb, pixelr, text, full screen, image, layers)"

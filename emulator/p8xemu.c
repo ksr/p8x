@@ -238,7 +238,9 @@ static uint8_t  gmode;                 /* 10f LINFUN pixel-write mode */
 #define TXCOLS  (GW_MAX / CHARGEN_CW)      /* 80 */
 #define TXROWS  (GH_MAX / CHARGEN_CH)      /* 34 */
 static uint8_t  txram[TXROWS * TXCOLS];    /* one ASCII code per cell (0 = blank) */
-static int      tx_en;                     /* overlay enabled (TXEN) */
+static int      tx_en;                     /* text overlay enabled (TXEN) */
+static int      gx_en = 1;                  /* GRAPHICS (bitmap) layer VISIBLE (GXEN); the bitmap
+                                              still accepts draws when hidden -- this is scanout-only */
 static int      tx_c0, tx_r0, tx_cw, tx_ch;/* clip/scroll window, in cells (TXWIN) */
 static uint16_t tx_fg = 0xFFFF;            /* glyph colour, RGB565 (TXCOL) */
 static int      tx_cx, tx_cy;              /* write cursor, absolute cell (TXAT) */
@@ -263,14 +265,15 @@ static void gpu_tx_scroll(void){
    cell has an inked pixel, else the bitmap pixel unchanged. THE co-sim spec. */
 static uint16_t gpu_tx_sample(int x, int y, uint16_t base){
     int col, row; uint8_t ch, bits;
-    if(!tx_en) return base;
+    uint16_t bg = gx_en ? base : 0;        /* GXEN: the bitmap layer is black when hidden */
+    if(!tx_en) return bg;
     col = x / CHARGEN_CW; row = y / CHARGEN_CH;
     if(col < tx_c0 || col >= tx_c0 + tx_cw ||
-       row < tx_r0 || row >= tx_r0 + tx_ch) return base;
+       row < tx_r0 || row >= tx_r0 + tx_ch) return bg;
     ch = txram[row*TXCOLS + col];
-    if(ch < CHARGEN_LO || ch >= CHARGEN_LO + CHARGEN_N) return base;   /* blank */
+    if(ch < CHARGEN_LO || ch >= CHARGEN_LO + CHARGEN_N) return bg;   /* blank cell */
     bits = CHARGEN[(ch - CHARGEN_LO)*CHARGEN_CH + (y % CHARGEN_CH)];
-    return (bits & (1 << (5 - (x % CHARGEN_CW)))) ? tx_fg : base;
+    return (bits & (1 << (5 - (x % CHARGEN_CW)))) ? tx_fg : bg;
 }
 
 /* Stage 8a MDU ($FF30-$FF3F): hardware muldiv, bit-exact to lib_g3d's
@@ -877,7 +880,7 @@ static int gl_cmdlen(const uint8_t *p, int n){
     /* text-overlay plane (hex-only; deliberately NOT in gen_glkw, so it stays
        out of BASIC's token ABI and the RTL keyword ROM -- see gpu_tx_sample) */
     case 0x55: case 0x56: return 1;        /* TXCLR / TXSCR */
-    case 0x50: case 0x54: return 2;        /* TXEN en / TXPUT ch */
+    case 0x50: case 0x54: case 0x57: return 2;  /* TXEN en / TXPUT ch / GXEN en */
     case 0x53: return 3;                    /* TXAT col row */
     case 0x52: return 4;                    /* TXCOL r g b */
     case 0x51: return 5;                    /* TXWIN c0 r0 cw ch */
@@ -996,6 +999,7 @@ static int gl_exec2(const uint8_t *p, int n){
         return 2;
     case 0x55: memset(txram, 0, sizeof txram); return 1;          /* TXCLR */
     case 0x56: gpu_tx_scroll(); return 1;                         /* TXSCR window up 1 */
+    case 0x57: NEED(2); gx_en = p[1] ? 1 : 0; return 2;          /* GXEN en: bitmap layer visible */
     /* ---- stage 10e: read-back ---- */
     case 0x61: NEED(2);                    /* FLAGRD n -> RB (man gl table) */
         switch(p[1]){

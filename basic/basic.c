@@ -94,6 +94,12 @@
 //#define T_IMAGE 0xB2
 //#define T_GL 0xB3
 //#define T_GLRD 0xFB
+/* Layer-visibility statements. GL verbs occupy $B4..$F5 (GLV0..GLV0+GLVN-1) and
+   GLRD is $FB, so the four layer keywords take the free top tokens $FC..$FF. */
+//#define T_TEXTON 0xFC
+//#define T_TEXTOFF 0xFD
+//#define T_GRAPHON 0xFE
+//#define T_GRAPHOFF 0xFF
 /* relation bits */
 //#define R_LT 1
 //#define R_EQ 2
@@ -114,7 +120,9 @@ char kwmain[] = {
     'C','O','L','O','R',0xA6, 'N','O','F','I','L','L',0xA9, 'B','O','X',0xA7,
     'F','I','L','L',0xA8, 'C','L','S',0xAA, 'P','I','X','E','L','W',0xAB,
     'C','I','R','C','L','E',0xAC, 'P','I','X','E','L','R',0xAE, 'G','T','E','X','T',0xAF,
-    'R','G','B',0xB1, 'I','M','A','G','E',0xB2, 'G','L','R','D',0xFB, 'G','L',0xB3, 0 };
+    'R','G','B',0xB1, 'I','M','A','G','E',0xB2, 'G','L','R','D',0xFB, 'G','L',0xB3,
+    'T','E','X','T','O','N',0xFC, 'T','E','X','T','O','F','F',0xFD,
+    'G','R','A','P','H','I','C','S','O','N',0xFE, 'G','R','A','P','H','I','C','S','O','F','F',0xFF, 0 };
 char glwtab[] = { 0xB3,0x00,0x00,0xDF,0x01,0x00,0x00,0x0F,0x01,
                   0xB2,0x00,0x00,0xDF,0x01,0x00,0x00,0x0F,0x01,
                   0x06,0x1F,0x3F,0x1F };
@@ -299,7 +307,9 @@ int cklead() {                           /* may the token at tp start a statemen
     c = *tp & 255;
     if (c == 0) return 0;
     if (c == T_REM) return 1;
-    if (c >= GLV0) { if (c < GLV0 + GLVN) return 0; return -1; }
+    if (c >= GLV0) { if (c < GLV0 + GLVN) return 0;   /* a GL verb */
+                     if (c >= T_TEXTON) return 0;      /* TEXTON..GRAPHICSOFF ($FC..$FF) */
+                     return -1; }
     if (c & 128) {
         if (c == T_THEN || c == T_TO || c == T_STEP || c == T_ABS || c == T_RND || c == T_PEEK ||
             c == T_CHRS || c == T_LEFTS || c == T_RIGHTS || c == T_MIDS || c == T_LEN || c == T_ASC ||
@@ -1086,10 +1096,16 @@ int stmt() {
     if (c == T_GTEXT) return st_gtext();
     if (c == T_GL) return st_gl();
     if (c == T_IMAGE) return st_image();
+    /* layer visibility: TEXT = overlay (TXEN 0x50), GRAPHICS = bitmap (GXEN 0x57).
+       Both composite (text over bitmap); the bitmap still accepts draws while hidden. */
+    if (c == T_TEXTON)   { tp = tp + 1; if (!glchk()) return 0; glput(0x50); glput(1); return gldrain(); }
+    if (c == T_TEXTOFF)  { tp = tp + 1; if (!glchk()) return 0; glput(0x50); glput(0); return gldrain(); }
+    if (c == T_GRAPHON)  { tp = tp + 1; if (!glchk()) return 0; glput(0x57); glput(1); return gldrain(); }
+    if (c == T_GRAPHOFF) { tp = tp + 1; if (!glchk()) return 0; glput(0x57); glput(0); return gldrain(); }
     if (c == T_RUN) return st_run();
     if (c == T_LIST) { tp = tp + 1; list(); outs("Ok\r\n"); return 0; }
     if (c == T_NEW) { tp = tp + 1; newprog(); outs("Ok\r\n"); return 0; }
-    if (c == T_HELP) { tp = tp + 1; outs("\r\nSTATEMENTS: PRINT LET IF/THEN FOR/TO/STEP NEXT\r\n  GOTO GOSUB RETURN INPUT POKE REM END\r\nFILES: OPEN name OUTPUT|INPUT : PRINT# : INPUT# : CLOSE : EOF(n)\r\nCOMMANDS: RUN LIST NEW SAVE LOAD HELP BYE\r\nFUNCTIONS: ABS(x) RND(n) PEEK(a)\r\n  LEN ASC CHR$ LEFT$ RIGHT$ MID$ STR$ VAL\r\nGRAPHICS (window coords, y UP 0-271): COLOR r,g,b : CLS\r\n  LINE x0,y0,x1,y1   BOX x0,y0,x1,y1[,FILL|,NOFILL]\r\n  CIRCLE x,y,r[,ry][,FILL]  PIXELW x,y  PIXELR(x,y)  RGB(r,g,b)\r\n  GTEXT x,y,size,s$  easy 2D text (window coords, absolute size)\r\n  raw: MOVE3 x,y,0 then TEXT s$ (TSIZE COMPOUNDS, MDIDEN resets)\r\n  IMAGE x,y,f$   draw a P8I file, bottom-left at x,y\r\n  + the PGC verbs native: MOVE DRAW POLY RECT AREA TEXT\r\n    LINPAT p (dash bits)  LINFUN m (0=set 1=compl 2=OR 3=AND 4=XOR)\r\n    and the rest - man basic / man gl\r\n  SCREEN IS 480x272 RGB565 - COLOR r,g,b (0-31,0-63,0-31)\r\n  or COLOR c, one PACKED value - from RGB() or PIXELR()\r\nSTRINGS: A$ B$ (assign, + concat, compare)\r\nOPERATORS: + - * / %  = <> < > <= >=\r\n"); return 0; }
+    if (c == T_HELP) { tp = tp + 1; outs("\r\nSTATEMENTS: PRINT LET IF/THEN FOR/TO/STEP NEXT\r\n  GOTO GOSUB RETURN INPUT POKE REM END\r\nFILES: OPEN name OUTPUT|INPUT : PRINT# : INPUT# : CLOSE : EOF(n)\r\nCOMMANDS: RUN LIST NEW SAVE LOAD HELP BYE\r\nFUNCTIONS: ABS(x) RND(n) PEEK(a)\r\n  LEN ASC CHR$ LEFT$ RIGHT$ MID$ STR$ VAL\r\nGRAPHICS (window coords, y UP 0-271): COLOR r,g,b : CLS\r\n  LINE x0,y0,x1,y1   BOX x0,y0,x1,y1[,FILL|,NOFILL]\r\n  CIRCLE x,y,r[,ry][,FILL]  PIXELW x,y  PIXELR(x,y)  RGB(r,g,b)\r\n  GTEXT x,y,size,s$  easy 2D text (window coords, absolute size)\r\n  raw: MOVE3 x,y,0 then TEXT s$ (TSIZE COMPOUNDS, MDIDEN resets)\r\n  IMAGE x,y,f$   draw a P8I file, bottom-left at x,y\r\n  LAYERS: GRAPHICSON/OFF (drawing, default OFF)  TEXTON/OFF (text overlay)\r\n  + the PGC verbs native: MOVE DRAW POLY RECT AREA TEXT\r\n    LINPAT p (dash bits)  LINFUN m (0=set 1=compl 2=OR 3=AND 4=XOR)\r\n    and the rest - man basic / man gl\r\n  SCREEN IS 480x272 RGB565 - COLOR r,g,b (0-31,0-63,0-31)\r\n  or COLOR c, one PACKED value - from RGB() or PIXELR()\r\nSTRINGS: A$ B$ (assign, + concat, compare)\r\nOPERATORS: + - * / %  = <> < > <= >=\r\n"); return 0; }
     if (c == T_SAVE) return st_save();
     if (c == T_LOAD) return st_load();
     if (c == T_OPEN) return st_open();
@@ -1121,6 +1137,8 @@ int main() {
                                                        PRINT shows on the panel over
                                                        BASIC's graphics (two planes) */
         glput(0xB0); glput(0); glput(0);            /* PROJCT 0 */
+        glput(0x57); glput(0);                      /* GRAPHICS default OFF: hide the bitmap
+                                                       (TEXT overlay stays on) -- GRAPHICSON reveals */
     }
     outs("\r\nP8X BASIC V0\r\n");
     while (1) {
@@ -1133,7 +1151,10 @@ int main() {
                 edit(text);
             } else if (*tp) {
                 stmtline();
-                if (endf == 2) return 0;               /* BYE */
+                if (endf == 2) {                       /* BYE */
+                    if (peek(GLIDR) == 'G') { glput(0x57); glput(1); }  /* restore graphics visible for other apps */
+                    return 0;
+                }
             }
         }
     }
