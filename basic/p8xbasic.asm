@@ -283,6 +283,10 @@ bs_go:  LDA  #$03            ; ACIA master reset
         CMP                  ;   overlay STAYS on: PRINT shows on the panel over
         JNZ  bnr_ng          ;   BASIC's graphics (the two planes compose)
         JSR  glwin
+        LDA  #$50            ; TXEN 1: the console text overlay is where PRINT and
+        JSR  GLPUT           ;   the banner land, so make sure it is VISIBLE -- a
+        LDA  #1              ;   launcher like finder hides it (TXEN 0) and does not
+        JSR  GLPUT           ;   restore it, which left BASIC's text invisible.
         LDA  #$B0            ; PROJCT 0: 2D first; TEXT strokes live at z=0,
         JSR  GLPUT           ;   which the native camera would near-clip
         LDA  #0

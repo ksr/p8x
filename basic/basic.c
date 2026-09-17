@@ -1136,6 +1136,11 @@ int main() {
                                                        console overlay STAYS on, so
                                                        PRINT shows on the panel over
                                                        BASIC's graphics (two planes) */
+        glput(0x50); glput(1);                      /* TXEN 1: force the console text
+                                                       overlay VISIBLE -- a launcher
+                                                       like finder hides it (TXEN 0)
+                                                       and never restores it, which
+                                                       left BASIC's text invisible */
         glput(0xB0); glput(0); glput(0);            /* PROJCT 0 */
         glput(0x57); glput(0);                      /* GRAPHICS default OFF: hide the bitmap
                                                        (TEXT overlay stays on) -- GRAPHICSON reveals */
