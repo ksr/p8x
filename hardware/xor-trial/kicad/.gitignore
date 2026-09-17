@@ -1,2 +1,7 @@
 # loose gerber/drill outputs -- the orderable ZIP is committed, these are regenerable
 gerbers/
+
+# KiCad per-user + report byproducts
+*.kicad_prl
+*-drc.rpt
+*.rpt
