@@ -54,6 +54,7 @@ it and applies the rev-F transform, asserting the gate usage is consistent.
 | `p8x-memory-card-gerbers.zip` | **the orderable output** — 4-layer Gerbers + Excellon drill |
 | `p8x-memory-card-render-top.png` | rendered top view (silk part values visible) |
 | `p8x-memory-card-render-3d.png` | rendered 3D perspective |
+| `p8x-memory-card-placement.pdf` | parts-placement drawing (refs + values, centred on the sheet) |
 
 ## Regenerate / re-route
 
