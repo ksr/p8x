@@ -238,6 +238,12 @@ def silk(s, x, y, size=1.4):
 for i, (_rs, _led, label) in enumerate(LEDPAIR):
     silk(label, 192, 13 + i*14 - 2.0)      # just above each LED, inboard of the edge
 
+# JWP ROM write-protect jumper: mark the two shunt positions. Pins (row): 1=-WE,
+# 2=ROMWE (common, to U1 !WE), 3=VCC. Shunt 1-2 = ROM WRITABLE; 2-3 = PROTECTED.
+_jp = {p.GetNumber(): p.GetPosition() for p in footp["JWP"].Pads()}
+silk("WR", pcbnew.ToMM(_jp["1"].x), pcbnew.ToMM(_jp["1"].y) + 3.3, size=1.0)  # 1-2
+silk("WP", pcbnew.ToMM(_jp["3"].x), pcbnew.ToMM(_jp["3"].y) + 3.3, size=1.0)  # 2-3
+
 # ---- 6. internal power planes: In1.Cu = GND, In2.Cu = VCC ------------------
 # THT pads penetrate every layer, so each GND/VCC pin connects to its plane with
 # no routing at all -- which is why this board goes to 4 layers. Freerouting then
