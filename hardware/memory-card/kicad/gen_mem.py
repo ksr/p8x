@@ -108,7 +108,6 @@ def load_fp(ref):
         sys.exit("footprint missing: %s:%s (for %s)" % (lib, name, ref))
     fp.SetReference(ref)
     fp.SetValue(PARTS[ref][1])
-    fp.Value().SetVisible(False)         # keep silk to references (cuts silk-over-pad)
     return fp
 
 # The card is a Eurocard: its HEIGHT is fixed at 100mm by the DIN41612 connector
@@ -207,6 +206,34 @@ _pj.SetPosition(P(0, 0)); _pj.SetOrientationDegrees(90)
 _xs = [p.GetPosition().x for p in _pj.Pads()]
 _ys = [p.GetPosition().y for p in _pj.Pads()]
 _pj.SetPosition(VECTOR2I(mm(4) - min(_xs), mm(50) - (min(_ys) + max(_ys)) // 2))
+
+# ---- 3b. put each part's VALUE on the silkscreen ---------------------------
+# There is plenty of room, so show values (the ICs' part numbers differ; the
+# passives are uniform but shown anyway). Reference stays where KiCad put it; the
+# value goes to a clear spot: below the ICs, right of the caps (open lane there),
+# below the resistors. J1/JWP values are left off (ref + the pin silk say enough).
+def _txt(field, x, y, just, size=0.9):
+    field.SetVisible(True); field.SetLayer(pcbnew.F_SilkS)
+    field.SetTextSize(pcbnew.VECTOR2I(mm(size), mm(size)))
+    field.SetTextThickness(mm(0.15)); field.SetHorizJustify(just)
+    field.SetPosition(VECTOR2I(x, y))
+C_ = pcbnew.GR_TEXT_H_ALIGN_CENTER; L_ = pcbnew.GR_TEXT_H_ALIGN_LEFT
+for ref in PARTS:
+    if ref in ("J1", "JWP"):
+        footp[ref].Value().SetVisible(False); continue
+    fp = footp[ref]
+    xs = [p.GetPosition().x for p in fp.Pads()]; ys = [p.GetPosition().y for p in fp.Pads()]
+    cx = (min(xs) + max(xs)) // 2; cy = (min(ys) + max(ys)) // 2
+    if ref.startswith("C"):                        # cap: value to the right (open lane)
+        _txt(fp.Value(), max(xs) + mm(1.5), cy, L_)
+    elif ref.startswith("U"):                      # IC: part number below the body
+        _txt(fp.Value(), cx, max(ys) + mm(4.6), C_)
+    elif ref.startswith("LED"):                    # LED: colour to the right; the
+        _txt(fp.Value(), max(xs) + mm(1.3), cy, L_)   # function label (PWR/ROM/..) is
+        fp.Reference().SetVisible(False)              # a better ID than "LEDn" here
+    else:                                          # resistor: ref above, value below
+        _txt(fp.Reference(), cx, cy - mm(3.2), C_)
+        _txt(fp.Value(), cx, cy + mm(3.2), C_)
 
 # ---- 4. assign pads to nets ------------------------------------------------
 for net, mem in NETS.items():
