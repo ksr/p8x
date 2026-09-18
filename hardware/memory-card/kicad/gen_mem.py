@@ -163,8 +163,10 @@ CAPFOR = {"C1":"U1", "C2":"U2", "C3":"U3", "C4":"U4", "C5":"U5", "C6":"U6",
 # (horizontal, inboard) feeds an LED near the edge, rotated 180 so its anode
 # (pad 2) faces the resistor's pad 2 (same net). A silk label sits between the
 # resistor and the LED. 14mm vertical pitch.
-LEDPAIR = [("RP1","LED3","PWR"), ("RS1","LED2","ROM"), ("RS2","LED4","RAMH"),
-           ("RS3","LED5","RD"),  ("RS4","LED6","WR"),  ("RS5","LED7","RAML")]
+# top-to-bottom order (user 2026-09-18): PWR, ROM, RAML, RAMH, RD, WR. Each tuple
+# keeps its (resistor, LED, function) pairing -- only the row position changes.
+LEDPAIR = [("RP1","LED3","PWR"), ("RS1","LED2","ROM"), ("RS5","LED7","RAML"),
+           ("RS2","LED4","RAMH"), ("RS3","LED5","RD"),  ("RS4","LED6","WR")]
 for i, (rs, led, _lbl) in enumerate(LEDPAIR):
     yr = 30 + i*14
     PLACE[rs]  = (250, yr,   0)
