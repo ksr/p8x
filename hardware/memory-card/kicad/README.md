@@ -6,8 +6,9 @@ KiCad board overall; the rest of the machine uses the Eagle flow in
 `generators/gen_eagle.py`). Generators are canon here too — edit the scripts and
 re-run, don't hand-edit the `.kicad_pcb`.
 
-**200 × 100 mm, 4-layer.** The height is the Eurocard/DIN41612 standard (fixed by
+**210 × 100 mm, 4-layer.** The height is the Eurocard/DIN41612 standard (fixed by
 the backplane); the width was widened from the usual 160 mm for routing headroom
+and the labelled LED bank
 (the card is cantilevered off the connector — see the theory doc). Stackup:
 
 | Layer | Use |

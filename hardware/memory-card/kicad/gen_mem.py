@@ -115,7 +115,7 @@ def load_fp(ref):
 # and the backplane slot. The WIDTH (the card's depth, projecting out from the
 # backplane) is free -- widened to 200mm here for routing headroom on this dense
 # bus board (the user opted for the larger card; it does not affect slot pitch).
-BW, BH = 200.0, 100.0
+BW, BH = 210.0, 100.0
 
 # Explicit placement (mm centre, rotation) for EVERY part, laid out in clear
 # lanes so nothing overlaps (final fine-layout is the router's/human's job, but
@@ -155,24 +155,26 @@ PLACE = {
     # write-protect jumper -- clear area near the ROM, above the gate row
     "JWP": (162, 62, 90),
 }
-# all 11 decoupling caps in one clear lane between the memory row and the
-# buffer/decoder row (y~40); proximity-to-IC is not critical for routing.
-for i, c in enumerate(["C1","C10","C2","C3","C5","C6","C4","C7","C8","C9","C11"]):
-    PLACE[c] = (42 + i*11, 40, 0)
+# Each 100nF decoupling cap sits just ABOVE its own IC (house convention: cap at
+# the top of the chip, horizontal / parallel to the chip's top edge, right next to
+# it). Positions are computed after placement from each chip's top pad edge.
+CAPFOR = {"C1":"U1", "C2":"U2", "C3":"U3", "C4":"U4", "C5":"U5", "C6":"U6",
+          "C7":"U7", "C8":"U8", "C9":"U9", "C10":"U10", "C11":"U11"}
 # LED bank down the RIGHT (top-when-mounted) edge: each series resistor
 # (horizontal, inboard) feeds an LED near the edge, rotated 180 so its anode
-# (pad 2) faces the resistor's pad 2 (same net). 14mm vertical pitch.
-LEDPAIR = [("RP1","LED3"), ("RS1","LED2"), ("RS2","LED4"),
-           ("RS3","LED5"), ("RS4","LED6"), ("RS5","LED7")]
-for i, (rs, led) in enumerate(LEDPAIR):
+# (pad 2) faces the resistor's pad 2 (same net). A silk label sits between the
+# resistor and the LED. 14mm vertical pitch.
+LEDPAIR = [("RP1","LED3","PWR"), ("RS1","LED2","ROM"), ("RS2","LED4","RAMH"),
+           ("RS3","LED5","RD"),  ("RS4","LED6","WR"),  ("RS5","LED7","RAML")]
+for i, (rs, led, _lbl) in enumerate(LEDPAIR):
     yr = 13 + i*14
-    PLACE[rs]  = (177, yr,   0)
-    PLACE[led] = (193, yr, 180)
+    PLACE[rs]  = (180, yr,   0)
+    PLACE[led] = (201, yr, 180)
 
 footp = {}
 for ref in PARTS:
     fp = load_fp(ref); board.Add(fp); footp[ref] = fp
-missing = [r for r in PARTS if r not in PLACE and r != "J1"]
+missing = [r for r in PARTS if r not in PLACE and r != "J1" and r not in CAPFOR]
 assert not missing, "unplaced parts: %s" % missing
 
 def place_centered(fp, x, y, rot):
@@ -186,6 +188,16 @@ def place_centered(fp, x, y, rot):
 
 for ref, (x, y, rot) in PLACE.items():
     place_centered(footp[ref], x, y, rot)
+
+# decoupling caps: horizontal, centred on their IC's x, 4mm above the IC's top
+# pad row (cap parallel to the chip's top edge, hugging it -- house convention).
+for cap, chip in CAPFOR.items():
+    cfp = footp[chip]
+    cxs = [p.GetPosition().x for p in cfp.Pads()]
+    cys = [p.GetPosition().y for p in cfp.Pads()]
+    ic_cx = pcbnew.ToMM((min(cxs) + max(cxs)) // 2)
+    ic_top = pcbnew.ToMM(min(cys))          # smallest y = top edge in layout
+    place_centered(footp[cap], ic_cx, ic_top - 4.5, 0)
 
 # J1 (DIN41612) hugs the left edge: rot 90, its left pad column 4mm from the edge
 # (the connector body overhangs the edge, as a card edge connector should) and
@@ -214,6 +226,17 @@ def edge(x1, y1, x2, y2):
     s.SetStart(P(x1, y1)); s.SetEnd(P(x2, y2))
     s.SetLayer(pcbnew.Edge_Cuts); s.SetWidth(mm(0.15)); board.Add(s)
 edge(0, 0, BW, 0); edge(BW, 0, BW, BH); edge(BW, BH, 0, BH); edge(0, BH, 0, 0)
+
+# ---- 5b. silkscreen LED labels (between each resistor and its LED) ----------
+def silk(s, x, y, size=1.4):
+    t = pcbnew.PCB_TEXT(board)
+    t.SetText(s); t.SetPosition(P(x, y)); t.SetLayer(pcbnew.F_SilkS)
+    t.SetTextThickness(mm(0.25))
+    t.SetTextSize(pcbnew.VECTOR2I(mm(size), mm(size)))
+    t.SetHorizJustify(pcbnew.GR_TEXT_H_ALIGN_CENTER)
+    board.Add(t)
+for i, (_rs, _led, label) in enumerate(LEDPAIR):
+    silk(label, 192, 13 + i*14 - 2.0)      # just above each LED, inboard of the edge
 
 # ---- 6. internal power planes: In1.Cu = GND, In2.Cu = VCC ------------------
 # THT pads penetrate every layer, so each GND/VCC pin connects to its plane with
