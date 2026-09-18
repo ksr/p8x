@@ -114,7 +114,7 @@ def load_fp(ref):
 # and the backplane slot. The WIDTH (the card's depth, projecting out from the
 # backplane) is free -- widened to 200mm here for routing headroom on this dense
 # bus board (the user opted for the larger card; it does not affect slot pitch).
-BW, BH = 210.0, 100.0
+BW, BH = 280.0, 140.0   # uniform card size (matches the generic cards)
 
 # Explicit placement (mm centre, rotation) for EVERY part, laid out in clear
 # lanes so nothing overlaps (final fine-layout is the router's/human's job, but
@@ -166,9 +166,9 @@ CAPFOR = {"C1":"U1", "C2":"U2", "C3":"U3", "C4":"U4", "C5":"U5", "C6":"U6",
 LEDPAIR = [("RP1","LED3","PWR"), ("RS1","LED2","ROM"), ("RS2","LED4","RAMH"),
            ("RS3","LED5","RD"),  ("RS4","LED6","WR"),  ("RS5","LED7","RAML")]
 for i, (rs, led, _lbl) in enumerate(LEDPAIR):
-    yr = 13 + i*14
-    PLACE[rs]  = (180, yr,   0)
-    PLACE[led] = (201, yr, 180)
+    yr = 30 + i*14
+    PLACE[rs]  = (250, yr,   0)
+    PLACE[led] = (271, yr, 180)
 
 footp = {}
 for ref in PARTS:
@@ -205,7 +205,7 @@ _pj = footp["J1"]
 _pj.SetPosition(P(0, 0)); _pj.SetOrientationDegrees(90)
 _xs = [p.GetPosition().x for p in _pj.Pads()]
 _ys = [p.GetPosition().y for p in _pj.Pads()]
-_pj.SetPosition(VECTOR2I(mm(4) - min(_xs), mm(50) - (min(_ys) + max(_ys)) // 2))
+_pj.SetPosition(VECTOR2I(mm(4) - min(_xs), mm(BH/2) - (min(_ys) + max(_ys)) // 2))
 
 # ---- 3b. put each part's VALUE on the silkscreen ---------------------------
 # There is plenty of room, so show values (the ICs' part numbers differ; the
@@ -263,7 +263,7 @@ def silk(s, x, y, size=1.4):
     t.SetHorizJustify(pcbnew.GR_TEXT_H_ALIGN_CENTER)
     board.Add(t)
 for i, (_rs, _led, label) in enumerate(LEDPAIR):
-    silk(label, 192, 13 + i*14 - 2.0)      # just above each LED, inboard of the edge
+    silk(label, 262, 30 + i*14 - 2.0)      # just above each LED, inboard of the edge
 
 # JWP ROM write-protect jumper: mark the two shunt positions. Pins (row): 1=-WE,
 # 2=ROMWE (common, to U1 !WE), 3=VCC. Shunt 1-2 = ROM WRITABLE; 2-3 = PROTECTED.

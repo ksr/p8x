@@ -3,38 +3,42 @@
 KiCad 4-layer boards (F/B signals, In1=GND, In2=VCC planes), generated from the
 canonical gen_eagle netlists by `generators/gen_kicad.py` (per-card) /
 `gen_backplane.py`, autorouted with Freerouting via
-`generators/build_kicad_card.sh <card>`. Each lives in `hardware/<card>/kicad/`.
-Standard: bypass cap above each IC, labelled LED/jumper bank, part values on silk,
-placement PDF + top/3D renders + orderable gerbers.
+`generators/build_kicad_card.sh <card>`. Standard per card: bypass cap above each
+IC, LED/jumper labels + part values on silk, placement PDF + top/3D renders +
+gerbers.
 
-| Board | Size (mm) | Routed | Unconn. | Notes |
-|-------|-----------|--------|---------|-------|
-| memory-card | 210×100 | ✅ | 0 | rev F, hand-tuned (bespoke `gen_mem.py`) |
-| led-card | 200×100 | ✅ | 0 | |
-| control-card | 300×100 | ✅ | 0 | |
-| cf-card | 200×100 | ✅ | 0 | IDE 2×20, RTC, coin-cell subs |
-| alu-card | 300×100 | ✅ | 1 | 1 net short of complete |
-| io-card | 400×100 | ✅ | 1 | ACIA/MAX232/RTC/DIP-sw subs |
-| regbank-card | 340×100 | ✅ | 1 | largest (95 parts, 3920 tracks) |
-| bustest-card | 230×100 | ⚠ placed | — | Pico bus too dense to auto-route |
-| backplane | 560×320 | ⚠ placed | — | 10-slot bus is a large routing job |
+**Uniform card size: 280 × 140 mm.** Every plug-in card is the same dimensions
+(the connector-edge is 140 mm — the DIN41612 is only ~94 mm, so the extra room
+lets components use more rows and keeps the depth down). The backplane is the
+motherboard and is physically larger.
+
+| Board | Routed | Unconn. | Notes |
+|-------|--------|---------|-------|
+| memory-card | ✅ | 1 | rev F, bespoke `gen_mem.py` |
+| led-card | ✅ | 0 | |
+| cf-card | ✅ | 0 | IDE/RTC/coin subs |
+| control-card | ✅ | 0 | 14-pin oscillator |
+| alu-card | ✅ | 0 | |
+| io-card | ✅ | 1 | ACIA/MAX232/RTC/DIP-sw subs |
+| regbank-card | ⚠ placed | — | 95 parts — densest route, Freerouting didn't finish in time |
+| bustest-card | ⚠ placed | — | Pico fans into the whole bus — too dense to auto-route |
+| backplane | ⚠ placed | — | 10-slot DIN41612 motherboard, ~560×320mm; bus routing is a big follow-up |
 
 ## Known follow-ups
-- **Oversized boards.** The auto-placer (cap-above-each-IC + safe gaps) is less
-  dense than the hand-routed Eagle cards, so the big cards run 300–400 mm wide
-  instead of ~210. They route and are orderable, but a denser placement pass would
-  bring them closer to the memory-card size.
-- **Cosmetic silk.** The generic silk placement leaves some ref/value overlaps
-  (fab-clipped over pads); not as tuned as the memory card's.
-- **1 unrouted net** on io/alu/regbank — Freerouting left a single connection;
-  finish by hand or a longer pass.
-- **bustest + backplane routing** — placed + netlisted + planes; routing pending.
+- **regbank + bustest routing.** Placed + netlisted + planes at 280×140, but the
+  two densest boards defeated Freerouting's time budget. Options: a longer/tuned
+  Freerouting pass, or a touch more depth for just those two (breaks strict
+  uniformity), or hand-routing.
+- **Cosmetic silk crowding** on the densest cards — part values on every part get
+  tight; readable and fab-clipped over pads, but not as clean as the memory card.
+- **1 stray net** on memory/io — a single Freerouting gap to finish by hand.
+- **Placement is auto** (courtyard-spaced flow, 0 overlaps) — a hand pass would
+  tidy grouping/silk further.
 
 ## Not built (need input)
-- **PS/2 keyboard/mouse card** — designed only as docs (`hardware/ps2-card/`), no
-  net-level netlist. Building it means deriving the exact wiring (74HC164/161/574,
-  7407 open-collector, decode) — a design task to confirm, not auto-generate.
-- **Graphics card** — the Tang Nano 20K FPGA card; a bespoke FPGA/video board with
-  no TTL netlist. Needs a from-scratch schematic/netlist decision.
+- **PS/2 keyboard/mouse card** — docs only (`hardware/ps2-card/`), no net-level
+  netlist; deriving the wiring is a design task. Level-shifting: **NOYITO TXS0102
+  breakout** (user-specified) for the CLK/DATA lines.
+- **Graphics card** — Tang Nano 20K FPGA/video board; no TTL netlist.
 
 Exotic parts use the closest standard KiCad footprint (flagged at build time).
