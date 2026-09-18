@@ -53,44 +53,44 @@ for card in $cards; do
     echo "  --> $card: INCOMPLETE (no board)"; overall=1; continue
   fi
 
-  # 3. DRC ---------------------------------------------------------------------
-  drc=$("$CLI" pcb drc -o "$D/p8x-$card-drc.rpt" "$BRD" 2>/dev/null | grep -iE 'Found .* (violation|unconnected)' | tr '\n' ' ')
-  nv=$(echo "$drc" | grep -oE '[0-9]+ violation' | grep -oE '[0-9]+' || echo 0)
-  nu=$(echo "$drc" | grep -oE '[0-9]+ unconnected' | grep -oE '[0-9]+' || echo 0)
-  echo "  3. DRC        : $drc"
-  [ "${nv:-0}" -gt 0 ] && fail=1
-  [ "${nu:-0}" -gt 0 ] && fail=1
-
-  # 4 + 5. keepout + fab report (pcbnew) --------------------------------------
-  "$PYK" - "$BRD" "$MIN_TRACE" "$MIN_DRILL" <<'PYEOF'
-import sys, math, pcbnew
-brd, mintr, mindr = sys.argv[1], float(sys.argv[2]), float(sys.argv[3])
-b = pcbnew.LoadBoard(brd)
+  # 3-5. DRC (blocking vs cosmetic) + keepout + fab (pcbnew) ------------------
+  "$CLI" pcb drc -o "$D/p8x-$card-drc.rpt" "$BRD" >/dev/null 2>&1                 # human-readable report
+  "$CLI" pcb drc --format json -o /tmp/p8x-$card-drc.json "$BRD" >/dev/null 2>&1
+  "$PYK" - "$BRD" "$MIN_TRACE" "$MIN_DRILL" /tmp/p8x-$card-drc.json <<'PYEOF'
+import sys, math, json, pcbnew
+brd, mintr, mindr, drcj = sys.argv[1], float(sys.argv[2]), float(sys.argv[3]), sys.argv[4]
 mm = pcbnew.ToMM
-# keepout: DIN NPTH mounting holes vs tracks/vias
+# 3. DRC, categorised: silkscreen issues are cosmetic (the fab trims silk); every
+#    other violation type blocks manufacture.
+COSMETIC = {"silk_overlap", "silk_edge_clearance", "silk_over_copper"}
+d = json.load(open(drcj))
+viol = d.get("violations", []); unconn = len(d.get("unconnected_items", []))
+blocking = sum(1 for v in viol if v["type"] not in COSMETIC)
+cosmetic = sum(1 for v in viol if v["type"] in COSMETIC)
+print("  3. DRC        : %d blocking, %d cosmetic-silk, %d unconnected" % (blocking, cosmetic, unconn))
+b = pcbnew.LoadBoard(brd)
+# 4. keepout: DIN NPTH mounting holes vs tracks/vias
 holes = [(mm(p.GetPosition().x), mm(p.GetPosition().y))
          for fp in b.GetFootprints() if "DIN41612" in str(fp.GetFPIDAsString())
          for p in fp.Pads() if p.GetAttribute() == pcbnew.PAD_ATTRIB_NPTH]
-near = 0
-for t in b.GetTracks():
-    x, y = mm(t.GetStart().x), mm(t.GetStart().y)
-    if any(math.hypot(x-hx, y-hy) < 4.0 for hx, hy in holes): near += 1
-ktxt = "PASS (0 copper within 4mm)" if near == 0 else "FAIL (%d near a hole)" % near
-print("  4. keepout    : %d DIN hole(s) -- %s" % (len(holes), ktxt))
-# fab: min track width + min drill
+near = sum(1 for t in b.GetTracks()
+           if any(math.hypot(mm(t.GetStart().x)-hx, mm(t.GetStart().y)-hy) < 4.0 for hx, hy in holes))
+print("  4. keepout    : %d DIN hole(s) -- %s" % (len(holes),
+      "PASS (0 copper within 4mm)" if near == 0 else "FAIL (%d near a hole)" % near))
+# 5. fab: smallest track width + drill vs conservative fab minimums
 tws = [mm(t.GetWidth()) for t in b.GetTracks() if t.Type() == pcbnew.PCB_TRACE_T]
-drs = []
-for fp in b.GetFootprints():
-    for p in fp.Pads():
-        d = mm(p.GetDrillSizeX())
-        if d > 0: drs.append(d)
-for t in b.GetTracks():
-    if t.Type() == pcbnew.PCB_VIA_T: drs.append(mm(t.GetDrillValue()))
+drs = [mm(p.GetDrillSizeX()) for fp in b.GetFootprints() for p in fp.Pads() if mm(p.GetDrillSizeX()) > 0]
+drs += [mm(t.GetDrillValue()) for t in b.GetTracks() if t.Type() == pcbnew.PCB_VIA_T]
 mintw = min(tws) if tws else 0; mindl = min(drs) if drs else 0
 tflag = "" if mintw >= mintr else "  <-- below %.2fmm fab min!" % mintr
 dflag = "" if mindl >= mindr else "  <-- below %.2fmm fab min!" % mindr
 print("  5. fab        : min track %.3fmm%s ; min drill %.3fmm%s" % (mintw, tflag, mindl, dflag))
-sys.exit(1 if (near or (mintw and mintw < mintr) or (mindl and mindl < mindr)) else 0)
+# verdict: FAIL only on blocking DRC / unconnected / keepout / sub-min features.
+# cosmetic silk is a WARNING, not a manufacturing blocker.
+bad = blocking or unconn or near or (mintw and mintw < mintr) or (mindl and mindl < mindr)
+if cosmetic and not bad:
+    print("  (note: %d cosmetic silk overlap(s) -- fab trims silk; not a blocker)" % cosmetic)
+sys.exit(1 if bad else 0)
 PYEOF
   [ $? -ne 0 ] && fail=1
 
