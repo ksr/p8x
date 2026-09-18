@@ -20,7 +20,9 @@ FP = "/Applications/KiCad/KiCad.app/Contents/SharedSupport/footprints"
 def mm(v): return pcbnew.FromMM(float(v))
 def P(x, y): return VECTOR2I(mm(x), mm(y))
 
-bps, bpn, DEV = GE.bps, GE.bpn, GE.DEV
+# local copies of the netlist so the power-connector remap below doesn't mutate
+# gen_eagle's module-level structures.
+bps, bpn, DEV = dict(GE.bps), {k: list(v) for k, v in GE.bpn.items()}, GE.DEV
 # device -> footprint (female vertical DIN for the slots; passives as usual)
 FPMAP = {
     "DIN96":  ("Connector_DIN", "DIN41612_C_3x32_Female_Vertical_THT"),
@@ -30,10 +32,20 @@ FPMAP = {
     "RES":    ("Resistor_THT", "R_Axial_DIN0207_L6.3mm_D2.5mm_P10.16mm_Horizontal"),
     "SIP9":   ("Resistor_THT", "R_Array_SIP9"),
     "LED":    ("LED_THT", "LED_D5.0mm"),
-    "TB4":    ("Connector_PinHeader_2.54mm", "PinHeader_1x04_P2.54mm_Vertical"),
+    # Power entry: Phoenix Contact MSTBA 2,5/2-G-5,08 (Digikey 1729128) -- a 2-pos,
+    # 5.08mm-pitch pluggable screw terminal block, ~12A. V+ on terminal 1, GND on 2.
+    "PWR2":   ("Connector_Phoenix_MSTB",
+               "PhoenixContact_MSTBA_2,5_2-G-5,08_1x02_P5.08mm_Horizontal"),
 }
+# Swap the power connector J11 from the old 4-pin header (TB4) to the 2-terminal
+# Phoenix block: keep its placement/value, drop the doubled pins, and re-map its
+# bus membership so pad 1 = V+ (VCC) and pad 2 = GND.
+bps["J11"] = ("PWR2",) + tuple(bps["J11"][1:])
+for _net in bpn: bpn[_net] = [(r, p) for (r, p) in bpn[_net] if r != "J11"]
+bpn["VCC"].append(("J11", "1")); bpn["GND"].append(("J11", "2"))
 def pad_of(dev, pinname):
     if dev == "DIN96": return pinname.lower()
+    if dev not in DEV: return str(pinname)        # local pseudo-devices (e.g. PWR2)
     return str(DEV[dev]["pm"][pinname])
 
 board = pcbnew.BOARD(); board.SetCopperLayerCount(4)
@@ -82,8 +94,8 @@ place("RN1", RCOL_A, 28.0, 90)                             # 8x10K SIP (vertical
 place("R2", RCOL_A, 52.0); place("R3", RCOL_A, 66.0); place("R4", RCOL_A, 80.0)
 place("C13", RCOL_A, 98.0); place("C14", RCOL_A, 112.0)
 # right outer column (by the board edge, roomy): power entry + bulk caps + power LED
-place("J11", RCOL_B, 24.0)                                 # PWR-5V header (natively tall)
-place("C11", RCOL_B, 52.0); place("C12", RCOL_B, 78.0)     # 470uF bulk electrolytics
+place("J11", RCOL_B + 1.0, 26.0, 90)                       # Phoenix 2-pos terminal block
+place("C11", RCOL_B, 56.0); place("C12", RCOL_B, 80.0)     # 470uF bulk electrolytics
 place("R1", RCOL_B - 6.0, 108.0); place("LED1", RCOL_B + 8.0, 108.0)   # power-on LED
 
 # --- silk: SLOT n under each connector (the PDF's slot labels) -----------------

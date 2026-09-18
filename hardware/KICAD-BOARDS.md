@@ -21,7 +21,7 @@ motherboard and is physically larger.
 | io-card | ✅ | 1 | ACIA/MAX232/RTC/DIP-sw subs |
 | regbank-card | ✅ | 0 | 95 parts — routed (5m45s auto + ~13min optimizer) |
 | bustest-card | ✅ | 0 | Pico + 17 LEDs; routed with right-edge LED bank |
-| backplane | ⚠ placed | — | 10-slot DIN41612 motherboard, 318×128mm (28mm slot pitch, slots left-justified, all power/pull-up parts gathered on the right); bus routing is a big follow-up |
+| backplane | ⚠ placed | — | 10-slot DIN41612 motherboard, 318×128mm (28mm slot pitch, slots left-justified, power/pull-up parts on the right; power entry = Phoenix MSTBA 2,5/2-G-5,08 terminal block, Digikey 1729128); bus routing is a big follow-up |
 
 > **Deprecated:** the **led-card** (previously routed here) was a CAD-workflow
 > test card, never planned to be built. It was moved to
