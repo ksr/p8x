@@ -279,6 +279,11 @@ D("ATMEGA328",
    "PB6":"9","PB7":"10","PD5":"11","PD6":"12","PD7":"13","PB0":"14","PB1":"15","PB2":"16",
    "PB3":"17","PB4":"18","PB5":"19","AVCC":"20","AREF":"21","GND2":"22","PC0":"23","PC1":"24",
    "PC2":"25","PC3":"26","PC4":"27","PC5":"28"},"DIP28N")
+# 74HC688 8-bit magnitude comparator -- the PS/2 window ($FF58-5F) address compare.
+D("74688",["!G","P0","Q0","P1","Q1","P2","Q2","P3","Q3","Q4","P4","Q5","P5","Q6","P6","Q7","P7"],
+  ["!PEQ","VCC","GND"],
+  {"!G":"1","P0":"2","Q0":"3","P1":"4","Q1":"5","P2":"6","Q2":"7","P3":"8","Q3":"9","GND":"10",
+   "Q4":"11","P4":"12","Q5":"13","P5":"14","Q6":"15","P6":"16","Q7":"17","P7":"18","!PEQ":"19","VCC":"20"},"DIP20")
 
 # ---- bustest-card parts -----------------------------------------------------
 # MCP23S17: 16-bit SPI I/O expander, per-pin direction + per-pin pull-up, 5 V.
@@ -1472,6 +1477,71 @@ N(pcn,"LEDAC",("R6","2"),("LED6","A")); N(pcn,"LEDDA",("R7","2"),("LED7","A"))
 for b,pin in enumerate(("4","6","8","10","12","14","16","18")):
     N(pcn,"CFD%d"%(8+b),("U22","D%d"%(b+1)),("J4",pin))
 N(pcn,"VCC",("U22","!OC")); N(pcn,"GND",("U22","CLK"))
+# ---- PS/2 section: ATmega328 signal processor + latch bridge ($FF58-5F) ------
+# The '328 (U24) owns both PS/2 ports in firmware (5V-native, open-drain in
+# software), doing framing/parity/ready/overrun. The bus sees the exact $FF58-5F
+# registers through a latch bridge: 74688 (U25) window-compares A3-7 = 01011
+# (enabled by IOPG) -> -PSSEL; two 74138s decode A0-2, one gated by -RD (read
+# strobes), one by -MEMW (write strobes). Read registers are 74374 latches the
+# '328 keeps loaded (PSADAT/PSAST/PSBDAT/PSBST), each tri-state-enabled by its
+# read strobe; PSLINE + PSID are 74244 buffers. TX (host->device) is a firmware
+# stub, so status writes are only DECODED (the '328 senses -WR1/-WR3) -- no
+# write-data capture latch yet. PS/2 clock/data go via 10k pull-ups (open-drain).
+pcic.update({"U24":("ATMEGA328","PS/2 MCU"),"U25":("74688","WIN CMP"),
+ "U26":("74138","PS RD DEC"),"U27":("74138","PS WR DEC"),
+ "U28":("74374","PSADAT"),"U29":("74374","PSAST"),"U30":("74374","PSBDAT"),
+ "U31":("74374","PSBST"),"U32":("74244","PSLINE"),"U33":("74244","PSID K")})
+# window compare: A3-7 vs 01011, enabled by IOPG (active low in the I/O page)
+N(pcn,"IOPG",("U25","!G"))
+N(pcn,"GND",("U25","P0"),("U25","Q0"),("U25","P1"),("U25","Q1"),("U25","P2"),("U25","Q2"))
+N(pcn,"A3",("U25","P3")); N(pcn,"A4",("U25","P4")); N(pcn,"A5",("U25","P5"))
+N(pcn,"A6",("U25","P6")); N(pcn,"A7",("U25","P7"))
+N(pcn,"VCC",("U25","Q3"),("U25","Q4"),("U25","Q6"))    # target bits A3,A4,A6 = 1
+N(pcn,"GND",("U25","Q5"),("U25","Q7"))                 # target bits A5,A7 = 0
+N(pcn,"-PSSEL",("U25","!PEQ"),("U26","!G2A"),("U27","!G2A"))
+# register decode: reads gated by -RD, writes by -MEMW
+N(pcn,"A0",("U26","A"),("U27","A")); N(pcn,"A1",("U26","B"),("U27","B"))
+N(pcn,"A2",("U26","C"),("U27","C")); N(pcn,"VCC",("U26","G1"),("U27","G1"))
+N(pcn,"-RD",("U26","!G2B")); N(pcn,"-MEMW",("U27","!G2B"))
+N(pcn,"-RR0",("U26","Y0"),("U28","!OC"),("U24","PD0"))   # PSADAT read (+ '328 clears ready)
+N(pcn,"-RR1",("U26","Y1"),("U29","!OC"))                 # PSAST read
+N(pcn,"-RR2",("U26","Y2"),("U30","!OC"),("U24","PD1"))   # PSBDAT read (+ '328 clears ready)
+N(pcn,"-RR3",("U26","Y3"),("U31","!OC"))                 # PSBST read
+N(pcn,"-RR4",("U26","Y4"),("U32","!G1"),("U32","!G2"))   # PSLINE read
+N(pcn,"-RR6",("U26","Y6"),("U33","!G1"),("U33","!G2"))   # PSID read
+N(pcn,"-WR1",("U27","Y1"),("U24","PC4"))                 # PSAST write -> '328 sense
+N(pcn,"-WR3",("U27","Y3"),("U24","PC5"))                 # PSBST write -> '328 sense
+# read latches: D = '328 MB[0:7] bus, Q -> P8X D0-7, CLK from '328 load lines
+_MB=["PB0","PB1","PB2","PB3","PB4","PB5","PD6","PD7"]
+for b in range(8):
+    N(pcn,"MB%d"%b,("U24",_MB[b]),
+      ("U28","D%d"%(b+1)),("U29","D%d"%(b+1)),("U30","D%d"%(b+1)),("U31","D%d"%(b+1)))
+    N(pcn,"D%d"%b,("U28","Q%d"%(b+1)),("U29","Q%d"%(b+1)),("U30","Q%d"%(b+1)),
+      ("U31","Q%d"%(b+1)),("U32","Y%d"%(b+1)),("U33","Y%d"%(b+1)))
+N(pcn,"LDA",("U24","PC0"),("U28","CLK")); N(pcn,"LDSA",("U24","PC1"),("U29","CLK"))
+N(pcn,"LDB",("U24","PC2"),("U30","CLK")); N(pcn,"LDSB",("U24","PC3"),("U31","CLK"))
+# PSLINE buffer: 4 live PS/2 lines -> D0-3; D4-7 strapped low
+N(pcn,"PS2CKA",("U32","A1")); N(pcn,"PS2DA",("U32","A2"))
+N(pcn,"PS2CKB",("U32","A3")); N(pcn,"PS2DB",("U32","A4"))
+N(pcn,"GND",("U32","A5"),("U32","A6"),("U32","A7"),("U32","A8"))
+# PSID buffer: strap to 0x4B ('K'): bit0..7 = 1,1,0,1,0,0,1,0
+N(pcn,"VCC",("U33","A1"),("U33","A2"),("U33","A4"),("U33","A7"))
+N(pcn,"GND",("U33","A3"),("U33","A5"),("U33","A6"),("U33","A8"))
+# ATmega328 PS/2 lines, power, reset/ICSP. VCC(7)/GND(8) auto-wired by card().
+N(pcn,"PS2CKA",("U24","PD2")); N(pcn,"PS2DA",("U24","PD4"))
+N(pcn,"PS2CKB",("U24","PD3")); N(pcn,"PS2DB",("U24","PD5"))
+N(pcn,"VCC",("U24","AVCC")); N(pcn,"GND",("U24","GND2"))
+N(pcn,"PS2CKA",("PS2A","5")); N(pcn,"PS2DA",("PS2A","1"))
+N(pcn,"GND",("PS2A","3")); N(pcn,"VCC",("PS2A","4"))
+N(pcn,"PS2CKB",("PS2B","5")); N(pcn,"PS2DB",("PS2B","1"))
+N(pcn,"GND",("PS2B","3")); N(pcn,"VCC",("PS2B","4"))
+N(pcn,"VCC",("RN3","COM"))
+N(pcn,"PS2CKA",("RN3","R1")); N(pcn,"PS2DA",("RN3","R2"))
+N(pcn,"PS2CKB",("RN3","R3")); N(pcn,"PS2DB",("RN3","R4"))
+# ICSP (AVR 2x3): 1 MISO(PB4/MB4) 2 VCC 3 SCK(PB5/MB5) 4 MOSI(PB3/MB3) 5 !RESET 6 GND
+N(pcn,"MB4",("JICSP","1")); N(pcn,"VCC",("JICSP","2")); N(pcn,"MB5",("JICSP","3"))
+N(pcn,"MB3",("JICSP","4")); N(pcn,"-RESET",("JICSP","5"),("U24","!RESET"),("RRST","1"))
+N(pcn,"GND",("JICSP","6")); N(pcn,"VCC",("RRST","2"))
 # ---- small parts: I/O (unchanged refs) + CF (renumbered to avoid collisions) --
 pcsm={"X2":("OSC","2.4576MHZ"),"SW1":("DIP8SW","INPUT"),"RNP":("SIP9","8X10K"),
  "RL1":("RNISO8","8X330R"),"LA1":("LEDARR8","8-LED BAR"),
@@ -1484,10 +1554,12 @@ pcsm={"X2":("OSC","2.4576MHZ"),"SW1":("DIP8SW","INPUT"),"RNP":("SIP9","8X10K"),
  "X3":("XTAL32","32.768KHZ"),"BT1":("COIN","CR2032"),"J3":("HDR3","RTC 3-WIRE"),
  "DB9A":("DSUB9F","SERIAL1"),"DB9B":("DSUB9F","SERIAL2"),
  "JP1":("JMP2X3","S1 SWAP"),"JP2":("JMP2X3","S2 SWAP"),
+ "PS2A":("MINIDIN6","PS2-KBD"),"PS2B":("MINIDIN6","PS2-MOUSE"),
+ "RN3":("SIP9","4X10K"),"JICSP":("JMP2X3","ICSP"),"RRST":("RES","10K"),
  "J4":("IDE40","IDE-40"),"RN2":("SIP9","8X10K"),
  "R6":("RES","1K"),"LED6":("LED","ACT-YEL"),
  "R7":("RES","330R"),"LED7":("LED","DASP-GRN")}
-card("peripheral-card","P8X PERIPHERAL CARD REV A - I/O + CF-IDE (+ PS/2 stage 2)",pcic,pcsm,pcn,
+card("peripheral-card","P8X PERIPHERAL CARD REV A - I/O + CF-IDE + PS/2",pcic,pcsm,pcn,
  {"D%d"%i for i in range(8)}|{"A%d"%i for i in range(16)}|
  {"DOE%d"%i for i in range(4)}|{"DLD%d"%i for i in range(4)}|{"CLKB","-RES"},
  emit_files=False)
