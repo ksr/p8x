@@ -52,6 +52,8 @@ it and applies the rev-F transform, asserting the gate usage is consistent.
 | `import_ses.py` | import the `.ses` back, re-fill the planes, save |
 | `p8x-memory-card.kicad_pcb` | the finished routed board |
 | `p8x-memory-card-gerbers.zip` | **the orderable output** — 4-layer Gerbers + Excellon drill |
+| `p8x-memory-card-render-top.png` | rendered top view (silk part values visible) |
+| `p8x-memory-card-render-3d.png` | rendered 3D perspective |
 
 ## Regenerate / re-route
 
