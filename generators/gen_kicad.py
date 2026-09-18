@@ -120,14 +120,23 @@ def place_centered(fp, x_mm, y_mm, rot=0):
     fp.SetPosition(VECTOR2I(mm(x_mm) - (x0 + x1) // 2, mm(y_mm) - (y0 + y1) // 2))
 
 def size_after(fp, rot):
-    """(w,h) in mm of the pad bbox after a rotation, without disturbing placement order."""
+    """(w,h) in mm for placement spacing -- use the COURTYARD extent (part body),
+    not just pads, so wide-body parts (oscillators, connectors) don't overlap."""
     fp.SetPosition(P(0, 0))
     if rot: fp.SetOrientationDegrees(rot)
+    try:
+        bb = fp.GetCourtyard(pcbnew.F_CrtYd).BBox()
+        w, h = pcbnew.ToMM(bb.GetWidth()), pcbnew.ToMM(bb.GetHeight())
+        if w > 0.5 and h > 0.5:
+            return w, h
+    except Exception:
+        pass
     x0, y0, x1, y1 = pad_bbox(fp)
     return pcbnew.ToMM(x1 - x0), pcbnew.ToMM(y1 - y0)
 
 # ---- the build --------------------------------------------------------------
-BH = 100.0
+BH = 140.0   # connector-edge dimension (the DIN41612 is ~94mm; extra room = more rows)
+STD_W = 280.0   # uniform card depth (mm); with BH=140 fits the largest card
 def build_card(name):
     title, parts, nets = CARDS[name]
     labels = CARDLABELS.get(name, {}); capfor = CARDCAPS.get(name, {})
@@ -147,73 +156,43 @@ def build_card(name):
             missing.append("%s (%s/%s)" % (ref, dev, DEV[dev]["pkg"])); continue
         fp.SetReference(ref); fp.SetValue(val); board.Add(fp); footp[ref] = fp
 
-    # --- find each LED's series resistor (shared net on the LED anode) --------
-    led_res = {}
-    for ref in [r for r in parts if cls[r] == "led"]:
-        apad = pad_of(ref, parts[ref][0], "A")
-        anet = next((n for n, mem in nets.items() if (ref, "A") in mem), None)
-        if anet:
-            for (r2, pin) in nets[anet]:
-                if r2 != ref and cls.get(r2) == "res":
-                    led_res[ref] = r2; break
-    paired_res = set(led_res.values())
-
-    # --- RIGHT-edge bank: LED(+resistor) pairs, then jumpers/switches ---------
-    bank = [(r, led_res.get(r)) for r in parts if cls[r] == "led"]
-    jumpers = [r for r in parts if cls[r] in ("jumper",)]
-    # place bank down the right edge; resistor inboard, LED at the edge, label between
-    BANK_X_LED = None  # decided after we know width; use fixed right positions
+    # --- UNIFIED courtyard-spaced flow for every part (no fragile fixed bank) --
+    # ICs rotated 90 with their decoupling cap hugging the top edge; LEDs,
+    # resistors, jumpers, switches and misc parts flow inline in the same rows,
+    # each spaced by its real courtyard so nothing ever overlaps. Order groups
+    # like parts so the LED/jumper cluster stays together (labelled in silk).
     placed = set()
-
-    # --- GRID parts: ICs (+cap above), big connectors, misc, lone resistors ---
     grid = ([r for r in parts if cls[r] == "ic"]
             + [r for r in parts if cls[r] == "bigconn"]
             + [r for r in parts if cls[r] == "misc"]
-            + [r for r in parts if cls[r] == "res" and r not in paired_res])
-
-    # board width: flow ICs rot90 into rows in the middle; grow width to fit 100mm
-    GX0 = 34.0; GAP = 5.0; CAPH = 6.5
-    bankw = 30.0
+            + [r for r in parts if cls[r] == "res"]
+            + [r for r in parts if cls[r] == "led"]
+            + [r for r in parts if cls[r] == "jumper"])
+    GX0 = 32.0; GAP = 5.0; CAPH = 6.0
     def flow(width):
-        x1 = width - bankw
+        x1 = width - 6.0
         cx = GX0; cyt = 8.0; rowh = 0.0; pos = {}
         for r in grid:
-            rot = 90 if cls[r] in ("ic",) else 0
+            rot = 90 if cls[r] == "ic" else 0
             w, h = size_after(footp[r], rot)
             need_cap = r in capfor
             top = h + (CAPH if need_cap else 0)
             if cx + w > x1 and cx > GX0:
-                cx = GX0; cyt += rowh + GAP + 2.0; rowh = 0.0
+                cx = GX0; cyt += rowh + 3.0; rowh = 0.0
             pos[r] = (cx + w / 2, cyt + (CAPH if need_cap else 0) + h / 2, rot)
             cx += w + GAP; rowh = max(rowh, top)
         return pos, cyt + rowh
-    W = 200.0
-    for W in (200, 230, 260, 300, 340, 400):
-        pos, bottom = flow(W)
-        if bottom <= BH - 6:
-            break
-    BW = W
-
+    # UNIFORM board size: every card is the same dimensions (Eurocard-style).
+    BW = STD_W
+    pos, bottom = flow(BW)
+    if bottom > BH - 6:
+        print("  WARNING: %s overflows %dx%d (bottom=%.0f)" % (name, BW, BH, bottom))
     for r, (cxm, cym, rot) in pos.items():
         place_centered(footp[r], cxm, cym, rot); placed.add(r)
-        if r in capfor:                                # its cap, hugging the top edge
-            c = capfor[r]
-            if c in footp:
-                x0, y0, x1c, y1c = pad_bbox(footp[r])
-                place_centered(footp[c], pcbnew.ToMM((x0 + x1c) // 2), pcbnew.ToMM(y0) - 4.5, 0)
-                placed.add(c)
-
-    # bank on the right edge
-    yb = 12.0
-    for led, res in bank:
-        if res and res in footp:
-            place_centered(footp[res], BW - 24, yb, 0); placed.add(res)
-        if led in footp:
-            place_centered(footp[led], BW - 8, yb, 180); placed.add(led)
-        yb += 14.0
-    for j in jumpers:
-        if j in footp:
-            place_centered(footp[j], BW - 16, min(yb, BH - 8), 0); placed.add(j); yb += 12.0
+        if r in capfor and capfor[r] in footp:         # cap hugging the IC top edge
+            c = capfor[r]; x0, y0, x1c, y1c = pad_bbox(footp[r])
+            place_centered(footp[c], pcbnew.ToMM((x0 + x1c) // 2), pcbnew.ToMM(y0) - 4.5, 0)
+            placed.add(c)
 
     # any decaps whose IC wasn't placed, or leftovers -> park in a bottom row
     px = GX0
@@ -225,7 +204,7 @@ def build_card(name):
     if "J1" in footp:
         j = footp["J1"]; j.SetPosition(P(0, 0)); j.SetOrientationDegrees(90)
         x0, y0, x1, y1 = pad_bbox(j)
-        j.SetPosition(VECTOR2I(mm(4) - x0, mm(50) - (y0 + y1) // 2))
+        j.SetPosition(VECTOR2I(mm(4) - x0, mm(BH/2) - (y0 + y1) // 2))
 
     # --- assign pads to nets --------------------------------------------------
     badpad = []
@@ -260,7 +239,7 @@ def build_card(name):
 
     # --- silkscreen: values + LED/jumper labels ------------------------------
     C_ = pcbnew.GR_TEXT_H_ALIGN_CENTER; L_ = pcbnew.GR_TEXT_H_ALIGN_LEFT
-    def txt(field, x, y, just, size=0.9):
+    def txt(field, x, y, just, size=0.85):
         field.SetVisible(True); field.SetLayer(pcbnew.F_SilkS)
         field.SetTextSize(pcbnew.VECTOR2I(mm(size), mm(size)))
         field.SetTextThickness(mm(0.15)); field.SetHorizJustify(just)
@@ -275,7 +254,7 @@ def build_card(name):
         x0, y0, x1, y1 = pad_bbox(fp); cx = (x0 + x1) // 2; cy = (y0 + y1) // 2
         v = fp.Value()
         if cls[ref] == "decap":
-            txt(v, x1 + mm(1.3), cy, L_)
+            v.SetVisible(False)
         elif cls[ref] == "led":
             txt(v, x1 + mm(1.3), cy, L_)
             fp.Reference().SetVisible(False)
@@ -284,7 +263,7 @@ def build_card(name):
         elif cls[ref] == "res":
             txt(fp.Reference(), cx, cy - mm(3.2), C_); txt(v, cx, cy + mm(3.2), C_)
         else:
-            txt(v, cx, y1 + mm(4.6), C_)
+            txt(v, cx, y1 + mm(2.8), C_, size=0.8)
         if cls[ref] == "jumper":
             lab = labels.get(ref)
             if lab: silk(lab, pcbnew.ToMM(cx), pcbnew.ToMM(y1) + 2.5, 1.0)
