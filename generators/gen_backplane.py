@@ -41,16 +41,19 @@ netobj = {}
 for n in bpn:
     ni = pcbnew.NETINFO_ITEM(board, n); board.Add(ni); netobj[n] = ni
 
-# Board size + placement TEMPLATE: single row of ten DIN slots, matching the
-# Eagle "rev C compact" placement PDF (hardware/backplane/p8x-backplane-placement.pdf).
-#   - 10 vertical DIN41612 sockets J1..J10 in one row across the board
+# Board size + placement: single row of ten DIN slots pushed to the LEFT, with
+# ALL the peripheral parts gathered on the RIGHT where there is open room (the
+# bulk electrolytics were cramped ~3.5mm from J1 in the old left-column layout).
+#   - 10 vertical DIN41612 sockets J1..J10 in one row, hard against the left edge
 #   - a 100nF cap C1..C10 above each slot, at the top edge
-#   - LEFT column: J11 power entry + C11/C12 bulk electrolytics + R1/LED1 power LED
-#   - RIGHT column: RN1 pull-up network + R2/R3/R4 + C13/C14 clock termination
+#   - RIGHT, inner column: RN1 pull-up network + R2/R3/R4 + C13/C14 clock termination
+#   - RIGHT, outer column (roomy, by the board edge): J11 power entry, C11/C12
+#     bulk electrolytics, R1/LED1 power LED
 #   - 6 mounting holes (3 top, 3 bottom)
-SLOT_X0, SLOT_PITCH, SLOT_CY = 20.0, 28.0, 62.0        # J1 centre, pitch, row centre
+SLOT_X0, SLOT_PITCH, SLOT_CY = 14.0, 28.0, 62.0        # J1 centre, pitch, row centre
 RX = SLOT_X0 + SLOT_PITCH * 9                           # J10 (last slot) centre
-BW, BH = RX + 43.0, 128.0                               # width follows the slot pitch
+RCOL_A, RCOL_B = RX + 16.0, RX + 34.0                  # right inner (pull-ups) / outer (power)
+BW, BH = RCOL_B + 18.0, 128.0                           # width leaves the bulk caps room to breathe
 footp = {}; missing = []
 for ref, spec in bps.items():
     dev, val = spec[0], spec[1]
@@ -74,14 +77,14 @@ for i in range(10):
     sx = SLOT_X0 + SLOT_PITCH * i
     place("J%d" % (i + 1), sx, SLOT_CY)
     place("C%d" % (i + 1), sx, 12.0)                       # decoupling cap, top edge
-# left column: power entry + bulk caps, power LED in the bottom-left corner
-place("J11", 8.0, 42.0)                                    # PWR-5V header (natively tall)
-place("C11", 9.0, 70.0); place("C12", 9.0, 92.0)           # 470uF bulk electrolytics
-place("R1", 12.0, 118.0); place("LED1", 26.0, 118.0)       # power-on LED
-# right column: wired-OR pull-up array + clock termination (past the last slot)
-place("RN1", RX + 12.0, 60.0, 90)                          # 8x10K SIP (vertical)
-place("R2", RX + 21.0, 40.0); place("R3", RX + 21.0, 60.0); place("R4", RX + 21.0, 80.0)
-place("C13", RX + 33.0, 40.0); place("C14", RX + 33.0, 60.0)
+# right inner column: wired-OR pull-up array + clock termination (small parts)
+place("RN1", RCOL_A, 28.0, 90)                             # 8x10K SIP (vertical)
+place("R2", RCOL_A, 52.0); place("R3", RCOL_A, 66.0); place("R4", RCOL_A, 80.0)
+place("C13", RCOL_A, 98.0); place("C14", RCOL_A, 112.0)
+# right outer column (by the board edge, roomy): power entry + bulk caps + power LED
+place("J11", RCOL_B, 24.0)                                 # PWR-5V header (natively tall)
+place("C11", RCOL_B, 52.0); place("C12", RCOL_B, 78.0)     # 470uF bulk electrolytics
+place("R1", RCOL_B - 6.0, 108.0); place("LED1", RCOL_B + 8.0, 108.0)   # power-on LED
 
 # --- silk: SLOT n under each connector (the PDF's slot labels) -----------------
 def silk(txt, x, y, size=1.4):
