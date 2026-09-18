@@ -1307,6 +1307,148 @@ card("cf-card","P8X CF-IDE CARD REV A - 8-BIT TRUE IDE AT 0xFF10",ic,sm,n,
  {"D%d"%i for i in range(8)}|{"A0","A1","A2","A3","A4"}|{"A%d"%i for i in range(8,16)}|
  {"DOE%d"%i for i in range(4)}|{"DLD%d"%i for i in range(4)}|{"CLKB","-RES"})
 
+# ===================== PERIPHERAL CARD (I/O + CF-IDE [+ PS/2]) ================
+# The combined card that supersedes io-card + cf-card (+ the PS/2 design). It
+# SHARES one front-end decode -- a single 7430 I/O-page detector (U1) plus one
+# DOE->-RD (U2) and one DLD->-MEMW (U3) 74138 feed BOTH the I/O and CF sections,
+# dropping the three duplicate decoders each standalone card carried. Addresses
+# are unchanged ($FF00-09 I/O, $FF10-17 CF), so NO software/emulator change.
+# STAGE 1 = the I/O+CF merge below. STAGE 2 (a 2nd 6850+DB9 serial and the
+# ATmega328 PS/2 latch-bridge) is added later. emit_files=False -> feeds the
+# KiCad flow only (the Eagle boards stay frozen); placement is bespoke (KiCad).
+pcn={}
+# ---- shared front-end decode ------------------------------------------------
+pcic={"U1":("7430","IO PAGE"),"U2":("74138","DOE DEC"),"U3":("74138","DLD DEC")}
+for i in range(8): N(pcn,"A%d"%(8+i),("U1","ABCDEFGH"[i]))
+N(pcn,"IOPG",("U1","Y"))
+for u,fld in (("U2","DOE"),("U3","DLD")):
+    for i,pn in enumerate(("A","B","C")): N(pcn,"%s%d"%(fld,i),(u,pn))
+    N(pcn,"%s3"%fld,(u,"!G2A")); N(pcn,"VCC",(u,"G1")); N(pcn,"GND",(u,"!G2B"))
+N(pcn,"-RD",("U2","Y7")); N(pcn,"-MEMW",("U3","Y7"))
+# ---- I/O section (from io-card; its 7430+2x138 decode is now the shared set) --
+pcic.update({"U4":("74138","PORT DEC"),"U5":("GATES14","74HCT32"),"U6":("GATES14","74HCT08"),
+ "U7":("74161","BAUD DIV"),"U8":("MAX232","RS232"),"U9":("74244","SW IN"),
+ "U10":("74374","LED PORT"),"U11":("74244","MON A-LO"),"U12":("74244","MON A-HI"),
+ "U13":("74244","MON D"),"U14":("6850","ACIA1"),"U15":("GATES14","74HCT00"),
+ "U16":("DS1302","RTC DNP")})
+N(pcn,"IOPG",("U4","!G2A"),("U15","3A"),("U15","3B"))
+for i,pn in enumerate(("A","B","C")): N(pcn,"A%d"%(i+1),("U4",pn))
+N(pcn,"VCC",("U4","G1")); N(pcn,"GND",("U4","!G2B"))
+N(pcn,"-P0",("U4","Y0"),("U5","1A")); N(pcn,"-P1",("U4","Y1"),("U5","2A"))
+N(pcn,"-P2",("U4","Y2"),("U15","2A"),("U15","2B"))
+N(pcn,"-RD",("U5","1B"),("U5","4A"))
+N(pcn,"-MEMW",("U5","2B"),("U5","4B"),("U14","RW"))
+N(pcn,"-SWOE",("U5","1Y"),("U9","!G1"),("U9","!G2"))
+N(pcn,"LW1",("U5","2Y"),("U5","3A"))
+N(pcn,"CLKB",("U15","1A"),("U15","1B"),("U6","2B"))
+N(pcn,"CLKBN",("U15","1Y"),("U5","3B"))
+N(pcn,"LCK",("U5","3Y"),("U10","CLK"))
+N(pcn,"BOEISH",("U5","4Y"),("U15","4A"),("U15","4B"))
+N(pcn,"ACCP",("U15","4Y"),("U6","3B"))
+N(pcn,"IOPGN",("U15","3Y"),("U6","3A"))
+N(pcn,"SELP",("U6","3Y"),("R4","2"))
+N(pcn,"LED4A",("R4","1"),("LED4","A")); N(pcn,"GND",("LED4","K"))
+N(pcn,"P2P",("U15","2Y"),("U6","2A"))
+N(pcn,"EEN",("U6","2Y"),("U14","E"))
+for b in range(8):
+    N(pcn,"SWN%d"%b,("SW1","A%d"%(b+1)),("RNP","R%d"%(b+1)),("U9","A%d"%(b+1)))
+    N(pcn,"GND",("SW1","B%d"%(b+1)))
+    N(pcn,"D%d"%b,("U9","Y%d"%(b+1)),("U10","D%d"%(b+1)),("U13","A%d"%(b+1)),("U14","D%d"%b))
+    N(pcn,"LP%d"%b,("U10","Q%d"%(b+1)),("RL1","A%d"%(b+1)))
+    N(pcn,"LR%d"%b,("RL1","B%d"%(b+1)),("LA1","A%d"%(b+1)))
+    N(pcn,"GND",("LA1","K%d"%(b+1)))
+N(pcn,"VCC",("RNP","COM"),("U14","CS0"),("U14","CS1"))
+N(pcn,"GND",("U10","!OC"),("U14","!CTS"),("U14","!DCD"))
+N(pcn,"-P2",("U14","!CS2"))
+N(pcn,"A0",("U14","RS"))
+N(pcn,"BOSC",("X2","OUT"),("U7","CLK"))
+N(pcn,"VCC",("X2","VCC"),("U7","ENP"),("U7","ENT"),("U7","!LOAD"),("U7","!CLR"))
+N(pcn,"GND",("X2","GND"),("U7","A"),("U7","B"),("U7","C"),("U7","D"))
+N(pcn,"BCLK",("U7","QD"),("U14","TXCLK"),("U14","RXCLK"))
+N(pcn,"TXD",("U14","TXD"),("U8","T1IN"))
+N(pcn,"RXD",("U14","RXD"),("U8","R1OUT"))
+N(pcn,"SOUT",("U8","T1OUT"),("J2","1")); N(pcn,"SIN",("U8","R1IN"),("J2","2"))
+N(pcn,"GND",("J2","3"),("LED3","K"))
+N(pcn,"C1PN",("U8","C1P"),("C2","1")); N(pcn,"C1MN",("U8","C1M"),("C2","2"))
+N(pcn,"C2PN",("U8","C2P"),("C3","1")); N(pcn,"C2MN",("U8","C2M"),("C3","2"))
+N(pcn,"VPN",("U8","VP"),("C4","1")); N(pcn,"GND",("C4","2"))
+N(pcn,"VMN",("U8","VM"),("C5","1")); N(pcn,"GND",("C5","2"))
+for half,u in ((0,"U11"),(1,"U12")):
+    N(pcn,"GND",(u,"!G1"),(u,"!G2"))
+    for b in range(8):
+        N(pcn,"A%d"%(half*8+b),(u,"A%d"%(b+1)))
+        N(pcn,"MA%d"%(half*8+b),(u,"Y%d"%(b+1)))
+N(pcn,"GND",("U13","!G1"),("U13","!G2"))
+for b in range(8): N(pcn,"MD%d"%b,("U13","Y%d"%(b+1)))
+for arr,(rm,lm,pre) in enumerate((("RM1","LM1","MA"),("RM2","LM2","MA"),("RM3","LM3","MD"))):
+    off=8 if arr==1 else 0
+    for b in range(8):
+        sig="%s%d"%(pre,off+b)
+        N(pcn,sig,(rm,"A%d"%(b+1)))
+        N(pcn,"ML%d_%d"%(arr,b),(rm,"B%d"%(b+1)),(lm,"A%d"%(b+1)))
+        N(pcn,"GND",(lm,"K%d"%(b+1)))
+N(pcn,"VCC",("RP1","1"))
+N(pcn,"LEDP",("RP1","2"),("LED3","A"))
+N(pcn,"GND",("U6","1A"),("U6","1B"))
+N(pcn,"RTCX1",("U16","X1"),("X3","1")); N(pcn,"RTCX2",("U16","X2"),("X3","2"))
+N(pcn,"VCC",("U16","VCC1")); N(pcn,"VBAT",("U16","VCC2"),("BT1","+"))
+N(pcn,"GND",("U16","GND"),("BT1","-"))
+N(pcn,"RTCCE",("U16","CE"),("J3","1")); N(pcn,"RTCSCLK",("U16","SCLK"),("J3","2"))
+N(pcn,"RTCIO",("U16","IO"),("J3","3"))
+# ---- CF-IDE section (from cf-card; decode shared, refs U17-U22, J4/RN2/R6-7) --
+pcic.update({"U17":("74245","DATA BUF"),"U18":("HEX14","74HCT14"),"U19":("7410","74HCT10"),
+ "U20":("7410","74HCT10"),"U21":("GATES14","74HCT08"),"U22":("74374","CF HI-BYTE DNP")})
+N(pcn,"IOPG",("U18","1A"))
+N(pcn,"IOPGP",("U18","1Y"),("U19","1A"),("U19","2A"))
+N(pcn,"-RD",("U18","2A")); N(pcn,"-MEMW",("U18","3A"))
+N(pcn,"RDP",("U18","2Y"),("U20","1B")); N(pcn,"WRP",("U18","3Y"),("U20","2B"))
+N(pcn,"A3",("U19","2C"),("U18","4A")); N(pcn,"A3N",("U18","4Y"),("U19","1C"))
+N(pcn,"A4",("U19","1B"),("U19","2B"))
+N(pcn,"-CS0",("U19","1Y"),("J4","37"),("U21","1A"))
+N(pcn,"-CS1",("U19","2Y"),("J4","38"),("U21","1B"))
+N(pcn,"-CFSEL",("U21","1Y"),("U18","5A"))
+N(pcn,"CFSELP",("U18","5Y"),("U20","1A"),("U20","2A"))   # was 'SELP' on cf-card (renamed: io's SELP differs)
+N(pcn,"CLKB",("U20","1C"),("U20","2C"))
+N(pcn,"-IOR",("U20","1Y"),("J4","25"),("U17","DIR"),("U21","2A"))
+N(pcn,"-IOW",("U20","2Y"),("J4","23"),("U21","2B"))
+N(pcn,"-CFOE",("U21","2Y"),("U17","!OE"),("U21","3A"),("U21","3B"))
+N(pcn,"ACTK",("U21","3Y"),("LED6","K"))
+for b in range(8):
+    N(pcn,"D%d"%b,("U17","A%d"%b))
+    N(pcn,"CFD%d"%b,("U17","B%d"%b),("J4",str(17-2*b)))
+for i,pin in enumerate(("35","33","36")): N(pcn,"A%d"%i,("J4",pin))
+N(pcn,"-RES",("J4","1"))
+N(pcn,"VCC",("RN2","COM"),("J4","29"))
+N(pcn,"IORDY",("RN2","R1"),("J4","27"))
+N(pcn,"-PDIAG",("RN2","R2"),("J4","34"))
+N(pcn,"-DASP",("RN2","R3"),("J4","39"),("LED7","K"))
+N(pcn,"GND",("J4","28"),*[("J4",p) for p in ("2","19","22","24","26","30","40")],
+  ("U21","4A"),("U21","4B"),
+  ("U19","3A"),("U19","3B"),("U19","3C"),("U20","3A"),("U20","3B"),("U20","3C"),
+  ("U18","6A"))
+N(pcn,"VCC",("R6","1"),("R7","1"))
+N(pcn,"LEDAC",("R6","2"),("LED6","A")); N(pcn,"LEDDA",("R7","2"),("LED7","A"))
+for b,pin in enumerate(("4","6","8","10","12","14","16","18")):
+    N(pcn,"CFD%d"%(8+b),("U22","D%d"%(b+1)),("J4",pin))
+N(pcn,"VCC",("U22","!OC")); N(pcn,"GND",("U22","CLK"))
+# ---- small parts: I/O (unchanged refs) + CF (renumbered to avoid collisions) --
+pcsm={"X2":("OSC","2.4576MHZ"),"SW1":("DIP8SW","INPUT"),"RNP":("SIP9","8X10K"),
+ "RL1":("RNISO8","8X330R"),"LA1":("LEDARR8","8-LED BAR"),
+ "RM1":("RNISO8","8X330R"),"LM1":("LEDARR8","A0-7"),
+ "RM2":("RNISO8","8X330R"),"LM2":("LEDARR8","A8-15"),
+ "RM3":("RNISO8","8X330R"),"LM3":("LEDARR8","D0-7"),
+ "J2":("HDR3","SERIAL"),"C2":("CAP","1uF"),"C3":("CAP","1uF"),"C4":("CAP","1uF"),
+ "C5":("CAP","1uF"),"RP1":("RES","1K"),"LED3":("LED","PWR-GRN"),
+ "R4":("RES","1K"),"LED4":("LED","IOSEL-YEL"),
+ "X3":("XTAL32","32.768KHZ"),"BT1":("COIN","CR2032"),"J3":("HDR3","RTC 3-WIRE"),
+ "J4":("IDE40","IDE-40"),"RN2":("SIP9","8X10K"),
+ "R6":("RES","1K"),"LED6":("LED","ACT-YEL"),
+ "R7":("RES","330R"),"LED7":("LED","DASP-GRN")}
+card("peripheral-card","P8X PERIPHERAL CARD REV A - I/O + CF-IDE (+ PS/2 stage 2)",pcic,pcsm,pcn,
+ {"D%d"%i for i in range(8)}|{"A%d"%i for i in range(16)}|
+ {"DOE%d"%i for i in range(4)}|{"DLD%d"%i for i in range(4)}|{"CLKB","-RES"},
+ emit_files=False)
+
 # ===================== MEMORY CARD rev E ======================================
 # Built through the shared card() helper like every other logic card (placement
 # is auto — final layout is done in Fusion/Eagle). card() supplies J1, the per-IC
