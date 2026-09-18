@@ -1,0 +1,5 @@
+gerbers/
+*.dsn
+*.kicad_prl
+*.rpt
+fr.log
