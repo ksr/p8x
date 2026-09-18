@@ -13,8 +13,13 @@ board-specific design docs.
 | Memory | [memory-card/](memory-card/README.md) | 28C64 ROM (or low 8K of 28C256) + 62256 SRAM, address decode |
 | I/O | [io-card/](io-card/README.md) | Switches, LEDs, 6850 ACIA (RS-232) |
 | CF-IDE | [cf-card/](cf-card/README.md) | CompactFlash in 8-bit True IDE mode at `$FF10–$FF17` |
-| LED display | [led-card/](led-card/README.md) | Optional front-panel bus monitor — passive address/data LED array |
 | Backplane | [backplane/](backplane/p8x-backplane-design.md) | 10-slot passive 96-pin DIN 41612 bus (rev C2) |
+
+> **Deprecated:** the standalone **LED test card** (a write-only 8-LED output
+> latch that decoded `$FF0C`) was a CAD-workflow trial, never built. It has been
+> moved to [`deprecated/led-card/`](deprecated/led-card/) and its I/O address
+> `$FF0C` is now free. (This is unrelated to the `$FF02` LED latch the emulator
+> traces, which stays.)
 | PS/2 *(design)* | [ps2-card/](ps2-card/README.md) | **Proposal** — standalone PS/2 keyboard + mouse receivers at `$FF58–$FF5F` (5 V TTL, no level shift). Not built yet, no CAD. |
 
 ### Not yet realised as TTL boards

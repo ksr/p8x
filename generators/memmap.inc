@@ -13,7 +13,7 @@ CSTACKTOP   = $F800              ; compiler C-stack top (grows down; p8cc __csp 
 
 ; I/O ports ($FF00-$FFFF)
 SWITCHES    = $FF00              ; read: DIP/switch input (I/O card port 0; emulator -s)
-LEDS        = $FF02              ; write: LED output latch (LED card port 1; emulator -L stamps)
+LEDS        = $FF02              ; write: LED output latch (emulator -L stamps; POKE 65282)
 IRQGEN      = $FF06              ; write (any value): assert a maskable IRQ (emulator device-IRQ model; hardware IRQ comes from the IRQ-controller card)
 ACIAS       = $FF04              ; ACIA status (rd) / control (wr)
 ACIAD       = $FF05              ; ACIA data

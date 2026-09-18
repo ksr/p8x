@@ -33,12 +33,18 @@ MAP = [
     # needs no loading. Apps keep the FULL TPA $6A00..CSTACKTOP. (History: a
     # standalone blob lived at $D800 above the TPA, then at $5600 -- both retired;
     # $5600 sat inside the shell history ring, which is why the ring moved.)
-    # I/O-card ports 0/1 (A1-A3 decode within the $FF00 page): the DIP switches
-    # in, the LED latch out. Both are real backplane registers -- switches on the
-    # I/O card ($FF00-$FF01), LEDs on the LED card ($FF02-$FF03). The emulator
-    # backs the switches with -s and stamps the LED writes with -L.
+    # $FF00 DIP switches (in) and $FF02 LED latch (out) -- the I/O-card ports the
+    # emulator backs with -s (switches) and traces with -L (LEDs). $FF02 is the LED
+    # output everything actually uses (benchmarks POKE 65282,n). NOTE: this is NOT
+    # the standalone LED *test* card -- that was a separate board at a different
+    # address ($FF0C, see below), now deprecated.
     ('I/O ports ($FF00-$FFFF)', 'SWITCHES', 0xFF00, 'read: DIP/switch input (I/O card port 0; emulator -s)'),
-    ('I/O ports ($FF00-$FFFF)', 'LEDS', 0xFF02, 'write: LED output latch (LED card port 1; emulator -L stamps)'),
+    ('I/O ports ($FF00-$FFFF)', 'LEDS', 0xFF02, 'write: LED output latch (emulator -L stamps; POKE 65282)'),
+    # $FF0C: FREE / available. Formerly the standalone LED test card's write-only
+    # 8-LED latch (74HC138 Y6 with A4=0 -> $FF0C). That card was a CAD-workflow
+    # trial, never built; deprecated and moved to hardware/deprecated/led-card on
+    # 2026-09-18. The address is unused and open for a future peripheral. (Distinct
+    # from the $FF02 LED latch above, which stays.)
     # $FF06: the emulator's DEVICE-IRQ model -- a write asserts a maskable IRQ so
     # test code can exercise the interrupt path. It is NOT a decoded board
     # register: on the TTL build the IRQ is raised by the (planned) IRQ-controller

@@ -12,7 +12,7 @@ CSTACKTOP   = 0xF800             # compiler C-stack top (grows down; p8cc __csp 
 
 # I/O ports ($FF00-$FFFF)
 SWITCHES    = 0xFF00             # read: DIP/switch input (I/O card port 0; emulator -s)
-LEDS        = 0xFF02             # write: LED output latch (LED card port 1; emulator -L stamps)
+LEDS        = 0xFF02             # write: LED output latch (emulator -L stamps; POKE 65282)
 IRQGEN      = 0xFF06             # write (any value): assert a maskable IRQ (emulator device-IRQ model; hardware IRQ comes from the IRQ-controller card)
 ACIAS       = 0xFF04             # ACIA status (rd) / control (wr)
 ACIAD       = 0xFF05             # ACIA data

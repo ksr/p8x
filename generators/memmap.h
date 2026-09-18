@@ -14,7 +14,7 @@
 
 /* I/O ports ($FF00-$FFFF) */
 #define SWITCHES    0xFF00       /* read: DIP/switch input (I/O card port 0; emulator -s) */
-#define LEDS        0xFF02       /* write: LED output latch (LED card port 1; emulator -L stamps) */
+#define LEDS        0xFF02       /* write: LED output latch (emulator -L stamps; POKE 65282) */
 #define IRQGEN      0xFF06       /* write (any value): assert a maskable IRQ (emulator device-IRQ model; hardware IRQ comes from the IRQ-controller card) */
 #define ACIAS       0xFF04       /* ACIA status (rd) / control (wr) */
 #define ACIAD       0xFF05       /* ACIA data */

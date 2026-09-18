@@ -15,7 +15,6 @@ motherboard and is physically larger.
 | Board | Routed | Unconn. | Notes |
 |-------|--------|---------|-------|
 | memory-card | ✅ | 1 | rev F, bespoke `gen_mem.py` |
-| led-card | ✅ | 0 | |
 | cf-card | ✅ | 0 | IDE/RTC/coin subs |
 | control-card | ✅ | 0 | 14-pin oscillator |
 | alu-card | ✅ | 0 | |
@@ -23,6 +22,11 @@ motherboard and is physically larger.
 | regbank-card | ✅ | 0 | 95 parts — routed (5m45s auto + ~13min optimizer) |
 | bustest-card | ✅ | 0 | Pico + 17 LEDs; routed with right-edge LED bank |
 | backplane | ⚠ placed | — | 10-slot DIN41612 motherboard, 315×128mm (rev-C compact template, 28mm slot pitch); bus routing is a big follow-up |
+
+> **Deprecated:** the **led-card** (previously routed here) was a CAD-workflow
+> test card, never planned to be built. It was moved to
+> `hardware/deprecated/led-card/` on 2026-09-18 and its I/O address `$FF0C` freed.
+> Not rebuilt or maintained going forward.
 
 ## Known follow-ups
 - **regbank + bustest routing.** Placed + netlisted + planes at 280×140, but the

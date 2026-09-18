@@ -8,7 +8,7 @@ the source of truth and `.brd` placement is the user's Fusion work).
 ## TL;DR
 
 Most of the built CPU cards (control, register bank, ALU, I/O, CF-IDE) plus the
-LED display and backplane are **current** — the ISA has grown a lot since they
+backplane are **current** — the ISA has grown a lot since they
 were laid out, but that growth is **entirely in the microcode ROM**, which is
 data burned into the control card's existing EPROMs, not a change to any card's
 logic. **Two things need attention before a build:** (1) the **memory card's ROM
@@ -31,7 +31,10 @@ emulator and/or on the FPGA graphics card.
 - **I/O card.** `$FF00` switches / `$FF02` LEDs / `$FF04-05` ACIA unchanged. These
   ports are now named in the single-source memory map (`SWITCHES`, `LEDS`).
 - **CF-IDE card.** `$FF10-$FF17`, unchanged.
-- **Backplane, LED display.** Unchanged.
+- **Backplane.** Unchanged.
+- **LED test card (DEPRECATED).** A CAD-workflow trial (write-only 8-LED latch at
+  `$FF0C`), never planned to be built. Moved to `hardware/deprecated/led-card/`;
+  `$FF0C` is now free. (Distinct from the `$FF02` LED latch above, which stays.)
 
 ## Needs a decode change before building
 

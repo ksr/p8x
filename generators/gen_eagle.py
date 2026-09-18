@@ -649,7 +649,7 @@ SILK_GAP=1.2
 
 def card(name,title,parts_ic,parts_small,nets,used_bus,labels=None,
          brd_outline_only=False,brd_unplaced=True,W=160,H=100,
-         hide_name=None,hide_val=None,center_title=False,place=None):
+         hide_name=None,hide_val=None,center_title=False,place=None,emit_files=True):
     """Build sch+brd for one plug-in card. `labels` maps ref -> logical-function
     text placed near the part on the schematic (the part's `value` is its part
     number). `brd_outline_only` emits a .brd with just the board dimensions;
@@ -759,7 +759,7 @@ def card(name,title,parts_ic,parts_small,nets,used_bus,labels=None,
     allp=dict(parts)   # resolved values (part numbers) for the BOM / renderer
     CARDS[name]=(title,allp,nets)
     base="%s/p8x-%s"%(name,name)   # each board in its own subdirectory
-    if EMIT:
+    if EMIT and emit_files:
         write_sch(base+".sch",title,sch,nets,lab)
         validate(base+".sch",sch,nets)
         write_brd(base+".brd",title,brd,nets,{},{"GND":[(2,)],"VCC":[(15,)]},W,H,
@@ -1545,7 +1545,13 @@ if EMIT:
               {"GND":[(2,)],"VCC":[(15,)]},300.0,128.0,viad,holes=bpholes)
     validate("backplane/p8x-backplane.brd",bpb,bpn)
 
-# ===================== LED OUTPUT CARD (test / CAD-workflow trial) ============
+# ===================== LED OUTPUT CARD (DEPRECATED) ==========================
+# DEPRECATED 2026-09-18: a CAD-workflow trial, never planned to be built. Its
+# file tree was moved to hardware/deprecated/led-card/ and this card no longer
+# emits files (emit_files=False below) -- the netlist is kept only so CARDS
+# still carries it for reference. Its I/O address $FF0C is now FREE (see
+# generators/gen_memmap.py). Do NOT regenerate/place/design it.
+#
 # A minimal memory-mapped output card: write a byte to $FF0C and its 8 bits
 # appear on 8 LEDs (write-only; no readback). Built with the shared card()
 # helper so it gets the standard DIN96C edge connector, per-IC decoupling, and
@@ -1589,9 +1595,9 @@ N(n,"GND",("U4","3A"),("U4","3B"),("U4","4A"),("U4","4B"),
 N(n,"VCC",("RP1","1"),("R4","1"))
 N(n,"LEDP",("RP1","2"),("LED3","A")); N(n,"GND",("LED3","K"))
 N(n,"LEDWR",("R4","2"),("LED4","A"))
-card("led-card","P8X LED OUTPUT CARD (test - write-only 8 LEDs at $FF0C)",ic,sm,n,
+card("led-card","P8X LED OUTPUT CARD (DEPRECATED - test card, $FF0C now free)",ic,sm,n,
  {"D%d"%i for i in range(8)}|{"A1","A2","A3","A4"}|{"A%d"%i for i in range(8,16)}|
- {"DLD%d"%i for i in range(4)}|{"CLKB"},labels=led_labels)   # brd_unplaced is now the default
+ {"DLD%d"%i for i in range(4)}|{"CLKB"},labels=led_labels,emit_files=False)  # DEPRECATED: emits no files
 
 # ===================== BUS TEST CARD (USB-driven bring-up) ====================
 # See hardware/bustest-card/p8x-bustest-card-design.md. A Pico drives 5 MCP23S17

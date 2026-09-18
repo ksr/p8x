@@ -63,8 +63,9 @@ boards are built from, and can't drift out of sync.
 ### `render_traditional_auto.py` — card schematics
 Imports `gen_eagle` and algorithmically lays out a traditional-style schematic
 (bus spines, junction dots, power-rail glyphs, NC marks) for every card in
-`gen_eagle.CARDS` — all seven (control, register-bank, ALU, I/O, CF, memory, and
-the LED card). Automatic placement: functional rather than hand-polished, but
+`gen_eagle.CARDS` — control, register-bank, ALU, I/O, CF, and memory. (The
+deprecated LED test card is still in `CARDS` for reference but emits no files.)
+Automatic placement: functional rather than hand-polished, but
 covers every card from one run. Each card's PDF lands in its own
 `hardware/<board>/` directory. Because it imports `gen_eagle`, running it
 regenerates the board files too, so run it from `hardware/`.
