@@ -32,3 +32,4 @@ print("routed: %d track segments, %d vias" % (ntrk, nvia))
 sys.path.insert(0, HERE)
 import gen_placement
 gen_placement.build()
+sys.stdout.flush(); os._exit(0)   # skip the wx.App exit hang (board + PDF are saved)

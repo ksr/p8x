@@ -32,3 +32,4 @@ open(dsn, "w").write(txt)
 npow = txt.count("(type power)")
 print("patched internal layers to power:", npow)
 print("exists:", os.path.exists(dsn), os.path.getsize(dsn), "bytes")
+import sys as _sys; _sys.stdout.flush(); os._exit(0)   # skip the wx.App exit hang

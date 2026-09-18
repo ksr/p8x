@@ -151,3 +151,4 @@ if __name__ == "__main__":
     elif cmd == "placement": placement(sys.argv[2])
     elif cmd == "finish": finish(sys.argv[2])
     else: sys.exit("unknown cmd " + cmd)
+    sys.stdout.flush(); os._exit(0)   # skip the wx.App event-loop exit hang (work is saved)
