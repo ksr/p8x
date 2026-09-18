@@ -57,7 +57,7 @@ FPMAP = {
     "MABC96R":("Connector_DIN", "DIN41612_C_3x32_Male_Horizontal_THT"),
     # ---- substitutions (closest standard footprint) ----
     "HDR40":  ("Connector_PinHeader_2.54mm", "PinHeader_2x20_P2.54mm_Vertical", "SUB 2x20 header"),
-    "OSC4":   ("Oscillator", "Oscillator_DIP-8", "SUB DIP-8 can oscillator"),
+    "OSC4":   ("Oscillator", "Oscillator_DIP-14", "SUB DIP-14 can oscillator"),
     "SIP9":   ("Resistor_THT", "R_Array_SIP9", "SUB bussed SIP-9 R-network"),
     "SIP16":  ("Connector_PinHeader_2.54mm", "PinHeader_1x16_P2.54mm_Vertical", "SUB 1x16 SIP (isolated R-net)"),
     "CP_RADIAL": ("Capacitor_THT", "CP_Radial_D8.0mm_P3.50mm", "SUB radial electrolytic / coin"),
@@ -172,7 +172,7 @@ def build_card(name):
             + [r for r in parts if cls[r] == "res" and r not in paired_res])
 
     # board width: flow ICs rot90 into rows in the middle; grow width to fit 100mm
-    GX0 = 34.0; GAP = 6.0; CAPH = 7.5
+    GX0 = 34.0; GAP = 5.0; CAPH = 6.5
     bankw = 30.0
     def flow(width):
         x1 = width - bankw
@@ -183,7 +183,7 @@ def build_card(name):
             need_cap = r in capfor
             top = h + (CAPH if need_cap else 0)
             if cx + w > x1 and cx > GX0:
-                cx = GX0; cyt += rowh + GAP + 3.0; rowh = 0.0
+                cx = GX0; cyt += rowh + GAP + 2.0; rowh = 0.0
             pos[r] = (cx + w / 2, cyt + (CAPH if need_cap else 0) + h / 2, rot)
             cx += w + GAP; rowh = max(rowh, top)
         return pos, cyt + rowh

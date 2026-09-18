@@ -91,3 +91,8 @@ __pycache__/
 # firmware — keep everything under it tracked despite the global *.zip / binary
 # ignore rules above.
 !hardware/reference/**
+
+# kicad-cli scratch
+logs/
+p8x-*-drc.rpt
+*-drc.rpt
