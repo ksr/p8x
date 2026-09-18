@@ -95,6 +95,13 @@ PKG={
  "SW2P": [("1",0,0,1.0,1.9),("2",5.08,0,1.0,1.9)],
  "HDR40": [(str(k+1),2.54*(k%2),-2.54*(k//2),0.9,1.7) for k in range(40)],
  "HDR10": [(str(k+1),2.54*(k%2),-2.54*(k//2),0.9,1.7) for k in range(10)],
+ # peripheral-card connectors (stage 2). DSUB9 = DE9 pin pattern (5 top / 4 bottom
+ # staggered); HDR2X3 = 2col x 3row (row-major, left col = 1,3,5); MINIDIN6 = a
+ # 1x6 header stand-in for the PS/2 socket (SUB -- real MiniDIN-6 land later).
+ "DSUB9": [(str(k),2.77*(k-1),0,1.0,2.0) for k in range(1,6)]
+        + [(str(k),2.77*(k-6)+1.385,-2.84,1.0,2.0) for k in range(6,10)],
+ "HDR2X3": [(str(k+1),2.54*(k%2),-2.54*(k//2),0.9,1.7) for k in range(6)],
+ "MINIDIN6": [(str(k+1),0,-2.54*k,0.9,1.8) for k in range(6)],
 }
 
 # Extra silkscreen geometry per package, beyond the standard >NAME/>VALUE text.
@@ -259,6 +266,19 @@ D("LEDARR8",["A%d"%i for i in range(1,9)],["K%d"%i for i in range(1,9)],
   dict([("A%d"%i,str(i)) for i in range(1,9)]+[("K%d"%i,str(17-i)) for i in range(1,9)]),"DIP16")
 D("IDE40",[str(k) for k in range(1,41,2)],[str(k) for k in range(2,41,2)],
   {str(k):str(k) for k in range(1,41)},"HDR40")
+# ---- peripheral-card connectors + MCU (stage 2) -----------------------------
+D("DSUB9F",[str(k) for k in range(1,10)],[],{str(k):str(k) for k in range(1,10)},"DSUB9")  # DB9 female (socket)
+D("MINIDIN6",[str(k) for k in range(1,7)],[],{str(k):str(k) for k in range(1,7)},"MINIDIN6")  # PS/2 (SUB hdr)
+D("JMP2X3",[str(k) for k in range(1,7)],[],{str(k):str(k) for k in range(1,7)},"HDR2X3")    # RX/TX swap block
+# ATmega328P (DIP-28 narrow): PS/2 signal processor. Standard AVR DIP pinout.
+D("ATMEGA328",
+  ["!RESET","PD0","PD1","PD2","PD3","PD4","PB6","PB7","PD5","PD6","PD7",
+   "PB0","PB1","PB2","PB3","PB4","PB5","AREF","PC0","PC1","PC2","PC3","PC4","PC5"],
+  ["VCC","AVCC","GND","GND2"],
+  {"!RESET":"1","PD0":"2","PD1":"3","PD2":"4","PD3":"5","PD4":"6","VCC":"7","GND":"8",
+   "PB6":"9","PB7":"10","PD5":"11","PD6":"12","PD7":"13","PB0":"14","PB1":"15","PB2":"16",
+   "PB3":"17","PB4":"18","PB5":"19","AVCC":"20","AREF":"21","GND2":"22","PC0":"23","PC1":"24",
+   "PC2":"25","PC3":"26","PC4":"27","PC5":"28"},"DIP28N")
 
 # ---- bustest-card parts -----------------------------------------------------
 # MCP23S17: 16-bit SPI I/O expander, per-pin direction + per-pin pull-up, 5 V.
@@ -1367,8 +1387,13 @@ N(pcn,"GND",("X2","GND"),("U7","A"),("U7","B"),("U7","C"),("U7","D"))
 N(pcn,"BCLK",("U7","QD"),("U14","TXCLK"),("U14","RXCLK"))
 N(pcn,"TXD",("U14","TXD"),("U8","T1IN"))
 N(pcn,"RXD",("U14","RXD"),("U8","R1OUT"))
-N(pcn,"SOUT",("U8","T1OUT"),("J2","1")); N(pcn,"SIN",("U8","R1IN"),("J2","2"))
-N(pcn,"GND",("J2","3"),("LED3","K"))
+# serial 1 (ACIA1) RS-232 through the RX/TX swap jumper JP1 to DB9-A. On JP1
+# (2x3): centre row = P8X TX(3)/RX(4); TOP jumpers (1-3,2-4)=STRAIGHT, BOTTOM
+# jumpers (3-5,4-6)=NULL. DB9 pin3=TXD, pin2=RXD (both wired to two JP pins).
+N(pcn,"SOUT",("U8","T1OUT"),("JP1","3")); N(pcn,"SIN",("U8","R1IN"),("JP1","4"))
+N(pcn,"S1TXD",("JP1","1"),("JP1","6"),("DB9A","3"))
+N(pcn,"S1RXD",("JP1","2"),("JP1","5"),("DB9A","2"))
+N(pcn,"GND",("DB9A","5"),("LED3","K"))
 N(pcn,"C1PN",("U8","C1P"),("C2","1")); N(pcn,"C1MN",("U8","C1M"),("C2","2"))
 N(pcn,"C2PN",("U8","C2P"),("C3","1")); N(pcn,"C2MN",("U8","C2M"),("C3","2"))
 N(pcn,"VPN",("U8","VP"),("C4","1")); N(pcn,"GND",("C4","2"))
@@ -1395,6 +1420,23 @@ N(pcn,"VCC",("U16","VCC1")); N(pcn,"VBAT",("U16","VCC2"),("BT1","+"))
 N(pcn,"GND",("U16","GND"),("BT1","-"))
 N(pcn,"RTCCE",("U16","CE"),("J3","1")); N(pcn,"RTCSCLK",("U16","SCLK"),("J3","2"))
 N(pcn,"RTCIO",("U16","IO"),("J3","3"))
+# ---- 2nd serial channel: ACIA2 ($FF08/09) on MAX232 chan 2 -> DB9-B/JP2 ------
+# Enable E2 = P4P AND CLKB, mirroring ACIA1's EEN. -P4 ($FF08 select from the
+# port decoder) is inverted by the spare HEX14 gate (U18.6) and ANDed with CLKB
+# in the spare 74HCT08 gate (U6.4).
+pcic["U23"]=("6850","ACIA2")
+N(pcn,"-P4",("U4","Y4"),("U18","6A")); N(pcn,"P4P",("U18","6Y"),("U6","4A"))
+N(pcn,"CLKB",("U6","4B")); N(pcn,"E2",("U6","4Y"),("U23","E"))
+for b in range(8): N(pcn,"D%d"%b,("U23","D%d"%b))
+N(pcn,"VCC",("U23","CS0"),("U23","CS1")); N(pcn,"-P4",("U23","!CS2"))
+N(pcn,"A0",("U23","RS")); N(pcn,"-MEMW",("U23","RW"))
+N(pcn,"BCLK",("U23","TXCLK"),("U23","RXCLK"))
+N(pcn,"GND",("U23","!CTS"),("U23","!DCD"))
+N(pcn,"TXD2",("U23","TXD"),("U8","T2IN")); N(pcn,"RXD2",("U23","RXD"),("U8","R2OUT"))
+N(pcn,"SOUT2",("U8","T2OUT"),("JP2","3")); N(pcn,"SIN2",("U8","R2IN"),("JP2","4"))
+N(pcn,"S2TXD",("JP2","1"),("JP2","6"),("DB9B","3"))
+N(pcn,"S2RXD",("JP2","2"),("JP2","5"),("DB9B","2"))
+N(pcn,"GND",("DB9B","5"))
 # ---- CF-IDE section (from cf-card; decode shared, refs U17-U22, J4/RN2/R6-7) --
 pcic.update({"U17":("74245","DATA BUF"),"U18":("HEX14","74HCT14"),"U19":("7410","74HCT10"),
  "U20":("7410","74HCT10"),"U21":("GATES14","74HCT08"),"U22":("74374","CF HI-BYTE DNP")})
@@ -1424,8 +1466,7 @@ N(pcn,"-PDIAG",("RN2","R2"),("J4","34"))
 N(pcn,"-DASP",("RN2","R3"),("J4","39"),("LED7","K"))
 N(pcn,"GND",("J4","28"),*[("J4",p) for p in ("2","19","22","24","26","30","40")],
   ("U21","4A"),("U21","4B"),
-  ("U19","3A"),("U19","3B"),("U19","3C"),("U20","3A"),("U20","3B"),("U20","3C"),
-  ("U18","6A"))
+  ("U19","3A"),("U19","3B"),("U19","3C"),("U20","3A"),("U20","3B"),("U20","3C"))
 N(pcn,"VCC",("R6","1"),("R7","1"))
 N(pcn,"LEDAC",("R6","2"),("LED6","A")); N(pcn,"LEDDA",("R7","2"),("LED7","A"))
 for b,pin in enumerate(("4","6","8","10","12","14","16","18")):
@@ -1437,10 +1478,12 @@ pcsm={"X2":("OSC","2.4576MHZ"),"SW1":("DIP8SW","INPUT"),"RNP":("SIP9","8X10K"),
  "RM1":("RNISO8","8X330R"),"LM1":("LEDARR8","A0-7"),
  "RM2":("RNISO8","8X330R"),"LM2":("LEDARR8","A8-15"),
  "RM3":("RNISO8","8X330R"),"LM3":("LEDARR8","D0-7"),
- "J2":("HDR3","SERIAL"),"C2":("CAP","1uF"),"C3":("CAP","1uF"),"C4":("CAP","1uF"),
+ "C2":("CAP","1uF"),"C3":("CAP","1uF"),"C4":("CAP","1uF"),
  "C5":("CAP","1uF"),"RP1":("RES","1K"),"LED3":("LED","PWR-GRN"),
  "R4":("RES","1K"),"LED4":("LED","IOSEL-YEL"),
  "X3":("XTAL32","32.768KHZ"),"BT1":("COIN","CR2032"),"J3":("HDR3","RTC 3-WIRE"),
+ "DB9A":("DSUB9F","SERIAL1"),"DB9B":("DSUB9F","SERIAL2"),
+ "JP1":("JMP2X3","S1 SWAP"),"JP2":("JMP2X3","S2 SWAP"),
  "J4":("IDE40","IDE-40"),"RN2":("SIP9","8X10K"),
  "R6":("RES","1K"),"LED6":("LED","ACT-YEL"),
  "R7":("RES","330R"),"LED7":("LED","DASP-GRN")}

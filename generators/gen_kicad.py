@@ -55,7 +55,10 @@ FPMAP = {
     "HDR4":   ("Connector_PinHeader_2.54mm", "PinHeader_1x04_P2.54mm_Vertical"),
     "HDR10":  ("Connector_PinHeader_2.54mm", "PinHeader_1x10_P2.54mm_Vertical"),
     "MABC96R":("Connector_DIN", "DIN41612_C_3x32_Male_Horizontal_THT"),
+    "DSUB9":  ("Connector_Dsub", "DSUB-9_Socket_Horizontal_P2.77x2.54mm_EdgePinOffset9.40mm"),
+    "HDR2X3": ("Connector_PinHeader_2.54mm", "PinHeader_2x03_P2.54mm_Vertical"),
     # ---- substitutions (closest standard footprint) ----
+    "MINIDIN6":("Connector_PinHeader_2.54mm", "PinHeader_1x06_P2.54mm_Vertical", "SUB 1x6 header for PS/2 mini-DIN-6 (replace with real MiniDIN-6 socket)"),
     "HDR40":  ("Connector_PinHeader_2.54mm", "PinHeader_2x20_P2.54mm_Vertical", "SUB 2x20 header"),
     "OSC4":   ("Oscillator", "Oscillator_DIP-14", "SUB DIP-14 can oscillator"),
     "SIP9":   ("Resistor_THT", "R_Array_SIP9", "SUB bussed SIP-9 R-network"),
