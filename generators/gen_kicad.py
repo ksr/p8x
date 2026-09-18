@@ -162,15 +162,31 @@ def build_card(name):
     # each spaced by its real courtyard so nothing ever overlaps. Order groups
     # like parts so the LED/jumper cluster stays together (labelled in silk).
     placed = set()
+    # STATUS LEDs (+ their series resistors) go in a bank down the RIGHT edge
+    # (opposite the bus connector). Find each LED's resistor via its anode net.
+    leds = [r for r in parts if cls[r] == "led"]
+    led_res = {}; _used = set()
+    for led in leds:
+        anet = next((n for n, mem in nets.items() if (led, "A") in mem), None)
+        if anet:
+            for (r2, _p) in nets[anet]:
+                if r2 != led and cls.get(r2) == "res" and r2 not in _used:
+                    led_res[led] = r2; _used.add(r2); break   # each resistor -> one LED
+    bank_res = set(led_res.values())
+    # reserve the right strip: compute how many LED columns are needed so the grid
+    # never runs into the bank (each column ~20mm; ~12 LEDs fit a 140mm column).
+    per_col = max(1, int((BH - 16) / 11))
+    ncol = max(1, math.ceil(len(leds) / per_col)) if leds else 0
+    BANKW = ncol * 26.0 + 8.0 if leds else 6.0
+    # everything else flows in the left area, courtyard-spaced (never overlaps)
     grid = ([r for r in parts if cls[r] == "ic"]
             + [r for r in parts if cls[r] == "bigconn"]
             + [r for r in parts if cls[r] == "misc"]
-            + [r for r in parts if cls[r] == "res"]
-            + [r for r in parts if cls[r] == "led"]
+            + [r for r in parts if cls[r] == "res" and r not in bank_res]
             + [r for r in parts if cls[r] == "jumper"])
     GX0 = 32.0; GAP = 5.0; CAPH = 6.0
     def flow(width):
-        x1 = width - 6.0
+        x1 = width - BANKW
         cx = GX0; cyt = 8.0; rowh = 0.0; pos = {}
         for r in grid:
             rot = 90 if cls[r] == "ic" else 0
@@ -193,6 +209,23 @@ def build_card(name):
             c = capfor[r]; x0, y0, x1c, y1c = pad_bbox(footp[r])
             place_centered(footp[c], pcbnew.ToMM((x0 + x1c) // 2), pcbnew.ToMM(y0) - 4.5, 0)
             placed.add(c)
+
+    # --- status-LED bank down the RIGHT edge (opposite the connector) ---------
+    # LEDs near the edge, each series resistor just inboard, courtyard-spaced
+    # vertically; wraps to a second column leftward if a card has many LEDs.
+    ledx = BW - 9.0; resx = BW - 24.0; by = 10.0
+    for led in leds:
+        if led not in footp: continue
+        lh = size_after(footp[led], 180)[1]
+        rr = led_res.get(led)
+        rh = size_after(footp[rr], 0)[1] if (rr and rr in footp) else 0
+        row = max(lh, rh, 5.0)
+        if by + row > BH - 6:                       # column full -> shift left
+            ledx -= 26.0; resx -= 26.0; by = 10.0
+        place_centered(footp[led], ledx, by + row / 2, 180); placed.add(led)
+        if rr and rr in footp:
+            place_centered(footp[rr], resx, by + row / 2, 0); placed.add(rr)
+        by += row + 4.0
 
     # any decaps whose IC wasn't placed, or leftovers -> park in a bottom row
     px = GX0
