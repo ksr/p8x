@@ -139,6 +139,27 @@ for layer, nn in [(pcbnew.In1_Cu, "GND"), (pcbnew.In2_Cu, "VCC")]:
     o = z.Outline(); o.NewOutline()
     for x, y in [(1, 1), (BW - 1, 1), (BW - 1, BH - 1), (1, BH - 1)]: o.Append(mm(x), mm(y))
     board.Add(z)
+
+# metal-screw keepouts: ring every DIN socket mounting hole (NPTH) with a copper
+# keepout on all layers (no fill/tracks/vias) so a metal screw can't short.
+import math
+SCREW_KEEPOUT_R = 4.0
+nk = 0
+for fp in footp.values():
+    if "DIN41612" not in str(fp.GetFPIDAsString()): continue
+    for p in fp.Pads():
+        if p.GetAttribute() != pcbnew.PAD_ATTRIB_NPTH: continue
+        cx = pcbnew.ToMM(p.GetPosition().x); cy = pcbnew.ToMM(p.GetPosition().y)
+        z = pcbnew.ZONE(board); ls = pcbnew.LSET()
+        for lyr in (pcbnew.F_Cu, pcbnew.In1_Cu, pcbnew.In2_Cu, pcbnew.B_Cu): ls.AddLayer(lyr)
+        z.SetLayerSet(ls); z.SetIsRuleArea(True)
+        z.SetDoNotAllowZoneFills(True); z.SetDoNotAllowTracks(True); z.SetDoNotAllowVias(True)
+        o = z.Outline(); o.NewOutline()
+        for i in range(32):
+            a = 2 * math.pi * i / 32
+            o.Append(mm(cx + SCREW_KEEPOUT_R * math.cos(a)), mm(cy + SCREW_KEEPOUT_R * math.sin(a)))
+        board.Add(z); nk += 1
+print("  %d DIN mounting-hole keepouts (r=%.1fmm)" % (nk, SCREW_KEEPOUT_R))
 pcbnew.ZONE_FILLER(board).Fill(board.Zones())
 
 outdir = os.path.join(ROOT, "hardware", "backplane", "kicad"); os.makedirs(outdir, exist_ok=True)

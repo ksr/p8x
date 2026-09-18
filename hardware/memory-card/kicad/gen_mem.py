@@ -288,6 +288,27 @@ def plane(layer, net):
     board.Add(z)
 plane(pcbnew.In1_Cu, "GND")
 plane(pcbnew.In2_Cu, "VCC")
+
+# metal-screw keepouts: ring every DIN mounting hole (NPTH) with an all-layer
+# copper keepout (no fill/tracks/vias) so a metal screw can't short to copper.
+import math as _math
+SCREW_KEEPOUT_R = 4.0
+_nk = 0
+for _fp in board.GetFootprints():
+    if "DIN41612" not in str(_fp.GetFPIDAsString()): continue
+    for _p in _fp.Pads():
+        if _p.GetAttribute() != pcbnew.PAD_ATTRIB_NPTH: continue
+        _cx = pcbnew.ToMM(_p.GetPosition().x); _cy = pcbnew.ToMM(_p.GetPosition().y)
+        _z = pcbnew.ZONE(board); _ls = pcbnew.LSET()
+        for _lyr in (pcbnew.F_Cu, pcbnew.In1_Cu, pcbnew.In2_Cu, pcbnew.B_Cu): _ls.AddLayer(_lyr)
+        _z.SetLayerSet(_ls); _z.SetIsRuleArea(True)
+        _z.SetDoNotAllowZoneFills(True); _z.SetDoNotAllowTracks(True); _z.SetDoNotAllowVias(True)
+        _o = _z.Outline(); _o.NewOutline()
+        for _i in range(32):
+            _a = 2 * _math.pi * _i / 32
+            _o.Append(mm(_cx + SCREW_KEEPOUT_R * _math.cos(_a)), mm(_cy + SCREW_KEEPOUT_R * _math.sin(_a)))
+        board.Add(_z); _nk += 1
+print("  %d DIN mounting-hole keepouts (r=%.1fmm)" % (_nk, SCREW_KEEPOUT_R))
 pcbnew.ZONE_FILLER(board).Fill(board.Zones())
 
 pcbnew.SaveBoard(OUT, board)

@@ -137,6 +137,37 @@ def size_after(fp, rot):
 # ---- the build --------------------------------------------------------------
 BH = 140.0   # connector-edge dimension (the DIN41612 is ~94mm; extra room = more rows)
 STD_W = 280.0   # uniform card depth (mm); with BH=140 fits the largest card
+SCREW_KEEPOUT_R = 4.0   # radius (mm) of the copper keepout around each DIN mounting hole
+
+def add_mounting_keepouts(board, footp, r=SCREW_KEEPOUT_R, layers=None):
+    """Ring every DIN-connector mounting hole (NPTH) with a copper keepout so a
+    METAL screw can secure the connector without shorting to a trace or a plane.
+    Rule area on all copper layers: no fill, no tracks, no vias. Must run BEFORE
+    the plane fill and the DSN export so both the pour and Freerouting avoid it."""
+    if layers is None:
+        layers = (pcbnew.F_Cu, pcbnew.In1_Cu, pcbnew.In2_Cu, pcbnew.B_Cu)
+    n = 0
+    for fp in (footp.values() if isinstance(footp, dict) else footp):
+        # only the DIN edge/socket connectors carry the screw holes we care about
+        if "DIN41612" not in str(fp.GetFPIDAsString()): continue
+        for p in fp.Pads():
+            if p.GetAttribute() != pcbnew.PAD_ATTRIB_NPTH: continue
+            cx = pcbnew.ToMM(p.GetPosition().x); cy = pcbnew.ToMM(p.GetPosition().y)
+            z = pcbnew.ZONE(board)
+            ls = pcbnew.LSET()
+            for lyr in layers: ls.AddLayer(lyr)
+            z.SetLayerSet(ls)
+            z.SetIsRuleArea(True)
+            z.SetDoNotAllowZoneFills(True)   # planes pull back from the hole
+            z.SetDoNotAllowTracks(True)
+            z.SetDoNotAllowVias(True)
+            o = z.Outline(); o.NewOutline()
+            for i in range(32):
+                a = 2 * math.pi * i / 32
+                o.Append(mm(cx + r * math.cos(a)), mm(cy + r * math.sin(a)))
+            board.Add(z); n += 1
+    return n
+
 def build_card(name):
     title, parts, nets = CARDS[name]
     labels = CARDLABELS.get(name, {}); capfor = CARDCAPS.get(name, {})
@@ -268,6 +299,8 @@ def build_card(name):
             o.Append(mm(x), mm(y))
         board.Add(z)
     plane(pcbnew.In1_Cu, "GND"); plane(pcbnew.In2_Cu, "VCC")
+    nk = add_mounting_keepouts(board, footp)   # metal-screw keepouts at DIN holes
+    print("  %d DIN mounting-hole keepouts (r=%.1fmm)" % (nk, SCREW_KEEPOUT_R))
     pcbnew.ZONE_FILLER(board).Fill(board.Zones())
 
     # --- silkscreen: values + LED/jumper labels ------------------------------
@@ -312,7 +345,7 @@ if __name__ == "__main__":
     name = sys.argv[1]
     SUBS.clear()
     r = build_card(name)
-    print("wrote", r["out"], "(%dx100mm, %d/%d footprints)" % (r["BW"], r["footprints"], r["parts"]))
+    print("wrote", r["out"], "(%dx%dmm, %d/%d footprints)" % (r["BW"], BH, r["footprints"], r["parts"]))
     if r["missing"]: print("  MISSING FOOTPRINTS:", r["missing"])
     if r["badpad"]:  print("  PAD MISMATCH (%d):" % len(r["badpad"]), r["badpad"][:12])
     if r["subs"]:    print("  SUBSTITUTIONS:", r["subs"])
