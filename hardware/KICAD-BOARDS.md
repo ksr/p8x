@@ -7,7 +7,7 @@ canonical gen_eagle netlists by `generators/gen_kicad.py` (per-card) /
 IC, LED/jumper labels + part values on silk, placement PDF + top/3D renders +
 gerbers.
 
-**Uniform card size: 280 × 140 mm.** Every plug-in card is the same dimensions
+**Uniform card size: 280 × 140 mm** — status LEDs on the edge opposite the connector. Every plug-in card is the same dimensions
 (the connector-edge is 140 mm — the DIN41612 is only ~94 mm, so the extra room
 lets components use more rows and keeps the depth down). The backplane is the
 motherboard and is physically larger.
@@ -20,7 +20,7 @@ motherboard and is physically larger.
 | control-card | ✅ | 0 | 14-pin oscillator |
 | alu-card | ✅ | 0 | |
 | io-card | ✅ | 1 | ACIA/MAX232/RTC/DIP-sw subs |
-| regbank-card | ⚠ placed | — | 95 parts — densest route, Freerouting didn't finish in time |
+| regbank-card | ✅ | 0 | 95 parts — routed (5m45s auto + ~13min optimizer) |
 | bustest-card | ⚠ placed | — | Pico fans into the whole bus — too dense to auto-route |
 | backplane | ⚠ placed | — | 10-slot DIN41612 motherboard, ~560×320mm; bus routing is a big follow-up |
 
