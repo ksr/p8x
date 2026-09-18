@@ -164,6 +164,8 @@ def add_mounting_keepouts(board, footp, r=SCREW_KEEPOUT_R, layers=None):
             z.SetDoNotAllowZoneFills(True)   # planes pull back from the hole
             z.SetDoNotAllowTracks(True)
             z.SetDoNotAllowVias(True)
+            z.SetDoNotAllowPads(False)       # allow the connector's own NPTH hole (no copper) inside
+            z.SetDoNotAllowFootprints(False)
             o = z.Outline(); o.NewOutline()
             for i in range(32):
                 a = 2 * math.pi * i / 32

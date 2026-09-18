@@ -154,6 +154,11 @@ for fp in footp.values():
         for lyr in (pcbnew.F_Cu, pcbnew.In1_Cu, pcbnew.In2_Cu, pcbnew.B_Cu): ls.AddLayer(lyr)
         z.SetLayerSet(ls); z.SetIsRuleArea(True)
         z.SetDoNotAllowZoneFills(True); z.SetDoNotAllowTracks(True); z.SetDoNotAllowVias(True)
+        z.SetDoNotAllowPads(False); z.SetDoNotAllowFootprints(False)  # allow the NPTH hole itself
+        # the mounting hole's OWN NPTH pad sits at the keepout centre by design --
+        # keep copper (fill/tracks/vias) out, but allow the hole itself and its
+        # footprint, else DRC flags each of the 20 NPTH pads as "items not allowed".
+        z.SetDoNotAllowPads(False); z.SetDoNotAllowFootprints(False)
         o = z.Outline(); o.NewOutline()
         for i in range(32):
             a = 2 * math.pi * i / 32

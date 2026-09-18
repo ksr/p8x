@@ -303,6 +303,7 @@ for _fp in board.GetFootprints():
         for _lyr in (pcbnew.F_Cu, pcbnew.In1_Cu, pcbnew.In2_Cu, pcbnew.B_Cu): _ls.AddLayer(_lyr)
         _z.SetLayerSet(_ls); _z.SetIsRuleArea(True)
         _z.SetDoNotAllowZoneFills(True); _z.SetDoNotAllowTracks(True); _z.SetDoNotAllowVias(True)
+        _z.SetDoNotAllowPads(False); _z.SetDoNotAllowFootprints(False)  # allow the NPTH hole itself
         _o = _z.Outline(); _o.NewOutline()
         for _i in range(32):
             _a = 2 * _math.pi * _i / 32
