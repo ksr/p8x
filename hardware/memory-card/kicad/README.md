@@ -49,7 +49,8 @@ it and applies the rev-F transform, asserting the gate usage is consistent.
 | `gen_mem.py` | the board generator (pcbnew): rev-F netlist, footprints, placement, GND/VCC planes, outline |
 | `export_dsn.py` | export a Specctra `.dsn` for Freerouting (marks In1/In2 as **power** planes) |
 | `p8x-memory-card.ses` | **the routing** — Freerouting's session file (the canonical routing artifact, like an Eagle `.brd`'s copper) |
-| `import_ses.py` | import the `.ses` back, re-fill the planes, save |
+| `import_ses.py` | import the `.ses` back, re-fill the planes, save, and regenerate the placement PDF |
+| `gen_placement.py` | the parts-placement PDF generator (centres the board on the sheet, plots refs + values in black) — run by `import_ses.py` |
 | `p8x-memory-card.kicad_pcb` | the finished routed board |
 | `p8x-memory-card-gerbers.zip` | **the orderable output** — 4-layer Gerbers + Excellon drill |
 | `p8x-memory-card-render-top.png` | rendered top view (silk part values visible) |

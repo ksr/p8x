@@ -20,3 +20,8 @@ tracks = board.GetTracks()
 ntrk = sum(1 for t in tracks if t.Type() == pcbnew.PCB_TRACE_T)
 nvia = sum(1 for t in tracks if t.Type() == pcbnew.PCB_VIA_T)
 print("routed: %d track segments, %d vias" % (ntrk, nvia))
+
+# regenerate the parts-placement PDF from the finalised board (part of the build)
+sys.path.insert(0, HERE)
+import gen_placement
+gen_placement.build()
