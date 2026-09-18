@@ -48,8 +48,9 @@ for n in bpn:
 #   - LEFT column: J11 power entry + C11/C12 bulk electrolytics + R1/LED1 power LED
 #   - RIGHT column: RN1 pull-up network + R2/R3/R4 + C13/C14 clock termination
 #   - 6 mounting holes (3 top, 3 bottom)
-BW, BH = 300.0, 128.0
-SLOT_X0, SLOT_PITCH, SLOT_CY = 22.0, 25.0, 62.0        # J1 centre, pitch, row centre
+SLOT_X0, SLOT_PITCH, SLOT_CY = 20.0, 28.0, 62.0        # J1 centre, pitch, row centre
+RX = SLOT_X0 + SLOT_PITCH * 9                           # J10 (last slot) centre
+BW, BH = RX + 43.0, 128.0                               # width follows the slot pitch
 footp = {}; missing = []
 for ref, spec in bps.items():
     dev, val = spec[0], spec[1]
@@ -77,10 +78,10 @@ for i in range(10):
 place("J11", 8.0, 42.0)                                    # PWR-5V header (natively tall)
 place("C11", 9.0, 70.0); place("C12", 9.0, 92.0)           # 470uF bulk electrolytics
 place("R1", 12.0, 118.0); place("LED1", 26.0, 118.0)       # power-on LED
-# right column: wired-OR pull-up array + clock termination
-place("RN1", 260.0, 60.0, 90)                              # 8x10K SIP (vertical)
-place("R2", 279.0, 40.0); place("R3", 279.0, 60.0); place("R4", 279.0, 80.0)
-place("C13", 293.0, 40.0); place("C14", 293.0, 60.0)
+# right column: wired-OR pull-up array + clock termination (past the last slot)
+place("RN1", RX + 12.0, 60.0, 90)                          # 8x10K SIP (vertical)
+place("R2", RX + 21.0, 40.0); place("R3", RX + 21.0, 60.0); place("R4", RX + 21.0, 80.0)
+place("C13", RX + 33.0, 40.0); place("C14", RX + 33.0, 60.0)
 
 # --- silk: SLOT n under each connector (the PDF's slot labels) -----------------
 def silk(txt, x, y, size=1.4):
@@ -92,7 +93,7 @@ for i in range(10):
 
 # --- 6 mounting holes (3 top, 3 bottom), matching the template -----------------
 MH = ("MountingHole", "MountingHole_3.2mm_M3")
-for hx in (48.0, 150.0, 252.0):
+for hx in (BW * 0.15, BW * 0.5, BW * 0.85):
     for hy in (6.0, 122.0):
         h = pcbnew.FootprintLoad(FP + "/" + MH[0] + ".pretty", MH[1])
         if h is None: continue
