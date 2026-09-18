@@ -21,7 +21,7 @@ motherboard and is physically larger.
 | alu-card | ✅ | 0 | |
 | io-card | ✅ | 1 | ACIA/MAX232/RTC/DIP-sw subs |
 | regbank-card | ✅ | 0 | 95 parts — routed (5m45s auto + ~13min optimizer) |
-| bustest-card | ⚠ placed | — | Pico fans into the whole bus — too dense to auto-route |
+| bustest-card | ✅ | 0 | Pico + 17 LEDs; routed with right-edge LED bank |
 | backplane | ⚠ placed | — | 10-slot DIN41612 motherboard, ~560×320mm; bus routing is a big follow-up |
 
 ## Known follow-ups
