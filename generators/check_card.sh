@@ -33,13 +33,19 @@ for card in $cards; do
   fail=0
 
   # 1. ERC ---------------------------------------------------------------------
-  erc=$("$PYK" "$ROOT/generators/gen_erc.py" "$card" 2>/dev/null | grep -E '^== ERC' || echo "ERC: (card not in CARDS)")
-  ne=$(echo "$erc" | grep -oE '[0-9]+ ERROR' | grep -oE '[0-9]+' || echo 0)
-  echo "  1. ERC        : $erc"
-  [ "${ne:-0}" -gt 0 ] && fail=1
+  if [ "$card" = backplane ]; then
+    echo "  1. ERC        : N/A (passive bus -- drivers live on the plugged-in cards)"
+  else
+    erc=$("$PYK" "$ROOT/generators/gen_erc.py" "$card" 2>/dev/null | grep -E '^== ERC' || echo "ERC: (card not in CARDS)")
+    ne=$(echo "$erc" | grep -oE '[0-9]+ ERROR' | grep -oE '[0-9]+' || echo 0)
+    echo "  1. ERC        : $erc"
+    [ "${ne:-0}" -gt 0 ] && fail=1
+  fi
 
   # 2. gate-sim (only cards with a testbench) ---------------------------------
-  if grep -qE "^[[:space:]]*$card\)" "$ROOT/tools/gatesim/run.sh" 2>/dev/null; then
+  if [ "$card" = backplane ]; then
+    echo "  2. gate-sim   : N/A (no logic -- interconnect only)"
+  elif grep -qE "^[[:space:]]*$card\)" "$ROOT/tools/gatesim/run.sh" 2>/dev/null; then
     gs=$(sh "$ROOT/tools/gatesim/run.sh" "$card" 2>/dev/null | grep -iE 'PASS|FAIL' | head -1)
     echo "  2. gate-sim   : ${gs:-(ran, see output)}"
     echo "$gs" | grep -qi FAIL && fail=1
