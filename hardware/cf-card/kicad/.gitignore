@@ -3,3 +3,4 @@ gerbers/
 *.kicad_prl
 *.rpt
 fr.log
+logs/
