@@ -71,7 +71,7 @@ def placement(brd):
 
 def _boilerplate(d, name):
     gi=os.path.join(d,".gitignore")
-    open(gi,"w").write("gerbers/\n*.dsn\n*.kicad_prl\n*.rpt\nfr.log\n")
+    open(gi,"w").write("gerbers/\n*.dsn\n*.kicad_prl\n*.rpt\nfr.log\nlogs/\n")
     rd=os.path.join(d,"README.md")
     if not os.path.exists(rd):
         card=name.replace("p8x-","")

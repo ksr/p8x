@@ -12,8 +12,10 @@ dsn="$d/p8x-$card.dsn"; ses="$d/p8x-$card.ses"
 "$PYK" "$ROOT/generators/gen_kicad.py" "$card" 2>/dev/null | grep -viE 'Debug|traits' || exit 1
 "$PYK" "$ROOT/generators/kicad_tools.py" export_dsn "$brd" 2>/dev/null | grep -v traits || exit 1
 rm -f "$ses"
-java -jar "$FRJAR" -de "$dsn" -do "$ses" -mp 30 -oit 100 > "$d/fr.log" 2>&1
+# run from the card's kicad/ dir so Freerouting's own logs/freerouting.log lands
+# there (not in the repo root); paths are relative to $d
+( cd "$d" && java -jar "$FRJAR" -de "p8x-$card.dsn" -do "p8x-$card.ses" -mp 30 -oit 100 > fr.log 2>&1 )
 if [ ! -f "$ses" ]; then echo "  ROUTE FAILED ($card) -- see fr.log"; tail -3 "$d/fr.log"; exit 2; fi
 "$PYK" "$ROOT/generators/kicad_tools.py" import_ses "$brd" "$ses" 2>/dev/null | grep -v traits
-echo -n "  DRC: "; "$CLI" pcb drc "$brd" 2>/dev/null | grep -v Fontconfig | grep -iE 'Found .* violation|Found .* unconnected' | tr '\n' ' '; echo
+echo -n "  DRC: "; "$CLI" pcb drc -o "$d/p8x-$card-drc.rpt" "$brd" 2>/dev/null | grep -v Fontconfig | grep -iE 'Found .* violation|Found .* unconnected' | tr '\n' ' '; echo   # report -> the card's kicad/ dir
 "$PYK" "$ROOT/generators/kicad_tools.py" finish "$brd" 2>/dev/null | grep -v traits
