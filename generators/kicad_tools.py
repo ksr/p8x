@@ -33,9 +33,42 @@ def export_dsn(brd):
     open(dsn, "w").write(t)
     print("export_dsn ->", dsn)
 
+def stitch_trivial_nets(b):
+    """Self-heal: Freerouting occasionally leaves a trivial 2-pad net unrouted
+    (e.g. an LED-bank resistor->LED at the board edge, whose direct top path is
+    blocked by another track). Stitch any 2-pad net that has no copper AND whose
+    pads are collinear with a straight B.Cu track -- through-hole pads let it duck
+    under the F.Cu tracks. Returns the number stitched. Call after ImportSpecctraSES
+    and before the zone fill. Shared by every card's import step."""
+    b.BuildConnectivity()
+    np = {}
+    for fp in b.GetFootprints():
+        for p in fp.Pads():
+            np.setdefault(p.GetNetname(), []).append(p)
+    n = 0
+    for name, pads in np.items():
+        if name in ("", "GND", "VCC") or len(pads) != 2:
+            continue
+        if any(t.GetNetname() == name for t in b.GetTracks()):
+            continue
+        a, c = pads
+        if a.GetPosition().x != c.GetPosition().x and a.GetPosition().y != c.GetPosition().y:
+            continue                                    # only stitch straight (collinear) runs
+        t = pcbnew.PCB_TRACK(b)
+        t.SetStart(a.GetPosition()); t.SetEnd(c.GetPosition())
+        t.SetLayer(pcbnew.B_Cu); t.SetWidth(pcbnew.FromMM(0.25)); t.SetNetCode(a.GetNetCode())
+        b.Add(t); n += 1
+        print("  stitched %s: %s.%s -> %s.%s" % (name,
+              a.GetParentFootprint().GetReference(), a.GetNumber(),
+              c.GetParentFootprint().GetReference(), c.GetNumber()))
+    if n:
+        print("stitched %d trivial unrouted 2-pad net(s)" % n)
+    return n
+
 def import_ses(brd, ses):
     b = pcbnew.LoadBoard(brd)
     pcbnew.ImportSpecctraSES(b, ses)
+    stitch_trivial_nets(b)                              # finish any net the router missed
     pcbnew.ZONE_FILLER(b).Fill(b.Zones())
     pcbnew.SaveBoard(brd, b)
     b.BuildConnectivity()
