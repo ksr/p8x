@@ -1,14 +1,13 @@
 #!/usr/bin/env python3
-"""gen_backplane.py -- KiCad board for the P8X 10-slot backplane (best-effort).
+"""gen_backplane.py -- KiCad board for the P8X backplane (NSLOT slots; best-effort).
 
     PYK generators/gen_backplane.py
 
-The backplane is NOT a plug-in card -- it is ten DIN41612 FEMALE sockets (the bus)
+The backplane is NOT a plug-in card -- it is NSLOT DIN41612 FEMALE sockets (the bus)
 plus power entry, bulk + per-slot decoupling caps, and the wired-OR pull-ups. Its
 netlist is the bps/bpn structure in gen_eagle.py. This builds a PLACED KiCad board
-(sockets in 2 rows of 5, power + caps, the full bus netlist, GND/VCC planes) --
-but it is NOT autorouted: a 10x96-pin parallel bus over a ~520x300mm board is a
-large routing job left for later (hand-route or a dedicated Freerouting pass).
+(NSLOT sockets in one row, power + caps, the full bus netlist, GND/VCC planes);
+the build pipeline routes it downstream (Freerouting + the kicad_tools heal steps).
 GENERATORS ARE CANON.
 """
 import os, sys, pcbnew
@@ -49,21 +48,40 @@ def pad_of(dev, pinname):
     return str(DEV[dev]["pm"][pinname])
 
 board = pcbnew.BOARD(); board.SetCopperLayerCount(4)
+# Tighten the default clearance 0.2 -> 0.13mm (~5-mil, standard fab tier -- e.g.
+# JLCPCB's cheapest tier is 5mil/0.127mm) ONLY on the backplane. The parallel bus
+# puts all ~96 nets through every inter-slot channel; at 0.2 track / 0.2 clearance
+# (0.4mm pitch) Freerouting converged leaving ~10-20 hops it couldn't fit ("finish
+# manually"). Tightening the clearance is the real lever (reducing slot count did
+# NOT help -- the congestion is per-channel, not per-slot): 0.15mm got it to 1-2
+# hops, 0.13mm routes the whole bus. Flows into both the DRC (via the netclass) and
+# the Freerouting DSN export (which reads the netclass clearance). The bus track
+# stays 0.2mm; only the spacing tightens.
+try:
+    board.GetDesignSettings().m_NetSettings.GetDefaultNetclass().SetClearance(mm(0.13))
+except Exception as _e:
+    print("  WARN: could not set 0.13mm clearance:", _e)
 netobj = {}
 for n in bpn:
     ni = pcbnew.NETINFO_ITEM(board, n); board.Add(ni); netobj[n] = ni
 
-# Board size + placement: single row of ten DIN slots pushed to the LEFT, with
+# Board size + placement: single row of DIN slots pushed to the LEFT, with
 # ALL the peripheral parts gathered on the RIGHT where there is open room (the
 # bulk electrolytics were cramped ~3.5mm from J1 in the old left-column layout).
-#   - 10 vertical DIN41612 sockets J1..J10 in one row, hard against the left edge
-#   - a 100nF cap C1..C10 above each slot, at the top edge
+#   - NSLOT vertical DIN41612 sockets J1..JN in one row, hard against the left edge
+#   - a 100nF cap C1..CN above each slot, at the top edge
 #   - RIGHT, inner column: RN1 pull-up network + R2/R3/R4 + C13/C14 clock termination
 #   - RIGHT, outer column (roomy, by the board edge): J11 power entry, C11/C12
 #     bulk electrolytics, R1/LED1 power LED
 #   - 6 mounting holes (3 top, 3 bottom)
+# Slot count NSLOT comes from gen_eagle (8 as of 2026-09-18, was 10). Keep the
+# tight 28mm pitch (short inter-slot runs cross the least perpendicular traffic --
+# widening the pitch to fill the old span actually made routing WORSE) and let the
+# board shrink: 8 slots drops two hops from every bus net, which is what relieves
+# the parallel-bus congestion.
+NSLOT = GE.NSLOT
 SLOT_X0, SLOT_PITCH, SLOT_CY = 14.0, 28.0, 62.0        # J1 centre, pitch, row centre
-RX = SLOT_X0 + SLOT_PITCH * 9                           # J10 (last slot) centre
+RX = SLOT_X0 + SLOT_PITCH * (NSLOT - 1)                 # last slot centre
 RCOL_A, RCOL_B = RX + 16.0, RX + 34.0                  # right inner (pull-ups) / outer (power)
 BW, BH = RCOL_B + 18.0, 128.0                           # width leaves the bulk caps room to breathe
 footp = {}; missing = []
@@ -84,8 +102,8 @@ def place(ref, x, y, rot=0):
     cx = (min(xs) + max(xs)) // 2; cy = (min(ys) + max(ys)) // 2
     fp.SetPosition(VECTOR2I(mm(x) - cx, mm(y) - cy))
 
-# ten slots in a single row (DIN sockets are natively tall), a 100nF cap above each
-for i in range(10):
+# slots in a single row (DIN sockets are natively tall), a 100nF cap above each
+for i in range(NSLOT):
     sx = SLOT_X0 + SLOT_PITCH * i
     place("J%d" % (i + 1), sx, SLOT_CY)
     place("C%d" % (i + 1), sx, 12.0)                       # decoupling cap, top edge
@@ -103,7 +121,7 @@ def silk(txt, x, y, size=1.4):
     t = pcbnew.PCB_TEXT(board); t.SetText(txt); t.SetLayer(pcbnew.F_SilkS)
     t.SetPosition(P(x, y)); t.SetTextSize(VECTOR2I(mm(size), mm(size)))
     t.SetTextThickness(mm(size * 0.15)); board.Add(t)
-for i in range(10):
+for i in range(NSLOT):
     silk("SLOT %d" % (i + 1), SLOT_X0 + SLOT_PITCH * i - 6.0, 116.0)
 
 # --- 6 mounting holes (3 top, 3 bottom), matching the template -----------------
@@ -178,4 +196,4 @@ pcbnew.SaveBoard(out, board)
 print("wrote", out, "(%dx%dmm, %d/%d footprints)" % (BW, BH, len(footp), len(bps)))
 if missing: print("  MISSING:", missing)
 if bad: print("  PAD MISMATCH (%d):" % len(bad), bad[:10])
-print("  NOTE: placed only -- NOT autorouted (10-slot bus routing is a follow-up).")
+print("  NOTE: placement done (routing handled downstream by the build pipeline).")

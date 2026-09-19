@@ -219,7 +219,12 @@ def heal_bus_gaps(brd, clear=0.2, cell=0.2, pad_mm=8.0):
     b = pcbnew.LoadBoard(brd); mm = pcbnew.ToMM; FM = pcbnew.FromMM
     plane_nets = set(z.GetNetname() for z in b.Zones()
                      if z.GetLayer() in (pcbnew.In1_Cu, pcbnew.In2_Cu))
-    tw = 0.25
+    try:                                                 # match the board's own clearance rule
+        bc = mm(b.GetDesignSettings().m_NetSettings.GetDefaultNetclass().GetClearance())
+        if bc > 0: clear = bc
+    except Exception:
+        pass
+    tw = 0.2                                              # match the bus track width (not wider)
     # halo = min centre-to-foreign-edge distance a routed cell centre must keep.
     # Includes the rule clearance, our track half-width, AND a cell/2 margin so a
     # segment drawn between two "free" cell centres can't clip an obstacle that
@@ -351,9 +356,15 @@ def heal_bus_gaps(brd, clear=0.2, cell=0.2, pad_mm=8.0):
     if not healed:
         if skipped: print("bus-heal: %d gap(s) left (none maze-routable)" % skipped)
         return 0
+    pcbnew.ZONE_FILLER(b).Fill(b.Zones())                # planes pull back around new vias
     # SAFETY: never ship maze copper that shorts or crowds. Save to a temp, DRC it,
     # and only overwrite the real board if we added ZERO blocking violations.
+    # DRC reads design rules from the sibling .kicad_pro, so the temp MUST carry a
+    # copy of it -- otherwise DRC falls back to the 0.2mm default and every tight
+    # (0.15mm) bus track reads as a violation, falsely rejecting good routing.
+    import shutil
     COSMETIC = {"silk_overlap", "silk_edge_clearance", "silk_over_copper"}
+    pro = brd[:-len(".kicad_pcb")] + ".kicad_pro"
     def _blocking(path_):
         jj = "/tmp/_bus_chk_%d.json" % os.getpid()
         subprocess.run([CLI, "pcb", "drc", "--format", "json", "-o", jj, path_],
@@ -363,6 +374,8 @@ def heal_bus_gaps(brd, clear=0.2, cell=0.2, pad_mm=8.0):
     base_block = _blocking(brd)
     tmp = "/tmp/_bus_try_%d.kicad_pcb" % os.getpid()
     pcbnew.SaveBoard(tmp, b)
+    if os.path.exists(pro):
+        shutil.copy(pro, tmp[:-len(".kicad_pcb")] + ".kicad_pro")   # carry the 0.15mm rules
     new_block = _blocking(tmp)
     if new_block > base_block:
         print("bus-heal: REJECTED -- maze routing added %d blocking DRC (was %d); board unchanged"

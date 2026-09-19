@@ -1659,29 +1659,36 @@ card("memory-card","P8X MEMORY CARD REV E",ic,sm,mcn,
  {"DOE%d"%i for i in range(4)}|{"DLD%d"%i for i in range(4)}|{"CLK"})
 
 # ===================== BACKPLANE rev C ========================================
+# NSLOT: number of DIN41612 bus slots. Dropped 10 -> 8 (2026-09-18) so the KiCad
+# backplane's parallel bus fits: at 10 slots the dense comb left ~11 single-pitch
+# hops the autorouter couldn't finish; 8 slots (wider channels + two fewer hops
+# per net) routes clean. Still ample -- the active cards are control/regbank/alu/
+# memory/peripheral (+headroom). The Eagle board below (frozen, EMIT-gated) tracks
+# the same constant so it stays self-consistent if ever re-emitted.
+NSLOT=8
 bps={}
-for i in range(10):
+for i in range(NSLOT):
     bps["J%d"%(i+1)]=("DIN96","SLOT%d"%(i+1),35.56+101.6*(i%5),38.10-281.94*(i//5))
 small=[("J11","TB4","PWR-5V",35.56),("C11","CAPP","470uF",86.36),("C12","CAPP","470uF",137.16),
  ("RN1","SIP9","8X10K",187.96),("R2","RES","100R",238.76),("C13","CAP","150pF",289.56),
  ("R3","RES","100R",340.36),("C14","CAP","150pF",391.16),("R1","RES","1K",441.96),("LED1","LED","PWR",492.76),
  # -IRQ (B29) is a wired-OR line: cards assert it with open-drain drivers (74HC07),
  # so it has NO high state of its own. R4 is that high state — one 10k pull-up on
- # the backplane serves all 10 slots and is always present. -RES gets nothing: the
+ # the backplane serves all slots and is always present. -RES gets nothing: the
  # control card drives it push-pull (74HCT14 + power-on RC), so there is nothing to
  # pull against. See hardware/backplane/p8x-bus-definition.md sec 3.12.
  ("R4","RES","10K",543.56)]
 for ref,dev,val,x in small: bps[ref]=(dev,val,x,-635.0)
 bpn={}
 def bnet(n,*p): bpn.setdefault(n,[]).extend(p)
-for i in range(10):
+for i in range(NSLOT):
     for pin in ALLPINS: bnet(busnet(pin),("J%d"%(i+1),pin))
 bnet("VCC",("J11","1"),("J11","2"),("C11","+"),("C12","+"),("RN1","COM"),("R1","1"),("R4","2"),
-     *[("C%d"%(i+1),"1") for i in range(10)])
+     *[("C%d"%(i+1),"1") for i in range(NSLOT)])
 bnet("IRQ",("R4","1"))                                   # 10k pull-up: wired-OR high state
 bnet("GND",("J11","3"),("J11","4"),("C11","-"),("C12","-"),("LED1","K"),("C13","2"),("C14","2"),
-     *[("C%d"%(i+1),"2") for i in range(10)])
-for i in range(10): bps["C%d"%(i+1)]=("CAP1","100nF",35.56+50.8*i,-723.9)
+     *[("C%d"%(i+1),"2") for i in range(NSLOT)])
+for i in range(NSLOT): bps["C%d"%(i+1)]=("CAP1","100nF",35.56+50.8*i,-723.9)
 for b in range(8): bnet("D%d"%b,("RN1","R%d"%(b+1)))
 bnet("CLK",("R2","1")); bnet("CLK_T",("R2","2"),("C13","1"))
 bnet("CLKB",("R3","1")); bnet("CLKB_T",("R3","2"),("C14","1"))
@@ -1689,7 +1696,7 @@ bnet("LED_A",("R1","2"),("LED1","A"))
 
 def backplane_rep():
     """Representative single-slot view of the backplane for the traditional-style
-    schematic PDF. All 10 slots are wired in parallel, so drawing one keeps it
+    schematic PDF. All slots are wired in parallel, so drawing one keeps it
     readable. Returns (title, parts, nets) shaped for
     render_traditional_auto.draw_card, so the backplane renders through the SAME
     auto-router as every card: wires connect pin-to-pin from the netlist by
@@ -1697,12 +1704,12 @@ def backplane_rep():
     guarantees every pin is drawn. Mirrors the real backplane nets above with one
     J1 and one representative decoupling cap. J1 pins come from busnet(), so a bus
     change flows in automatically — the schematic cannot silently drop a signal."""
-    parts={"J1":("DIN96","1 OF 10 SLOTS (PARALLEL)"),
+    parts={"J1":("DIN96","1 OF %d SLOTS (PARALLEL)"%NSLOT),
            "J11":("TB4","PWR-5V"),"C11":("CAPP","470uF"),"C12":("CAPP","470uF"),
            "RN1":("SIP9","8X10K"),"R2":("RES","100R DNP"),"C13":("CAP","150pF DNP"),
            "R3":("RES","100R DNP"),"C14":("CAP","150pF DNP"),
            "R1":("RES","1K"),"LED1":("LED","PWR"),
-           "R4":("RES","10K"),"C1":("CAP1","100nF x10")}
+           "R4":("RES","10K"),"C1":("CAP1","100nF x%d"%NSLOT)}
     n={}
     def a(net,*p): n.setdefault(net,[]).extend(p)
     for pin in ALLPINS: a(busnet(pin),("J1",pin))          # every bus pin -> its net
@@ -1715,10 +1722,10 @@ def backplane_rep():
     a("CLK",("R2","1"));  a("CLK_T",("R2","2"),("C13","1"))
     a("CLKB",("R3","1")); a("CLKB_T",("R3","2"),("C14","1"))
     a("LED_A",("R1","2"),("LED1","A"))
-    return ("P8X 10-SLOT BACKPLANE REV C",parts,n)
+    return ("P8X %d-SLOT BACKPLANE REV C"%NSLOT,parts,n)
 
 if EMIT:
-    write_sch("backplane/p8x-backplane.sch","P8X 10-SLOT BACKPLANE REV C",bps,bpn)
+    write_sch("backplane/p8x-backplane.sch","P8X %d-SLOT BACKPLANE REV C"%NSLOT,bps,bpn)
     validate("backplane/p8x-backplane.sch",bps,bpn)
 X0=15.24; P=25.4
 def sx(i): return X0+P*i
@@ -1730,7 +1737,7 @@ def py(n): return G*(38-n)
 EY=54.61
 def padx(i,row): return sx(i)+{"A":-5.08,"B":-2.54,"C":0.0}[row]   # FABC96S pad x for slot i
 bpb={}
-for i in range(10): bpb["J%d"%(i+1)]=("DIN96","SLOT%d"%(i+1),sx(i)-2.54,EY)
+for i in range(NSLOT): bpb["J%d"%(i+1)]=("DIN96","SLOT%d"%(i+1),sx(i)-2.54,EY)
 # RN1 pulled off the slot-10 connector into the end zone (was 246.38, hard up
 # against the C column at 243.84). Its R1..R8 pads still land on the row-3..10
 # A-row D-bus traces, which are extended to follow it (see xe below).
@@ -1748,25 +1755,25 @@ bpb["R4"]=("RES","10K",264.0,64.0)                       # -IRQ wired-OR pull-up
 # forward toward the front edge. These five are excluded from the X/Y shifts.
 bpb["J11"]=("TB4","PWR-5V",9.0,95.0)
 bpb["C11"]=("CAPP","470uF",9.0,68.0); bpb["C12"]=("CAPP","470uF",9.0,45.0)
-for s in range(10): bpb["C%d"%(s+1)]=("CAP1","100nF",sx(s)+G,109.0)   # up off the slot connectors
+for s in range(NSLOT): bpb["C%d"%(s+1)]=("CAP1","100nF",sx(s)+G,109.0)   # up off the slot connectors
 bpb["R1"]=("RES","1K",5.08,3.0); bpb["LED1"]=("LED","PWR",21.0,3.0)
 wires={}; viad={}
 def wadd(n,*w): wires.setdefault(n,[]).extend(w)
 def vadd(n,*v): viad.setdefault(n,[]).extend(v)
 for n in range(3,31):
     y=py(n)
-    nA=busnet("A%d"%n); xe=252.0 if 3<=n<=10 else padx(9,"A")   # rows 3..10 reach RN1
+    nA=busnet("A%d"%n); xe=252.0 if 3<=n<=10 else padx(NSLOT-1,"A")   # rows 3..N reach RN1
     wadd(nA,(padx(0,"A"),y,xe,y,1,0.4))
     nC=busnet("C%d"%n)
-    wadd(nC,(padx(0,"C"),y,padx(9,"C"),y,16,0.4))
+    wadd(nC,(padx(0,"C"),y,padx(NSLOT-1,"C"),y,16,0.4))
 # Clock taps to the end-zone terminators. Routed entirely on layer 1 in the free
 # channel right of the bus columns (A-row copper ends at 246.38, so x=250/253
 # risers cross no other net), straight to RTn pad1; no layer change/via needed.
-wadd("CLK",(padx(9,"A"),py(24),256.0,py(24),1,0.4),
+wadd("CLK",(padx(NSLOT-1,"A"),py(24),256.0,py(24),1,0.4),
            (256.0,py(24),256.0,96.0,1,0.4),
            (256.0,96.0,264.0,96.0,1,0.4))
 wadd("CLK_T",(274.16,96.0,279.24,96.0,1,0.4))
-wadd("CLKB",(padx(9,"A"),py(25),259.0,py(25),1,0.4),
+wadd("CLKB",(padx(NSLOT-1,"A"),py(25),259.0,py(25),1,0.4),
             (259.0,py(25),259.0,80.0,1,0.4),
             (259.0,80.0,264.0,80.0,1,0.4))
 wadd("CLKB_T",(274.16,80.0,279.24,80.0,1,0.4))
@@ -1778,8 +1785,8 @@ for nn in range(3,31):
     net=busnet("B%d"%nn)
     if net in ("GND","VCC"): continue
     y=py(nn)
-    wadd(net,(sx(0)-2.54,y-1.27,sx(9)-2.54,y-1.27,1,0.4))
-    for i in range(10):
+    wadd(net,(sx(0)-2.54,y-1.27,sx(NSLOT-1)-2.54,y-1.27,1,0.4))
+    for i in range(NSLOT):
         wadd(net,(sx(i)-2.54,y,sx(i)-2.54,y-1.27,1,0.4))
 # Shift the slot field + its routing right by XOFF (opens a front bay at the left
 # for the power connector and bulk caps) and up by YOFF (opens a bottom margin so
@@ -1798,7 +1805,7 @@ if EMIT:
     # holes (y=5) room below the connectors; top holes (y=123) clear the cap row
     # (which moved up to y=109+YOFF off the connectors).
     bpholes=[(x+XOFF,y,3.2) for y in (5.0,123.0) for x in (40.0,140.0,240.0)]
-    write_brd("backplane/p8x-backplane.brd","P8X 10-SLOT BACKPLANE REV C COMPACT",bpb,bpn,wires,
+    write_brd("backplane/p8x-backplane.brd","P8X %d-SLOT BACKPLANE REV C COMPACT"%NSLOT,bpb,bpn,wires,
               {"GND":[(2,)],"VCC":[(15,)]},300.0,128.0,viad,holes=bpholes)
     validate("backplane/p8x-backplane.brd",bpb,bpn)
 
