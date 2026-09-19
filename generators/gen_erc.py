@@ -53,7 +53,7 @@ OUT = {
  "OSC":    {"OUT":"O"},
 }
 # whole devices whose signal pins are all bidirectional buses (may drive or listen)
-BUS_DEV = {"74245","28C64","MEM28K8","MCP23S17","DS1302","ATMEGA328"}
+BUS_DEV = {"74245","28C64","MEM28K8","MCP23S17","DS1302","ATMEGA328","ATMEGA1284"}
 # 6850 D0-D7 are a bidirectional data bus
 BUS_PINS = {"6850": {f"D{i}" for i in range(8)}}
 # whole devices that are passive / external connectors / discretes -> never flagged

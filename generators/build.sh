@@ -17,6 +17,7 @@ run_one() {
   echo "############################## BUILD: $1 ##############################"
   case "$1" in
     memory-card)     sh "$ROOT/hardware/memory-card/kicad/build.sh" ;;
+    ps2-card)        sh "$ROOT/hardware/ps2-card/kicad/build.sh" ;;
     backplane)       sh "$ROOT/hardware/backplane/kicad/build.sh" ;;
     *)               sh "$ROOT/generators/build_kicad_card.sh" "$1" ;;
   esac

@@ -21,6 +21,7 @@ from pcbnew import VECTOR2I
 ROOT = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 GENE = os.path.join(ROOT, "generators", "gen_eagle.py")
 FP   = "/Applications/KiCad/KiCad.app/Contents/SharedSupport/footprints"
+FPLOCAL = os.path.join(os.path.dirname(os.path.abspath(__file__)), "footprints", "p8x.pretty")
 
 def mm(v): return pcbnew.FromMM(float(v))
 def P(x, y): return VECTOR2I(mm(x), mm(y))
@@ -47,6 +48,7 @@ FPMAP = {
     "DIP16":  (DIP, "DIP-16_W7.62mm"),  "DIP20": (DIP, "DIP-20_W7.62mm"),
     "DIP24N": (DIP, "DIP-24_W7.62mm"),  "DIP24W": (DIP, "DIP-24_W15.24mm"),
     "DIP28N": (DIP, "DIP-28_W7.62mm"),  "DIP28W": (DIP, "DIP-28_W15.24mm"),
+    "DIP40":  (DIP, "DIP-40_W15.24mm"),
     "C_DISC1":(("Capacitor_THT", "C_Disc_D5.0mm_W2.5mm_P5.00mm")),
     "C_DISC": (("Capacitor_THT", "C_Disc_D5.0mm_W2.5mm_P5.00mm")),
     "LED5":   ("LED_THT", "LED_D5.0mm"),
@@ -58,7 +60,7 @@ FPMAP = {
     "DSUB9":  ("Connector_Dsub", "DSUB-9_Socket_Horizontal_P2.77x2.54mm_EdgePinOffset9.40mm"),
     "HDR2X3": ("Connector_PinHeader_2.54mm", "PinHeader_2x03_P2.54mm_Vertical"),
     # ---- substitutions (closest standard footprint) ----
-    "MINIDIN6":("Connector_PinHeader_2.54mm", "PinHeader_1x06_P2.54mm_Vertical", "SUB 1x6 header for PS/2 mini-DIN-6 (replace with real MiniDIN-6 socket)"),
+    "MINIDIN6":("__LOCAL__", "MiniDIN6_RA_PS2", "custom PS/2 mini-DIN-6 footprint (from vendor drawing -- VERIFY vs part)"),
     "HDR40":  ("Connector_PinHeader_2.54mm", "PinHeader_2x20_P2.54mm_Vertical", "SUB 2x20 header"),
     "OSC4":   ("Oscillator", "Oscillator_DIP-14", "SUB DIP-14 can oscillator"),
     "SIP9":   ("Resistor_THT", "R_Array_SIP9", "SUB bussed SIP-9 R-network"),
@@ -187,7 +189,8 @@ def build_card(name):
     footp = {}; missing = []
     for ref, (dev, val) in parts.items():
         spec = footprint_for(ref, dev)
-        fp = pcbnew.FootprintLoad(FP + "/" + spec[0] + ".pretty", spec[1]) if spec else None
+        libdir = FPLOCAL if (spec and spec[0] == "__LOCAL__") else (FP + "/" + spec[0] + ".pretty" if spec else None)
+        fp = pcbnew.FootprintLoad(libdir, spec[1]) if spec else None
         if fp is None:
             missing.append("%s (%s/%s)" % (ref, dev, DEV[dev]["pkg"])); continue
         fp.SetReference(ref); fp.SetValue(val); board.Add(fp); footp[ref] = fp

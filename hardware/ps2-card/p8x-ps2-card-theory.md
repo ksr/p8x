@@ -21,24 +21,44 @@ golden model matches byte-for-byte.
 
 Two identical channels: **port A = keyboard**, **port B = mouse**.
 
-## 0. Built design — ATmega328 latch-bridge
+## 0. Built design — ATmega1284P latch-bridge
 
 The built card (`CARDS["ps2-card"]` in `generators/gen_eagle.py`) hands the PS/2
-protocol to an **ATmega328 (U13)** running in firmware — 5 V-native, open-drain in
-software, so there is **no level translation anywhere** (the TXS0102 is only the
-3.3 V FPGA path). The '328 does framing / parity / ready / overrun for both ports
-and keeps four **74HC374** read latches (U7–U10 = `PSADAT`/`PSAST`/`PSBDAT`/`PSBST`)
-loaded over its `MB0–7` bus; each latch tri-states onto D0–7 under its read strobe.
-`PSLINE` (U11 74244) reads the four live PS/2 lines, and `PSID` (U12 74244) drives
-the constant `$4B` (`'K'`) presence byte. Decode is local to the card (the parked
-peripheral shared it): **U1 7430** detects the `$FFxx` page, **U2/U3 74138** turn
-DOE=7→`-RD` and DLD=7→`-MEMW`, **U4 74688** window-compares A3–7 = 01011 →
-`-PSSEL`, and **U5/U6 74138** decode A0–2 into the per-register read/write strobes.
-An AVR **ICSP** header (`JICSP`) programs the '328; **RRST** is its reset pull-up.
+protocol to an **ATmega1284P (U13, PDIP-40)** running in firmware — 5 V-native,
+open-drain in software, so there is **no level translation anywhere** (the TXS0102
+is only the 3.3 V FPGA path). The MCU does framing / parity / ready / overrun for
+both ports and keeps four **74HC374** read latches (U7–U10 =
+`PSADAT`/`PSAST`/`PSBDAT`/`PSBST`) loaded over its `MB0–7` bus (the full `PA` port);
+each latch tri-states onto D0–7 under its read strobe. `PSLINE` (U11 74244) reads
+the four live PS/2 lines, and `PSID` (U12 74244) drives the constant `$4B` (`'K'`)
+presence byte. Decode is local to the card (the parked peripheral shared it):
+**U1 7430** detects the `$FFxx` page, **U2/U3 74138** turn DOE=7→`-RD` and
+DLD=7→`-MEMW`, **U4 74688** window-compares A3–7 = 01011 → `-PSSEL`, and
+**U5/U6 74138** decode A0–2 into the per-register read/write strobes. An AVR
+**ICSP** header (`JICSP`, on the MCU's own SPI pins PB5/6/7) programs the '1284P;
+**RRST** + the 470 Ω **RRB** tie its reset to the bus `-RES` (see below).
+
+**Why the 1284P and not a '328:** the bus bridge needs ~20 GPIO, leaving a '328
+only 2 spare — not enough to drive the status LEDs, so a '328 build needed an extra
+74HC123 one-shot for the read-activity LEDs. The 1284P's 32 GPIO drive all four
+LEDs straight off the MCU (`PB0` = keyboard-read, `PB1` = mouse-read, `PB2` =
+keystroke-available; a plain power LED on VCC), dropping the one-shot, and still
+leave ~9 pins for the host→device TX path and an IRQ line. The MCU stretches the
+read-activity blinks in firmware. (The shift-register-vs-latch reasoning: the MCU
+*is* the receiver — it replaces the pure-TTL shift registers; the 74374s remain
+only as the bus-read timing bridge, which no MCU can skip without a bus wait-state
+line the P8X doesn't have.)
 
 TX (host→device) is a firmware stub, so the status-register *writes* are only
-decoded (the '328 senses `-WR1`/`-WR3`); there is no write-data capture latch — the
+decoded (the MCU senses `-WR1`/`-WR3`); there is no write-data capture latch — the
 mouse runs in its power-on stream mode, matching the emulator and `lib_ps2` stub.
+
+**Board layout** (bespoke, `hardware/ps2-card/kicad/gen_ps2.py`): the two PS/2
+**mini-DIN-6 sockets on the bottom edge** (custom footprint from the vendor
+drawing — a right-angle shielded socket, shield tabs → GND; verify vs the physical
+part), the four **status LEDs on the right edge** opposite the bus, the DIN41612
+**bus connector on the left**, ICS + decoupling caps + the PS/2 pull-ups in the
+interior.
 
 The '328 reset (`-RESET`) is tied to the backplane **`-RES`** through a **470 Ω
 series isolation resistor (`RRB`)**, with the 10 kΩ `RRST` pull-up on the local

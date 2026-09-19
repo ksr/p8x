@@ -65,7 +65,7 @@ PKG={
  "DIP8":  dip_pads(8,7.62),
  "DIP14": dip_pads(14,7.62), "DIP16": dip_pads(16,7.62),
  "DIP20": dip_pads(20,7.62), "DIP24W": dip_pads(24,15.24),
- "DIP28W": dip_pads(28,15.24),
+ "DIP28W": dip_pads(28,15.24), "DIP40": dip_pads(40,15.24),  # 600-mil DIP-40 (ATmega1284P)
  # 300-mil skinny DIP-28. NOT interchangeable with DIP28W (600 mil): the
  # MCP23S17-E/SP is SPDIP, so DIP28W would leave it unable to reach its pads.
  "DIP28N": dip_pads(28,7.62),
@@ -268,7 +268,7 @@ D("IDE40",[str(k) for k in range(1,41,2)],[str(k) for k in range(2,41,2)],
   {str(k):str(k) for k in range(1,41)},"HDR40")
 # ---- peripheral-card connectors + MCU (stage 2) -----------------------------
 D("DSUB9F",[str(k) for k in range(1,10)],[],{str(k):str(k) for k in range(1,10)},"DSUB9")  # DB9 female (socket)
-D("MINIDIN6",[str(k) for k in range(1,7)],[],{str(k):str(k) for k in range(1,7)},"MINIDIN6")  # PS/2 (SUB hdr)
+D("MINIDIN6",[str(k) for k in range(1,7)]+["SH"],[],{**{str(k):str(k) for k in range(1,7)},"SH":"SH"},"MINIDIN6")  # PS/2 mini-DIN-6 (+ shield tabs)
 D("JMP2X3",[str(k) for k in range(1,7)],[],{str(k):str(k) for k in range(1,7)},"HDR2X3")    # RX/TX swap block
 # ATmega328P (DIP-28 narrow): PS/2 signal processor. Standard AVR DIP pinout.
 D("ATMEGA328",
@@ -284,6 +284,21 @@ D("74688",["!G","P0","Q0","P1","Q1","P2","Q2","P3","Q3","Q4","P4","Q5","P5","Q6"
   ["!PEQ","VCC","GND"],
   {"!G":"1","P0":"2","Q0":"3","P1":"4","Q1":"5","P2":"6","Q2":"7","P3":"8","Q3":"9","GND":"10",
    "Q4":"11","P4":"12","Q5":"13","P5":"14","Q6":"15","P6":"16","Q7":"17","P7":"18","!PEQ":"19","VCC":"20"},"DIP20")
+# ATmega1284P (PDIP-40, 0.6"): PS/2 signal processor. 32 GPIO (4 full ports) leaves
+# ~12 spare after the bus bridge -- enough to drive the status LEDs straight off the
+# MCU and leave room for host->device TX + an IRQ line (no 74123 one-shot needed).
+# SPI/ICSP is on PB5(MOSI)/PB6(MISO)/PB7(SCK). Internal RC osc -> XTAL pins unused.
+D("ATMEGA1284",
+  ["PB0","PB1","PB2","PB3","PB4","PB5","PB6","PB7","!RESET","XTAL2","XTAL1",
+   "PD0","PD1","PD2","PD3","PD4","PD5","PD6","PD7","PC0","PC1","PC2","PC3","PC4","PC5",
+   "PC6","PC7","AREF","PA7","PA6","PA5","PA4","PA3","PA2","PA1","PA0"],
+  ["VCC","GND","AVCC","GND2"],
+  {"PB0":"1","PB1":"2","PB2":"3","PB3":"4","PB4":"5","PB5":"6","PB6":"7","PB7":"8",
+   "!RESET":"9","VCC":"10","GND":"11","XTAL2":"12","XTAL1":"13","PD0":"14","PD1":"15",
+   "PD2":"16","PD3":"17","PD4":"18","PD5":"19","PD6":"20","PD7":"21","PC0":"22","PC1":"23",
+   "PC2":"24","PC3":"25","PC4":"26","PC5":"27","PC6":"28","PC7":"29","AVCC":"30","GND2":"31",
+   "AREF":"32","PA7":"33","PA6":"34","PA5":"35","PA4":"36","PA3":"37","PA2":"38","PA1":"39",
+   "PA0":"40"},"DIP40")
 
 # ---- bustest-card parts -----------------------------------------------------
 # MCP23S17: 16-bit SPI I/O expander, per-pin direction + per-pin pull-up, 5 V.
@@ -1589,7 +1604,7 @@ ic={"U1":("7430","IO PAGE"),"U2":("74138","DOE DEC"),"U3":("74138","DLD DEC"),
     "U4":("74688","WIN CMP"),"U5":("74138","PS RD DEC"),"U6":("74138","PS WR DEC"),
     "U7":("74374","PSADAT"),"U8":("74374","PSAST"),"U9":("74374","PSBDAT"),
     "U10":("74374","PSBST"),"U11":("74244","PSLINE"),"U12":("74244","PSID K"),
-    "U13":("ATMEGA328","PS/2 MCU")}
+    "U13":("ATMEGA1284","PS/2 MCU")}
 # local front-end decode (page + DOE/DLD), same as the shared set on other cards
 for i in range(8): N(n,"A%d"%(8+i),("U1","ABCDEFGH"[i]))
 N(n,"IOPG",("U1","Y"))
@@ -1609,16 +1624,16 @@ N(n,"-PSSEL",("U4","!PEQ"),("U5","!G2A"),("U6","!G2A"))
 N(n,"A0",("U5","A"),("U6","A")); N(n,"A1",("U5","B"),("U6","B"))
 N(n,"A2",("U5","C"),("U6","C")); N(n,"VCC",("U5","G1"),("U6","G1"))
 N(n,"-RD",("U5","!G2B")); N(n,"-MEMW",("U6","!G2B"))
-N(n,"-RR0",("U5","Y0"),("U7","!OC"),("U13","PD0"))     # PSADAT read (+ '328 clears ready)
+N(n,"-RR0",("U5","Y0"),("U7","!OC"),("U13","PD0"))     # PSADAT read (+ MCU clears ready)
 N(n,"-RR1",("U5","Y1"),("U8","!OC"))                   # PSAST read
-N(n,"-RR2",("U5","Y2"),("U9","!OC"),("U13","PD1"))     # PSBDAT read (+ '328 clears ready)
+N(n,"-RR2",("U5","Y2"),("U9","!OC"),("U13","PD1"))     # PSBDAT read (+ MCU clears ready)
 N(n,"-RR3",("U5","Y3"),("U10","!OC"))                  # PSBST read
 N(n,"-RR4",("U5","Y4"),("U11","!G1"),("U11","!G2"))    # PSLINE read
 N(n,"-RR6",("U5","Y6"),("U12","!G1"),("U12","!G2"))    # PSID read
-N(n,"-WR1",("U6","Y1"),("U13","PC4"))                  # PSAST write -> '328 sense
-N(n,"-WR3",("U6","Y3"),("U13","PC5"))                  # PSBST write -> '328 sense
-# read latches: D = '328 MB[0:7] bus, Q -> P8X D0-7, CLK from '328 load lines
-_MB=["PB0","PB1","PB2","PB3","PB4","PB5","PD6","PD7"]
+N(n,"-WR1",("U6","Y1"),("U13","PC4"))                  # PSAST write -> MCU sense
+N(n,"-WR3",("U6","Y3"),("U13","PC5"))                  # PSBST write -> MCU sense
+# read latches: D = MCU MB[0:7] bus (PA port), Q -> P8X D0-7, CLK from MCU load lines
+_MB=["PA0","PA1","PA2","PA3","PA4","PA5","PA6","PA7"]
 for b in range(8):
     N(n,"MB%d"%b,("U13",_MB[b]),
       ("U7","D%d"%(b+1)),("U8","D%d"%(b+1)),("U9","D%d"%(b+1)),("U10","D%d"%(b+1)))
@@ -1633,10 +1648,17 @@ N(n,"GND",("U11","A5"),("U11","A6"),("U11","A7"),("U11","A8"))
 # PSID buffer: strap to 0x4B ('K'): bit0..7 = 1,1,0,1,0,0,1,0
 N(n,"VCC",("U12","A1"),("U12","A2"),("U12","A4"),("U12","A7"))
 N(n,"GND",("U12","A3"),("U12","A5"),("U12","A6"),("U12","A8"))
-# ATmega328 PS/2 lines, power. VCC(7)/GND(8) auto-wired by card().
+# ATmega1284 PS/2 lines, power. VCC(10)/GND(11) auto-wired by card(); tie AVCC + 2nd GND.
 N(n,"PS2CKA",("U13","PD2")); N(n,"PS2DA",("U13","PD4"))
 N(n,"PS2CKB",("U13","PD3")); N(n,"PS2DB",("U13","PD5"))
 N(n,"VCC",("U13","AVCC")); N(n,"GND",("U13","GND2"))
+# status LEDs, driven straight off the MCU (no one-shot -- firmware stretches the
+# blink): PB0 = keyboard-read activity, PB1 = mouse-read activity, PB2 = keystroke
+# available (lit while a kbd byte waits). Plus a plain power LED on VCC.
+N(n,"LKR",("U13","PB0"),("RKR","2")); N(n,"LKRA",("RKR","1"),("LEDKR","A")); N(n,"GND",("LEDKR","K"))
+N(n,"LMR",("U13","PB1"),("RMR","2")); N(n,"LMRA",("RMR","1"),("LEDMR","A")); N(n,"GND",("LEDMR","K"))
+N(n,"LKA",("U13","PB2"),("RKA","2")); N(n,"LKAA",("RKA","1"),("LEDKA","A")); N(n,"GND",("LEDKA","K"))
+N(n,"VCC",("RPWR","2")); N(n,"LPWRA",("RPWR","1"),("LEDPWR","A")); N(n,"GND",("LEDPWR","K"))
 # PS/2 sockets + 10k open-drain pull-ups (RN1)
 N(n,"PS2CKA",("PS2A","5")); N(n,"PS2DA",("PS2A","1"))
 N(n,"GND",("PS2A","3")); N(n,"VCC",("PS2A","4"))
@@ -1645,9 +1667,11 @@ N(n,"GND",("PS2B","3")); N(n,"VCC",("PS2B","4"))
 N(n,"VCC",("RN1","COM"))
 N(n,"PS2CKA",("RN1","R1")); N(n,"PS2DA",("RN1","R2"))
 N(n,"PS2CKB",("RN1","R3")); N(n,"PS2DB",("RN1","R4"))
-# ICSP (AVR 2x3): 1 MISO(PB4/MB4) 2 VCC 3 SCK(PB5/MB5) 4 MOSI(PB3/MB3) 5 !RESET 6 GND
-N(n,"MB4",("JICSP","1")); N(n,"VCC",("JICSP","2")); N(n,"MB5",("JICSP","3"))
-N(n,"MB3",("JICSP","4")); N(n,"-RESET",("JICSP","5"),("U13","!RESET"),("RRST","1"),("RRB","2"))
+N(n,"GND",("PS2A","SH"),("PS2B","SH"))                 # metal shield tabs -> GND
+# ICSP (AVR 2x3): 1 MISO(PB6) 2 VCC 3 SCK(PB7) 4 MOSI(PB5) 5 !RESET 6 GND. On the
+# 1284P the SPI pins are dedicated (not shared with the MB data bus, which is on PA).
+N(n,"MISO",("JICSP","1"),("U13","PB6")); N(n,"VCC",("JICSP","2")); N(n,"SCK",("JICSP","3"),("U13","PB7"))
+N(n,"MOSI",("JICSP","4"),("U13","PB5")); N(n,"-RESET",("JICSP","5"),("U13","!RESET"),("RRST","1"),("RRB","2"))
 N(n,"GND",("JICSP","6")); N(n,"VCC",("RRST","2"))
 # Bus reset -> '328 reset, through a 470R series isolation resistor (RRB). A system
 # -RES (push-pull driven by the control card) pulls -RESET below the AVR threshold
@@ -1657,8 +1681,12 @@ N(n,"GND",("JICSP","6")); N(n,"VCC",("RRST","2"))
 N(n,"-RES",("RRB","1"))
 sm={"PS2A":("MINIDIN6","PS2-KBD"),"PS2B":("MINIDIN6","PS2-MOUSE"),
     "RN1":("SIP9","4X10K"),"JICSP":("JMP2X3","ICSP"),"RRST":("RES","10K"),
-    "RRB":("RES","470R")}
-card("ps2-card","P8X PS/2 CARD REV A - KEYBOARD + MOUSE (ATmega328, $FF58-5F)",ic,sm,n,
+    "RRB":("RES","470R"),
+    "LEDPWR":("LED","PWR-GRN"),"RPWR":("RES","1K"),
+    "LEDKR":("LED","KBD-RD-YEL"),"RKR":("RES","1K"),
+    "LEDMR":("LED","MSE-RD-YEL"),"RMR":("RES","1K"),
+    "LEDKA":("LED","KEY-AVAIL-GRN"),"RKA":("RES","1K")}
+card("ps2-card","P8X PS/2 CARD REV A - KEYBOARD + MOUSE (ATmega1284, $FF58-5F)",ic,sm,n,
  {"D%d"%i for i in range(8)}|{"A%d"%i for i in range(16)}|
  {"DOE%d"%i for i in range(4)}|{"DLD%d"%i for i in range(4)}|{"-RES"},
  emit_files=False)
