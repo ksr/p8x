@@ -1,6 +1,6 @@
 # P8X — Hand-Built 8-Bit TTL CPU
 
-A from-scratch 8-bit CPU built from ~130 74HCT logic chips on a 10-slot DIN41612 backplane. Fully microcoded; the microcode ROM images burned to the EPROMs are the same images the emulator interprets.
+A from-scratch 8-bit CPU built from ~130 74HCT logic chips on an 8-slot DIN41612 backplane. Fully microcoded; the microcode ROM images burned to the EPROMs are the same images the emulator interprets.
 
 The machine now exists **twice**: as the TTL card set, and as an [FPGA
 implementation](fpga/) of the same microarchitecture that boots the same
@@ -35,7 +35,7 @@ New to the abbreviations and signal names? See [GLOSSARY.md](GLOSSARY.md).
 | I/O | Switches, LEDs, 6850 ACIA (RS-232) |
 | CF-IDE | CompactFlash in 8-bit True IDE mode, memory-mapped at $FF10–$FF17 |
 
-All six cards plug into a passive 10-slot backplane over a 96-pin DIN 41612 bus (rev C2).
+All six cards plug into a passive 8-slot backplane over a 96-pin DIN 41612 bus (rev C2).
 
 ## Toolchain
 

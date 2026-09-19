@@ -881,7 +881,7 @@ Nothing below has been built or measured.
         1. Standalone TTL backplane card -- RECOMMENDED for the eventual
            TTL machine. The receive path is ~12 ICs (a full Eurocard),
            too much to graft onto the working IO card without a risky
-           re-place/re-route, and the 10-slot backplane has ~3 free slots
+           re-place/re-route, and the 8-slot backplane has ~2 free slots
            (6 cards + the planned IRQ card). One card per function.
         2. Fold into the IO card -- only argument is slot economy, which
            we do not need; rejected (respin risk + no room for a dozen

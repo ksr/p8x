@@ -3,7 +3,7 @@
 
 Rendered through the SAME auto-router as the cards
 (render_traditional_auto.draw_card), fed a representative single-slot netlist
-from gen_eagle.backplane_rep(). All 10 slots are wired in parallel, so one is
+from gen_eagle.backplane_rep(). All slots are wired in parallel, so one is
 drawn.
 
 History / why this exists: this used to be hand-drawn with per-wire coordinates.

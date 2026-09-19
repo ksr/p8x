@@ -70,7 +70,7 @@ story.append(Paragraph("P8X Backplane Bus Definition", H1))
 story.append(Paragraph("Revision C &mdash; June 2026 &mdash; FOR REVIEW", styles["Heading3"]))
 story.append(Spacer(1,6))
 story.append(Paragraph(
- "Connector: DIN 41612, 3 rows (A/B/C) &times; 32 pins. Backplane: 10 slots, "
+ "Connector: DIN 41612, 3 rows (A/B/C) &times; 32 pins. Backplane: 8 slots, "
  "25.4&nbsp;mm pitch, 4-layer (signals / GND plane / +5V plane / signals). "
  "Power: A1,B1,C1,A2,B2,C2 = +5V; A31,B31,C31,A32,B32,C32 = GND. "
  "Row B pins 3&ndash;30 are a grounded guard row between the two signal rows. "
@@ -111,7 +111,7 @@ leg=[["Acronym","Meaning","Acronym","Meaning"],
  ["ALUS0-3","74181 ALU function Select lines","ALUM","74181 Mode: logic vs arithmetic"],
  ["CIN","ALU Carry IN","SH0-1","SHifter control (pass/left/right/rotate)"],
  ["LDF","LoaD Flags: latch C,Z,N,V from ALU","-RES","RESet, active low (_N = active low)"],
- ["CLK / CLKB","System CLocK and its complement\n(CLK-Bar); loads on rising CLK,\nwrite strobes gated by CLKB","SPAREn","Unassigned, bused to all 10 slots,\nreserved for future use","FC FZ FN FV","ALU flags to control card\n(condition mux), allocated from\nformer SPARE0-3"]]
+ ["CLK / CLKB","System CLocK and its complement\n(CLK-Bar); loads on rising CLK,\nwrite strobes gated by CLKB","SPAREn","Unassigned, bused to all 8 slots,\nreserved for future use","FC FZ FN FV","ALU flags to control card\n(condition mux), allocated from\nformer SPARE0-3"]]
 leg=[[c.replace("\n","<br/>") if isinstance(c,str) else c for c in row] for row in leg]
 legP=[[Paragraph(c,SM) if i>0 else Paragraph("<font color=white><b>%s</b></font>"%c,SM) for c in row] for i,row in enumerate(leg)]
 tl=Table(legP,colWidths=[22*mm,58*mm,24*mm,58*mm],repeatRows=1)

@@ -111,12 +111,12 @@ leg_data = [
     ["Clock/reset", "CLK (A24), CLKB (A25), -RES (A11)", "System clock + complement; reset active-low. (Control card -> all.)"],
     ["Rev-C lines", "BSEL (B28), IRQ (B29)", "BSEL: ALU B-mux 0=B reg,1=T reg. IRQ: maskable int request (reserved)."],
     ["Power/GND", "+5V (1,2 all rows), GND (31,32 + row-B guard)", "+5V/GND planes; row B 3-26 is a grounded guard between signal rows."],
-    ["Spare", "SPARE4-11 (rev-C reallocations noted)", "Reserved, bused to all 10 slots. SPARE0-3 became FC/FZ/FN/FV."],
+    ["Spare", "SPARE4-11 (rev-C reallocations noted)", "Reserved, bused to all 8 slots. SPARE0-3 became FC/FZ/FN/FV."],
 ]
 leg = legtbl(leg_data, [16 * mm, 38 * mm, 105 * mm])
 
 note = Paragraph(
-    "Connector: DIN 41612, 3 rows (A/B/C) x 32 pins, 10 slots @ 25.4 mm. "
+    "Connector: DIN 41612, 3 rows (A/B/C) x 32 pins, 8 slots @ 28 mm. "
     "Shading: <font backColor='#FFD9D9'>&nbsp;+5V&nbsp;</font> "
     "<font backColor='#D9EBFF'>&nbsp;GND&nbsp;</font> "
     "<font backColor='#EEEEEE'>&nbsp;spare&nbsp;</font>. "

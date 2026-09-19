@@ -1,6 +1,12 @@
-# P8X 10-Slot Backplane — Rev C Design Notes
+# P8X 8-Slot Backplane — Design Notes
 
 > **Theory of operation:** [p8x-backplane-theory.md](p8x-backplane-theory.md) — deep walkthrough of the bus map, signal integrity, and power.
+
+> **Built version:** the go-forward board is the KiCad build in
+> [`kicad/`](kicad/README.md) — **8 slots, 28 mm pitch, 262 × 128 mm**, routed at
+> **0.13 mm clearance**, nylon-screw mounting. The layout figures below are the
+> older Eagle rev-C notes (25.4 mm pitch, 10 slots); the bus pinout/theory still
+> applies, only the slot count and physical layout changed.
 
 ## 1. Bus Pinout
 

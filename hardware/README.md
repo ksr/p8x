@@ -13,7 +13,7 @@ board-specific design docs.
 | Memory | [memory-card/](memory-card/README.md) | 28C64 ROM (or low 8K of 28C256) + 62256 SRAM, address decode |
 | I/O | [io-card/](io-card/README.md) | Switches, LEDs, 6850 ACIA (RS-232) |
 | CF-IDE | [cf-card/](cf-card/README.md) | CompactFlash in 8-bit True IDE mode at `$FF10–$FF17` |
-| Backplane | [backplane/](backplane/p8x-backplane-design.md) | 10-slot passive 96-pin DIN 41612 bus (rev C2) |
+| Backplane | [backplane/](backplane/p8x-backplane-design.md) | 8-slot passive 96-pin DIN 41612 bus (rev C2) |
 
 > **Deprecated:** the standalone **LED test card** (a write-only 8-LED output
 > latch that decoded `$FF0C`) was a CAD-workflow trial, never built. It has been

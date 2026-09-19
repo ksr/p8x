@@ -18,7 +18,7 @@ and **power**.
 | | |
 |---|---|
 | **Input** | +5 V / GND at the power terminal `J11` |
-| **Outputs** | the full 96-pin bus, presented identically at all 10 slots |
+| **Outputs** | the full 96-pin bus, presented identically at all 8 slots |
 
 The backplane neither drives nor consumes logic signals; it *connects* them. "Who
 drives what" is decided entirely by the cards (see the per-card theory docs).

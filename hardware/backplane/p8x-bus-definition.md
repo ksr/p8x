@@ -12,7 +12,7 @@ by `generators/gen_bus_pdf.py`. When any conflict exists, trust the generator co
 | Item | Spec |
 |---|---|
 | Connector | DIN 41612, 96-pin, 3 rows (A / B / C), 32 pins per row |
-| Backplane | 10 slots, 25.4 mm (1") pitch |
+| Backplane | 8 slots, 28 mm pitch (KiCad build) |
 | Card edge | Male right-angle DIN 41612; row A nearest board surface |
 | Mating orientation | VERIFY against physical connectors before first fab |
 
@@ -220,7 +220,7 @@ microcode-word additions, all driven by the control card's pipeline latches:
 | BSEL | B28 | ALU | ALU B-input mux select: 0 = B register, 1 = T register (microcode word bit 31, pipe U17.Q8; drives ALU-card U32/U33) |
 | IRQ | B29 | Control | Maskable interrupt request (rev C, reserved). **Wired-OR, active-low**: cards assert it with **open-drain** drivers (e.g. 74HC07) — the HCT push-pull parts used elsewhere cannot be wire-ORed. The line has no high state of its own, so the backplane provides it: **`R4`, one 10 kΩ pull-up to VCC** (end zone, beside `RN1`). The control-card interrupt controller (DNP footprints U20/U21) samples it; that circuit is not yet built — see BACKLOG. (`-RES`, by contrast, is push-pull driven by the control card and needs no pull.) |
 
-SPARE11 (B30) remains bused across all 10 slots, reserved; no card may use it
+SPARE11 (B30) remains bused across all 8 slots, reserved; no card may use it
 without a formal allocation recorded here.
 
 ---

@@ -14,14 +14,15 @@ motherboard and is physically larger.
 
 | Board | Routed | Unconn. | Notes |
 |-------|--------|---------|-------|
-| memory-card | ✅ | 1 | rev F, bespoke `gen_mem.py` |
+| memory-card | ✅ | 0 | rev F, bespoke `gen_mem.py` |
 | cf-card | ✅ | 0 | IDE/RTC/coin subs |
 | control-card | ✅ | 0 | 14-pin oscillator |
 | alu-card | ✅ | 0 | |
-| io-card | ✅ | 1 | ACIA/MAX232/RTC/DIP-sw subs |
+| io-card | ✅ | 0 | ACIA/MAX232/RTC/DIP-sw subs; coin-cell GND healed via plane via |
+| peripheral-card | ✅ | 0 | combined I/O + CF + PS/2 (replaces io/cf/ps2); bespoke `gen_periph.py` |
 | regbank-card | ✅ | 0 | 95 parts — routed (5m45s auto + ~13min optimizer) |
 | bustest-card | ✅ | 0 | Pico + 17 LEDs; routed with right-edge LED bank |
-| backplane | ⚠ placed | — | 10-slot DIN41612 motherboard, 318×128mm (28mm slot pitch, slots left-justified, power/pull-up parts on the right; power entry = Phoenix MSTBA 2,5/2-G-5,08 terminal block, Digikey 1729128); bus routing is a big follow-up |
+| backplane | ✅ | 0 | **8-slot** DIN41612 motherboard, 262×128mm (28mm slot pitch, slots left-justified, power/pull-up parts on the right; power entry = Phoenix MSTBA 2,5/2-G-5,08, Digikey 1729128). Routes clean at **0.13mm clearance** (netclass in the `.kicad_pro`) with **nylon-screw** 2mm keepouts. |
 
 > **Deprecated:** the **led-card** (previously routed here) was a CAD-workflow
 > test card, never planned to be built. It was moved to
