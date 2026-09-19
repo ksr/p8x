@@ -1195,19 +1195,22 @@ ic={"U1":("7430","IO PAGE"),"U2":("74138","PORT DEC"),"U3":("74138","DOE DEC"),
  "U4":("74138","DLD DEC"),"U5":("GATES14","74HCT32"),"U6":("GATES14","74HCT08"),
  "U7":("74161","BAUD DIV"),"U8":("MAX232","RS232"),"U9":("74244","SW IN"),
  "U10":("74374","LED PORT"),"U11":("74244","MON A-LO"),"U12":("74244","MON A-HI"),
- "U13":("74244","MON D"),"U14":("6850","ACIA"),"U15":("GATES14","74HCT00"),
- "U16":("DS1302","RTC DNP")}   # rev C: real-time clock, provisioned DNP
+ "U13":("74244","MON D"),"U14":("6850","ACIA1"),"U15":("GATES14","74HCT00"),
+ "U16":("DS1302","RTC DNP"),                       # rev C: real-time clock, provisioned DNP
+ "U17":("6850","ACIA2"),"U18":("HEX14","74HCT14")} # rev B: 2nd serial + its E-gate inverter
 sm={"X2":("OSC","2.4576MHZ"),"SW1":("DIP8SW","INPUT"),"RNP":("SIP9","8X10K"),
  "RL1":("RNISO8","8X330R"),"LA1":("LEDARR8","8-LED BAR"),
  "RM1":("RNISO8","8X330R"),"LM1":("LEDARR8","A0-7"),
  "RM2":("RNISO8","8X330R"),"LM2":("LEDARR8","A8-15"),
  "RM3":("RNISO8","8X330R"),"LM3":("LEDARR8","D0-7"),
- "J2":("HDR3","SERIAL"),"C2":("CAP","1uF"),"C3":("CAP","1uF"),"C4":("CAP","1uF"),
+ "DB9A":("DSUB9F","SERIAL1"),"DB9B":("DSUB9F","SERIAL2"),      # rev B: two RS-232 DB9s
+ "JP1":("JMP2X3","S1 SWAP"),"JP2":("JMP2X3","S2 SWAP"),        # RX/TX straight/null-modem
+ "C2":("CAP","1uF"),"C3":("CAP","1uF"),"C4":("CAP","1uF"),
  "C5":("CAP","1uF"),"RP1":("RES","1K"),"LED3":("LED","PWR-GRN"),
  "R4":("RES","1K"),"LED4":("LED","IOSEL-YEL"),
  # rev C RTC support parts (DNP): 32.768kHz crystal, backup coin cell, and a
- # 3-pin header breaking out the DS1302 3-wire (CE/SCLK/IO) so it can be jumpered
- # to a port during bring-up. Reserved I/O address: $FF08 (PORT DEC U2 Y3).
+ # 3-pin header breaking out the DS1302 3-wire (CE/SCLK/IO). It is a bit-banged
+ # 3-wire peripheral on J3, NOT memory-mapped -- $FF08 now belongs to ACIA2 (rev B).
  "X3":("XTAL32","32.768KHZ"),"BT1":("COIN","CR2032"),"J3":("HDR3","RTC 3-WIRE")}
 for i in range(8): N(n,"A%d"%(8+i),("U1","ABCDEFGH"[i]))
 N(n,"IOPG",("U1","Y"),("U2","!G2A"),("U15","3A"),("U15","3B"))
@@ -1250,12 +1253,33 @@ N(n,"GND",("X2","GND"),("U7","A"),("U7","B"),("U7","C"),("U7","D"))
 N(n,"BCLK",("U7","QD"),("U14","TXCLK"),("U14","RXCLK"))
 N(n,"TXD",("U14","TXD"),("U8","T1IN"))
 N(n,"RXD",("U14","RXD"),("U8","R1OUT"))
-N(n,"SOUT",("U8","T1OUT"),("J2","1")); N(n,"SIN",("U8","R1IN"),("J2","2"))
-N(n,"GND",("J2","3"),("LED3","K"))
+# ACIA1 RS-232 through the RX/TX swap jumper JP1 to DB9-A. Center pins 3/4 = the
+# MAX232 side (SOUT/SIN); pins 1/6 = DB9.3 (TXD), pins 2/5 = DB9.2 (RXD). A pair of
+# shunts selects straight-through (DTE) or crossed (null-modem).
+N(n,"SOUT",("U8","T1OUT"),("JP1","3")); N(n,"SIN",("U8","R1IN"),("JP1","4"))
+N(n,"S1TXD",("JP1","1"),("JP1","6"),("DB9A","3")); N(n,"S1RXD",("JP1","2"),("JP1","5"),("DB9A","2"))
+N(n,"GND",("DB9A","5"),("LED3","K"))
 N(n,"C1PN",("U8","C1P"),("C2","1")); N(n,"C1MN",("U8","C1M"),("C2","2"))
 N(n,"C2PN",("U8","C2P"),("C3","1")); N(n,"C2MN",("U8","C2M"),("C3","2"))
 N(n,"VPN",("U8","VP"),("C4","1")); N(n,"GND",("C4","2"))
 N(n,"VMN",("U8","VM"),("C5","1")); N(n,"GND",("C5","2"))
+# ---- 2nd serial channel: ACIA2 ($FF08/09) on MAX232 chan 2 -> DB9-B via JP2 ----
+# -P4 = U2.Y4 ($FF08). E2 = P4P AND CLKB (mirrors ACIA1's EEN); P4P = inverted -P4
+# via U18 (HEX inverter). One MAX232 (U8) serves BOTH channels: T1/R1 = ACIA1,
+# T2/R2 = ACIA2. This is the parked peripheral card's 2nd-serial design, brought
+# onto the standalone io-card.
+N(n,"-P4",("U2","Y4"),("U18","1A")); N(n,"P4P",("U18","1Y"),("U6","4A"))
+N(n,"CLKB",("U6","4B")); N(n,"E2",("U6","4Y"),("U17","E"))
+for b in range(8): N(n,"D%d"%b,("U17","D%d"%b))
+N(n,"VCC",("U17","CS0"),("U17","CS1")); N(n,"-P4",("U17","!CS2"))
+N(n,"A0",("U17","RS")); N(n,"-MEMW",("U17","RW"))
+N(n,"BCLK",("U17","TXCLK"),("U17","RXCLK"))
+N(n,"GND",("U17","!CTS"),("U17","!DCD"))
+N(n,"TXD2",("U17","TXD"),("U8","T2IN")); N(n,"RXD2",("U17","RXD"),("U8","R2OUT"))
+N(n,"SOUT2",("U8","T2OUT"),("JP2","3")); N(n,"SIN2",("U8","R2IN"),("JP2","4"))
+N(n,"S2TXD",("JP2","1"),("JP2","6"),("DB9B","3")); N(n,"S2RXD",("JP2","2"),("JP2","5"),("DB9B","2"))
+N(n,"GND",("DB9B","5"))
+N(n,"GND",("U18","2A"),("U18","3A"),("U18","4A"),("U18","5A"),("U18","6A"))  # unused inverters
 for half,u in ((0,"U11"),(1,"U12")):
     N(n,"GND",(u,"!G1"),(u,"!G2"))
     for b in range(8):
@@ -1283,23 +1307,30 @@ N(n,"VCC",("U16","VCC1")); N(n,"VBAT",("U16","VCC2"),("BT1","+"))
 N(n,"GND",("U16","GND"),("BT1","-"))
 N(n,"RTCCE",("U16","CE"),("J3","1")); N(n,"RTCSCLK",("U16","SCLK"),("J3","2"))
 N(n,"RTCIO",("U16","IO"),("J3","3"))
-card("io-card","P8X I/O CARD REV A - ACIA + SWITCHES + LEDS + BUS MONITOR",ic,sm,n,
+card("io-card","P8X I/O CARD REV B - 2x ACIA/DB9 + SWITCHES + LEDS + BUS MONITOR",ic,sm,n,
  {"D%d"%i for i in range(8)}|{"A%d"%i for i in range(16)}|
  {"DOE%d"%i for i in range(4)}|{"DLD%d"%i for i in range(4)}|{"CLKB","-RES"})
 
 # ===================== CF-IDE CARD ============================================
 n={}
-ic={"U1":("74245","DATA BUF"),"U2":("7430","IO PAGE"),"U3":("74138","DOE DEC"),
+ic={"U1":("74245","DATA BUF 0"),"U2":("7430","IO PAGE"),"U3":("74138","DOE DEC"),
  "U4":("74138","DLD DEC"),"U5":("HEX14","74HCT14"),"U6":("7410","74HCT10"),
  "U7":("7410","74HCT10"),"U8":("GATES14","74HCT08"),
  # rev C: 8-bit-mode fallback latch (DNP). Only needed if a CF card refuses True
  # IDE 8-bit mode; it captures the CF high data byte (D8-15) so it can be read
  # back separately. Provisioned DNP — inputs wired, outputs/clock/decode deferred.
- "U9":("74374","CF HI-BYTE DNP")}
-sm={"J2":("IDE40","IDE-40"),"RN1":("SIP9","8X10K"),
+ "U9":("74374","CF HI-BYTE DNP"),
+ # rev B: a SECOND fully-decoded CF drive at $FF18-1F (drive 1). Its own data
+ # buffer (U10) + strobe glue (U11) + header J5, so two CF-IDE adapters plug in as
+ # two independent masters -- no unreliable True-IDE master/slave. The OS already
+ # supports /d1 (dual-volume); firmware CFSETL/CFINIT pick the port base by drive.
+ "U10":("74245","DATA BUF 1"),"U11":("7410","74HCT10")}
+sm={"J2":("IDE40","IDE-40 D0"),"J5":("IDE40","IDE-40 D1"),
+ "RN1":("SIP9","8X10K"),"RN3":("SIP9","8X10K"),
  "RP1":("RES","1K"),"LED3":("LED","PWR-GRN"),
- "R4":("RES","1K"),"LED4":("LED","ACT-YEL"),
- "R5":("RES","330R"),"LED5":("LED","DASP-GRN")}
+ "R4":("RES","1K"),"LED4":("LED","ACT0-YEL"),
+ "R5":("RES","330R"),"LED5":("LED","DASP-GRN"),
+ "R6":("RES","1K"),"LED6":("LED","ACT1-YEL")}
 for i in range(8): N(n,"A%d"%(8+i),("U2","ABCDEFGH"[i]))
 N(n,"IOPG",("U2","Y"),("U5","1A"))
 N(n,"IOPGP",("U5","1Y"),("U6","1A"),("U6","2A"))
@@ -1310,31 +1341,47 @@ N(n,"-RD",("U3","Y7"),("U5","2A")); N(n,"-MEMW",("U4","Y7"),("U5","3A"))
 N(n,"RDP",("U5","2Y"),("U7","1B")); N(n,"WRP",("U5","3Y"),("U7","2B"))
 N(n,"A3",("U6","2C"),("U5","4A")); N(n,"A3N",("U5","4Y"),("U6","1C"))
 N(n,"A4",("U6","1B"),("U6","2B"))
-N(n,"-CS0",("U6","1Y"),("J2","37"),("U8","1A"))
-N(n,"-CS1",("U6","2Y"),("J2","38"),("U8","1B"))
-N(n,"-CFSEL",("U8","1Y"),("U5","5A"))
-N(n,"SELP",("U5","5Y"),("U7","1A"),("U7","2A"))
-N(n,"CLKB",("U7","1C"),("U7","2C"))
+# --- drive 0: command block $FF10-17 (CS0). Command-only now, so its old control
+#     block J2.38 (CS1) is tied inactive; drive 1 takes over the $FF18-1F term. ---
+N(n,"-CS0",("U6","1Y"),("J2","37"),("U5","5A"))   # -CFSEL0 = -CS0 straight to the SELP inverter
+N(n,"VCC",("J2","38"))                            # drive-0 control CS1 unused (idle high)
+N(n,"SELP",("U5","5Y"),("U7","1A"),("U7","2A"))   # SELP0 = NOT -CS0
+N(n,"CLKB",("U7","1C"),("U7","2C"),("U11","1C"),("U11","2C"))
 N(n,"-IOR",("U7","1Y"),("J2","25"),("U1","DIR"),("U8","2A"))
 N(n,"-IOW",("U7","2Y"),("J2","23"),("U8","2B"))
 N(n,"-CFOE",("U8","2Y"),("U1","!OE"),("U8","3A"),("U8","3B"))
 N(n,"ACTK",("U8","3Y"),("LED4","K"))
+# --- drive 1: command block $FF18-1F on its own header J5 (own buffer + strobes) -
+N(n,"-CS1",("U6","2Y"),("J5","37"),("U5","6A"))   # -CS1 = page.A4.A3 -> drive-1 CS0 + inverter
+N(n,"SELP1",("U5","6Y"),("U11","1A"),("U11","2A"))# SELP1 = NOT -CS1
+N(n,"RDP",("U11","1B")); N(n,"WRP",("U11","2B"))  # reuse the shared read/write pulses
+N(n,"-IOR1",("U11","1Y"),("J5","25"),("U10","DIR"),("U8","4A"))
+N(n,"-IOW1",("U11","2Y"),("J5","23"),("U8","4B"))
+N(n,"-CFOE1",("U8","4Y"),("U10","!OE"),("LED6","K"))  # drive-1 buffer OE + activity LED
+N(n,"VCC",("J5","38"))                            # drive-1 control CS1 unused (idle high)
+# per-drive data buffers (only the selected drive drives D0-7 on a read)
 for b in range(8):
-    N(n,"D%d"%b,("U1","A%d"%b))
+    N(n,"D%d"%b,("U1","A%d"%b),("U10","A%d"%b))
     N(n,"CFD%d"%b,("U1","B%d"%b),("J2",str(17-2*b)))
-for i,pin in enumerate(("35","33","36")): N(n,"A%d"%i,("J2",pin))
-N(n,"-RES",("J2","1"))
-N(n,"VCC",("RN1","COM"),("J2","29"))
-N(n,"IORDY",("RN1","R1"),("J2","27"))
-N(n,"-PDIAG",("RN1","R2"),("J2","34"))
-N(n,"-DASP",("RN1","R3"),("J2","39"),("LED5","K"))
-N(n,"GND",("J2","28"),*[("J2",p) for p in ("2","19","22","24","26","30","40")],
-  ("LED3","K"),("U8","4A"),("U8","4B"),
+    N(n,"CF1D%d"%b,("U10","B%d"%b),("J5",str(17-2*b)))
+# shared CPU->drive lines (address, reset) + per-drive open-drain status pull-ups
+for i,pin in enumerate(("35","33","36")): N(n,"A%d"%i,("J2",pin),("J5",pin))
+N(n,"-RES",("J2","1"),("J5","1"))
+N(n,"VCC",("RN1","COM"),("J2","29"),("RN3","COM"),("J5","29"))
+N(n,"IORDY",("RN1","R1"),("J2","27"));  N(n,"IORDY1",("RN3","R1"),("J5","27"))
+N(n,"-PDIAG",("RN1","R2"),("J2","34")); N(n,"-PDIAG1",("RN3","R2"),("J5","34"))
+N(n,"-DASP",("RN1","R3"),("J2","39"),("LED5","K")); N(n,"-DASP1",("RN3","R3"),("J5","39"))
+N(n,"GND",("J2","28"),("J5","28"),
+  *[("J2",p) for p in ("2","19","22","24","26","30","40")],
+  *[("J5",p) for p in ("2","19","22","24","26","30","40")],
+  ("LED3","K"),
   ("U6","3A"),("U6","3B"),("U6","3C"),("U7","3A"),("U7","3B"),("U7","3C"),
-  ("U5","6A"))
-N(n,"VCC",("RP1","1"),("R4","1"),("R5","1"))
+  ("U11","3A"),("U11","3B"),("U11","3C"),          # U11 spare gate tied off
+  ("U8","1A"),("U8","1B"))                          # U8 gate 1 freed (old -CFSEL) -> tie off
+N(n,"VCC",("RP1","1"),("R4","1"),("R5","1"),("R6","1"))
 N(n,"LEDP",("RP1","2"),("LED3","A"))
 N(n,"LEDAC",("R4","2"),("LED4","A")); N(n,"LEDDA",("R5","2"),("LED5","A"))
+N(n,"LEDAC1",("R6","2"),("LED6","A"))
 # rev C 8-bit fallback latch (DNP). Capture the CF high data byte D8-15 (J2 even
 # data pins) into U9; safe wiring only: inputs from the CF connector, output
 # enable held high (high-Z) and clock grounded (never latches). The bus-critical
@@ -1343,7 +1390,7 @@ N(n,"LEDAC",("R4","2"),("LED4","A")); N(n,"LEDDA",("R5","2"),("LED5","A"))
 for b,pin in enumerate(("4","6","8","10","12","14","16","18")):
     N(n,"CFD%d"%(8+b),("U9","D%d"%(b+1)),("J2",pin))
 N(n,"VCC",("U9","!OC")); N(n,"GND",("U9","CLK"))   # outputs high-Z, no clocking (safe)
-card("cf-card","P8X CF-IDE CARD REV A - 8-BIT TRUE IDE AT 0xFF10",ic,sm,n,
+card("cf-card","P8X CF-IDE CARD REV B - 2x 8-BIT TRUE IDE ($FF10 + $FF18)",ic,sm,n,
  {"D%d"%i for i in range(8)}|{"A0","A1","A2","A3","A4"}|{"A%d"%i for i in range(8,16)}|
  {"DOE%d"%i for i in range(4)}|{"DLD%d"%i for i in range(4)}|{"CLKB","-RES"})
 
