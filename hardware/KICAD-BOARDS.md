@@ -19,7 +19,7 @@ motherboard and is physically larger.
 | control-card | ✅ | 0 | 14-pin oscillator |
 | alu-card | ✅ | 0 | |
 | io-card | ✅ | 0 | ACIA/MAX232/RTC/DIP-sw subs; coin-cell GND healed via plane via |
-| ps2-card | ✅ | 0 | keyboard + mouse, ATmega328 latch-bridge at `$FF58-5F`; MiniDIN-6 + ICSP; no level-shift (5V-native) |
+| ps2-card | ✅ | 0 | keyboard + mouse, **ATmega1284P** latch-bridge at `$FF58-5F`; custom mini-DIN-6 sockets (bottom edge), 4 status LEDs (right edge), ICSP; no level-shift (5V-native); bespoke `gen_ps2.py` |
 | regbank-card | ✅ | 0 | 95 parts — routed (5m45s auto + ~13min optimizer) |
 | bustest-card | ✅ | 0 | Pico + 17 LEDs; routed with right-edge LED bank |
 | backplane | ✅ | 0 | **8-slot** DIN41612 motherboard, 262×128mm (28mm slot pitch, slots left-justified, power/pull-up parts on the right; power entry = Phoenix MSTBA 2,5/2-G-5,08, Digikey 1729128). Routes clean at **0.13mm clearance** (netclass in the `.kicad_pro`) with **nylon-screw** 2mm keepouts. |
