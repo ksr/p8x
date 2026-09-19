@@ -140,10 +140,15 @@ for layer, nn in [(pcbnew.In1_Cu, "GND"), (pcbnew.In2_Cu, "VCC")]:
     for x, y in [(1, 1), (BW - 1, 1), (BW - 1, BH - 1), (1, BH - 1)]: o.Append(mm(x), mm(y))
     board.Add(z)
 
-# metal-screw keepouts: ring every DIN socket mounting hole (NPTH) with a copper
-# keepout on all layers (no fill/tracks/vias) so a metal screw can't short.
+# mounting-hole keepouts: ring every DIN socket mounting hole (NPTH) with a copper
+# keepout on all layers (no fill/tracks/vias). The plug-in cards use a 4.0mm ring
+# for METAL screws; the backplane bus is far too dense for that (a 4mm ring at
+# each of 20 holes carves the bus channels and left 18 nets unroutable), so it
+# uses NYLON screws (or none) -- nylon is insulating, so copper only needs to
+# clear the drilled hole itself. Hole is 2.85mm dia (r=1.43); a 2.0mm keepout
+# clears it with a 0.57mm margin while freeing ~75% of the old ring area.
 import math
-SCREW_KEEPOUT_R = 4.0
+SCREW_KEEPOUT_R = 2.0   # nylon-screw / no-screw backplane (plug-in cards stay 4.0)
 nk = 0
 for fp in footp.values():
     if "DIN41612" not in str(fp.GetFPIDAsString()): continue

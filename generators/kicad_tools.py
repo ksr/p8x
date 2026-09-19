@@ -58,7 +58,8 @@ def export_dsn(brd):
     for lyr in ("In1.Cu", "In2.Cu"):
         t = t.replace("(layer %s\n      (type signal)" % lyr,
                       "(layer %s\n      (type power)" % lyr)
-    t = _inset_dsn_boundary(t)                       # keep routed copper off the board edge
+    if not os.environ.get("KT_NO_EDGE_INSET"):       # backplane opts out (dense bus needs the room)
+        t = _inset_dsn_boundary(t)                   # keep routed copper off the board edge
     open(dsn, "w").write(t)
     print("export_dsn ->", dsn)
 
@@ -197,6 +198,181 @@ def heal_unconnected(brd):
         print("heal: %d unconnected left (not auto-healable -- see DRC)" % skipped)
     return healed
 
+def heal_bus_gaps(brd, clear=0.2, cell=0.2, pad_mm=8.0):
+    """Finish the backplane bus hops Freerouting converges without completing (it
+    logs "autorouter can't improve... finish manually" and leaves ~10 single-pitch
+    hops). A path exists -- the router placed the other nine hops of each net -- so
+    a focused two-layer A* maze router closes them deterministically. For each
+    DRC-reported unconnected pair (non-plane), it rasterises foreign copper (tracks,
+    pads, keepout rule-areas) into an F.Cu and a B.Cu occupancy grid over a window
+    around the pair, then A*-routes pad->pad on that grid with layer changes via
+    stitching vias, and lays the resulting tracks + vias. Same-net copper is
+    passable. Anything it can't route it leaves for a human; the final DRC is the
+    backstop. Returns the number closed."""
+    import json, re, math, heapq
+    j = "/tmp/_bus_%d.json" % os.getpid()
+    subprocess.run([CLI, "pcb", "drc", "--format", "json", "-o", j, brd],
+                   stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    unc = json.load(open(j)).get("unconnected_items", [])
+    if not unc:
+        print("bus-heal: 0 unconnected"); return 0
+    b = pcbnew.LoadBoard(brd); mm = pcbnew.ToMM; FM = pcbnew.FromMM
+    plane_nets = set(z.GetNetname() for z in b.Zones()
+                     if z.GetLayer() in (pcbnew.In1_Cu, pcbnew.In2_Cu))
+    tw = 0.25
+    # halo = min centre-to-foreign-edge distance a routed cell centre must keep.
+    # Includes the rule clearance, our track half-width, AND a cell/2 margin so a
+    # segment drawn between two "free" cell centres can't clip an obstacle that
+    # sits between them (the coarse-grid short-circuit bug).
+    halo = clear + tw/2.0 + cell/2.0 + 0.05
+    # foreign copper as (kind, geom..., layerset, netcode); layerset: 'F','B','FB'
+    def lset(item):
+        f, bk = item.IsOnLayer(pcbnew.F_Cu), item.IsOnLayer(pcbnew.B_Cu)
+        return "FB" if (f and bk) else ("F" if f else "B")
+    segs = [(mm(t.GetStart().x), mm(t.GetStart().y), mm(t.GetEnd().x), mm(t.GetEnd().y),
+             mm(t.GetWidth())/2.0, lset(t), t.GetNetCode())
+            for t in b.GetTracks() if t.Type() == pcbnew.PCB_TRACE_T]
+    vias = []
+    for t in b.GetTracks():
+        if t.Type() != pcbnew.PCB_VIA_T: continue
+        try:    vr = mm(t.Cast().GetWidth())/2.0
+        except Exception: vr = 0.35
+        vias.append((mm(t.GetStart().x), mm(t.GetStart().y), vr, t.GetNetCode()))
+    padrects = [(mm(p.GetPosition().x), mm(p.GetPosition().y),
+                 max(mm(p.GetSize().x), mm(p.GetSize().y))/2.0, lset(p), p.GetNetCode())
+                for fp in b.GetFootprints() for p in fp.Pads()]
+    keepz = []                                           # keepout rule-areas (block both signal layers)
+    for z in b.Zones():
+        if z.GetIsRuleArea():
+            bb = z.GetBoundingBox()
+            keepz.append((mm(bb.GetLeft()), mm(bb.GetTop()), mm(bb.GetRight()), mm(bb.GetBottom())))
+    def _sd(px, py, x1, y1, x2, y2):
+        dx, dy = x2-x1, y2-y1; L2 = dx*dx+dy*dy
+        tt = 0.0 if L2 == 0 else max(0.0, min(1.0, ((px-x1)*dx+(py-y1)*dy)/L2))
+        return math.hypot(px-(x1+tt*dx), py-(y1+tt*dy))
+    def blocked(x, y, layer, nc):
+        for (a, c, e, f, hw, ls, snc) in segs:
+            if snc == nc or layer not in ls: continue
+            if _sd(x, y, a, c, e, f) < halo + hw: return True
+        for (a, c, r, snc) in vias:
+            if snc == nc: continue
+            if math.hypot(x-a, y-c) < halo + r: return True
+        for (a, c, r, ls, snc) in padrects:
+            if snc == nc or layer not in ls: continue
+            if abs(x-a) < halo + r and abs(y-c) < halo + r: return True
+        for (x0, y0, x1, y1) in keepz:
+            if x0-halo < x < x1+halo and y0-halo < y < y1+halo: return True
+        return False
+    def astar(ax, ay, cx, cy, nc):
+        x0, x1 = min(ax, cx)-pad_mm, max(ax, cx)+pad_mm
+        y0, y1 = min(ay, cy)-pad_mm, max(ay, cy)+pad_mm
+        W = int((x1-x0)/cell)+1; H = int((y1-y0)/cell)+1
+        def gx(x): return min(W-1, max(0, int(round((x-x0)/cell))))
+        def gy(y): return min(H-1, max(0, int(round((y-y0)/cell))))
+        sx, sy, tx, ty = gx(ax), gy(ay), gx(cx), gy(cy)
+        LC = ("F", "B")                                  # layer code for blocked()
+        occ = {}                                         # memoised blocked() per (i,j,layer)
+        def free(i, j, l):
+            k = (i, j, l)
+            if k not in occ:
+                occ[k] = not blocked(x0+i*cell, y0+j*cell, LC[l], nc)
+            return occ[k]
+        start = (sx, sy, 0)
+        goals = {(tx, ty, 0), (tx, ty, 1)}
+        h = lambda i, j: (abs(i-tx)+abs(j-ty))
+        openq = [(h(sx, sy), 0, start)]; came = {start: None}; g = {start: 0}
+        VIA = 8                                          # via cost (grid steps)
+        seen = 0
+        while openq and seen < 200000:
+            seen += 1
+            _, gc, cur = heapq.heappop(openq)
+            if cur in goals:
+                path = []
+                while cur is not None: path.append(cur); cur = came[cur]
+                return [(x0+i*cell, y0+j*cell, l) for (i, j, l) in reversed(path)]
+            ci, cj, cl = cur
+            nbrs = [(ci+1, cj, cl, 1), (ci-1, cj, cl, 1), (ci, cj+1, cl, 1), (ci, cj-1, cl, 1),
+                    (ci, cj, 1-cl, VIA)]
+            for ni, nj, nl, cost in nbrs:
+                if not (0 <= ni < W and 0 <= nj < H): continue
+                if not free(ni, nj, nl): continue
+                if nl != cl and not free(ni, nj, cl): continue   # via needs both layers clear
+                nn = (ni, nj, nl); ng = gc+cost
+                if ng < g.get(nn, 1e9):
+                    g[nn] = ng; came[nn] = cur
+                    heapq.heappush(openq, (ng+h(ni, nj), ng, nn))
+        return None
+    def add_track(x1, y1, x2, y2, layer, nc):
+        t = pcbnew.PCB_TRACK(b); t.SetStart(pcbnew.VECTOR2I(FM(x1), FM(y1)))
+        t.SetEnd(pcbnew.VECTOR2I(FM(x2), FM(y2)))
+        t.SetLayer(layer); t.SetWidth(FM(tw)); t.SetNetCode(nc); b.Add(t)
+    def add_via(x, y, nc):
+        v = pcbnew.PCB_VIA(b); v.SetPosition(pcbnew.VECTOR2I(FM(x), FM(y)))
+        v.SetDrill(FM(0.4)); v.SetWidth(FM(0.7)); v.SetNetCode(nc)
+        v.SetLayerPair(pcbnew.F_Cu, pcbnew.B_Cu); b.Add(v)
+    LY = (pcbnew.F_Cu, pcbnew.B_Cu)
+    healed, skipped = 0, 0
+    for u in unc:
+        its = [it for it in u.get("items", []) if "pos" in it]
+        if len(its) < 2: continue
+        m = next((re.search(r'\[([^\]]+)\]', it.get("description", "")) for it in its
+                  if re.search(r'\[([^\]]+)\]', it.get("description", ""))), None)
+        net = m.group(1) if m else None
+        if net in plane_nets or net is None:
+            continue
+        nc = b.FindNet(net).GetNetCode()
+        ax, ay = its[0]["pos"]["x"], its[0]["pos"]["y"]
+        cx, cy = its[1]["pos"]["x"], its[1]["pos"]["y"]
+        path = astar(ax, ay, cx, cy, nc)
+        if not path:
+            skipped += 1
+            print("  bus-heal SKIP %-7s (%.1f,%.1f)->(%.1f,%.1f): no maze route" % (net, ax, ay, cx, cy))
+            continue
+        # emit: collapse collinear runs per layer, drop a via at each layer change
+        run = [path[0]]
+        for p in path[1:]:
+            if p[2] != run[-1][2]:                       # layer change -> via at the switch point
+                for a, c in zip(run, run[1:]):
+                    add_track(a[0], a[1], c[0], c[1], LY[a[2]], nc)
+                add_via(run[-1][0], run[-1][1], nc)
+                # register the new via as an obstacle for later gaps
+                vias.append((run[-1][0], run[-1][1], 0.35, nc))
+                run = [p]
+            else:
+                run.append(p)
+        for a, c in zip(run, run[1:]):
+            add_track(a[0], a[1], c[0], c[1], LY[a[2]], nc)
+        # register new tracks as obstacles for later gaps in this pass
+        for a, c in zip(path, path[1:]):
+            if a[2] == c[2]:
+                segs.append((a[0], a[1], c[0], c[1], tw/2.0, "F" if a[2]==0 else "B", nc))
+        healed += 1
+        print("  bus-healed %-7s (%.1f,%.1f)->(%.1f,%.1f) via maze (%d pts)" % (net, ax, ay, cx, cy, len(path)))
+    if not healed:
+        if skipped: print("bus-heal: %d gap(s) left (none maze-routable)" % skipped)
+        return 0
+    # SAFETY: never ship maze copper that shorts or crowds. Save to a temp, DRC it,
+    # and only overwrite the real board if we added ZERO blocking violations.
+    COSMETIC = {"silk_overlap", "silk_edge_clearance", "silk_over_copper"}
+    def _blocking(path_):
+        jj = "/tmp/_bus_chk_%d.json" % os.getpid()
+        subprocess.run([CLI, "pcb", "drc", "--format", "json", "-o", jj, path_],
+                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        dd = json.load(open(jj))
+        return sum(1 for v in dd.get("violations", []) if v["type"] not in COSMETIC)
+    base_block = _blocking(brd)
+    tmp = "/tmp/_bus_try_%d.kicad_pcb" % os.getpid()
+    pcbnew.SaveBoard(tmp, b)
+    new_block = _blocking(tmp)
+    if new_block > base_block:
+        print("bus-heal: REJECTED -- maze routing added %d blocking DRC (was %d); board unchanged"
+              % (new_block - base_block, base_block))
+        return 0
+    pcbnew.SaveBoard(brd, b)
+    print("bus-healed %d gap(s)%s (0 new blocking DRC)" %
+          (healed, (", %d left for a human" % skipped) if skipped else ""))
+    return healed
+
 def heal_edge_clearance(brd, clear=0.5, margin=0.06):
     """Post-route heal: Freerouting occasionally lays a track segment a hair too
     close to the board edge (e.g. an A2 bus track hugging the left edge by the DIN
@@ -333,6 +509,7 @@ if __name__ == "__main__":
     if cmd == "export_dsn": export_dsn(sys.argv[2])
     elif cmd == "import_ses": import_ses(sys.argv[2], sys.argv[3])
     elif cmd == "heal": heal_unconnected(sys.argv[2])
+    elif cmd == "heal_bus": heal_bus_gaps(sys.argv[2])
     elif cmd == "heal_edge": heal_edge_clearance(sys.argv[2])
     elif cmd == "placement": placement(sys.argv[2])
     elif cmd == "finish": finish(sys.argv[2])

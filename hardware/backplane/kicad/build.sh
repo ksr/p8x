@@ -20,12 +20,22 @@ q() { grep -viE 'Debug:|assert|wxApp|handler|Fontconfig|traits'; }
 
 echo "== 1/6  placement + planes + keepouts (gen_backplane.py) =="
 "$PYK" "$ROOT/generators/gen_backplane.py" 2>&1 | q | grep -iE 'keepout|wrote'
-echo "== 2/6  export Specctra DSN =="
-"$PYK" "$KT" export_dsn "$BRD" 2>&1 | q | grep -i export_dsn
+echo "== 2/6  export Specctra DSN (no edge inset -- the dense bus needs every mm) =="
+KT_NO_EDGE_INSET=1 "$PYK" "$KT" export_dsn "$BRD" 2>&1 | q | grep -i export_dsn
 echo "== 3/6  PCB trace layout (Freerouting -- ~960-pin bus, this takes a while) =="
+# -oit 10 (not 100): the heavy optimiser tripped a FloatPoint.rotate NPE and hung
+# on this board; a lighter optimisation pass routes it without the crash. A
+# watchdog kills any hang so it can never stall the build indefinitely.
 rm -f "$HERE/p8x-backplane.ses"
-( cd "$HERE" && java -jar "$FRJAR" -de "p8x-backplane.dsn" -do "p8x-backplane.ses" -mp 30 -oit 100 -mt 1 > fr.log 2>&1 )
-[ -f "$HERE/p8x-backplane.ses" ] || { echo "  ROUTE FAILED -- see fr.log"; tail -3 "$HERE/fr.log"; exit 2; }
+( cd "$HERE" && java -jar "$FRJAR" -de "p8x-backplane.dsn" -do "p8x-backplane.ses" -mp 30 -oit 10 -mt 1 > fr.log 2>&1 ) &
+JPID=$!
+W=0; MAX=1200
+while kill -0 "$JPID" 2>/dev/null; do
+  sleep 15; W=$((W+15))
+  if [ "$W" -ge "$MAX" ]; then echo "  ROUTE WATCHDOG: killing Freerouting after ${MAX}s"; kill "$JPID" 2>/dev/null; sleep 2; kill -9 "$JPID" 2>/dev/null; break; fi
+done
+wait "$JPID" 2>/dev/null
+[ -f "$HERE/p8x-backplane.ses" ] || { echo "  ROUTE FAILED -- see fr.log"; tail -5 "$HERE/fr.log"; exit 2; }
 echo "== 4/6  import routing + self-heal stitch =="
 "$PYK" "$KT" import_ses "$BRD" "$HERE/p8x-backplane.ses" 2>&1 | q | grep -iE 'stitch|import_ses'
 echo "== 5/6  gerbers + drill + render =="

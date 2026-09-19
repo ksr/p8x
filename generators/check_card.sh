@@ -62,9 +62,13 @@ for card in $cards; do
   # 3-5. DRC (blocking vs cosmetic) + keepout + fab (pcbnew) ------------------
   "$CLI" pcb drc -o "$D/p8x-$card-drc.rpt" "$BRD" >/dev/null 2>&1                 # human-readable report
   "$CLI" pcb drc --format json -o /tmp/p8x-$card-drc.json "$BRD" >/dev/null 2>&1
-  "$PYK" - "$BRD" "$MIN_TRACE" "$MIN_DRILL" /tmp/p8x-$card-drc.json <<'PYEOF'
+  # metal-screw keepout radius: 4mm on the plug-in cards; the backplane uses nylon
+  # screws (or none), so its keepout only clears the drilled hole -> 2mm.
+  KEEP_R=4.0; [ "$card" = backplane ] && KEEP_R=2.0
+  "$PYK" - "$BRD" "$MIN_TRACE" "$MIN_DRILL" /tmp/p8x-$card-drc.json "$KEEP_R" <<'PYEOF'
 import sys, math, json, pcbnew
 brd, mintr, mindr, drcj = sys.argv[1], float(sys.argv[2]), float(sys.argv[3]), sys.argv[4]
+keep_r = float(sys.argv[5])
 mm = pcbnew.ToMM
 # 3. DRC, categorised: silkscreen issues are cosmetic (the fab trims silk); every
 #    other violation type blocks manufacture.
@@ -80,9 +84,9 @@ holes = [(mm(p.GetPosition().x), mm(p.GetPosition().y))
          for fp in b.GetFootprints() if "DIN41612" in str(fp.GetFPIDAsString())
          for p in fp.Pads() if p.GetAttribute() == pcbnew.PAD_ATTRIB_NPTH]
 near = sum(1 for t in b.GetTracks()
-           if any(math.hypot(mm(t.GetStart().x)-hx, mm(t.GetStart().y)-hy) < 4.0 for hx, hy in holes))
+           if any(math.hypot(mm(t.GetStart().x)-hx, mm(t.GetStart().y)-hy) < keep_r for hx, hy in holes))
 print("  4. keepout    : %d DIN hole(s) -- %s" % (len(holes),
-      "PASS (0 copper within 4mm)" if near == 0 else "FAIL (%d near a hole)" % near))
+      "PASS (0 copper within %.1fmm)" % keep_r if near == 0 else "FAIL (%d within %.1fmm)" % (near, keep_r)))
 # 5. fab: smallest track width + drill vs conservative fab minimums
 tws = [mm(t.GetWidth()) for t in b.GetTracks() if t.Type() == pcbnew.PCB_TRACE_T]
 drs = [mm(p.GetDrillSizeX()) for fp in b.GetFootprints() for p in fp.Pads() if mm(p.GetDrillSizeX()) > 0]
