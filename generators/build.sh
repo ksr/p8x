@@ -17,14 +17,13 @@ run_one() {
   echo "############################## BUILD: $1 ##############################"
   case "$1" in
     memory-card)     sh "$ROOT/hardware/memory-card/kicad/build.sh" ;;
-    peripheral-card) sh "$ROOT/hardware/peripheral-card/kicad/build.sh" ;;
     backplane)       sh "$ROOT/hardware/backplane/kicad/build.sh" ;;
     *)               sh "$ROOT/generators/build_kicad_card.sh" "$1" ;;
   esac
 }
 
 # build order: simplest/fastest first, the dense boards + the big bus last
-ALL="cf-card led-card bustest-card control-card io-card alu-card regbank-card memory-card peripheral-card backplane"
+ALL="cf-card led-card bustest-card control-card io-card ps2-card alu-card regbank-card memory-card backplane"
 if [ "$1" = "all" ]; then
   for c in $ALL; do
     # skip cards with no KiCad board target (e.g. the deprecated led-card)

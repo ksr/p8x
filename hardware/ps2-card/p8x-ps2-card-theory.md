@@ -1,24 +1,51 @@
 # PS/2 Card — Theory of Operation
 
-> **Status: DESIGN / PROPOSAL (2026-09-17).** This card is not built yet and has
-> no generated CAD — it is the standalone TTL realisation of the PS/2 window the
-> emulator already models (`$FF58-$FF5F`) and `lib_ps2` already decodes. The
-> chip-level circuit below is the agreed design; `generators/gen_eagle.py` does
-> not emit it yet (that is a separate, later step). The parallel FPGA-fabric path
-> — PS/2 ports hung off the graphics Tang Nano 20K card, level-shifted with a
-> TXS0102 per port — is a DIFFERENT design, documented in
+> **Status: BUILT (rev A, 2026-09-19).** Standalone keyboard+mouse card, split
+> back out of the (now parked) combined peripheral card. **The built design is the
+> ATmega328 latch-bridge**, not the pure-TTL receiver that §3–§4 and §6 below
+> describe — those sections are the ORIGINAL 2026-09-17 proposal, kept for the
+> rationale and the register semantics (which are identical); see
+> **§0 (built design)** for what `generators/gen_eagle.py` actually emits and
+> `hardware/ps2-card/kicad/` for the board. The bus-visible behaviour — the exact
+> `$FF58-$FF5F` window the emulator models and `lib_ps2` decodes — is the same
+> either way. The parallel FPGA-fabric path (PS/2 hung off the Tang Nano 20K,
+> level-shifted with a TXS0102 per port) is a DIFFERENT design, documented in
 > [`fpga/tang-nano-20k/PS2-INTERFACE.md`](../../fpga/tang-nano-20k/PS2-INTERFACE.md).
-> This card is the pure-backplane TTL alternative.
 
 The P8X design split for human input is deliberate and runs through the whole
-project: **the hardware receives, the software understands.** This card is *two
-dumb PS/2 receivers* — it shifts in the 11-bit device frames and latches each
-byte with a ready flag, and does nothing else. Turning Set-2 scan codes into
-ASCII (make/break, shift, caps) and 3-byte packets into (dx, dy, buttons) is
-entirely `lib_ps2`'s job (see `man ps2`), so this card is small and the meaning
-lives in one place that the emulator's golden model matches byte-for-byte.
+project: **the hardware receives, the software understands.** Turning Set-2 scan
+codes into ASCII (make/break, shift, caps) and 3-byte packets into (dx, dy,
+buttons) is entirely `lib_ps2`'s job (see `man ps2`); the card only guarantees
+"here is the next whole byte, and whether you missed one," which the emulator's
+golden model matches byte-for-byte.
 
 Two identical channels: **port A = keyboard**, **port B = mouse**.
+
+## 0. Built design — ATmega328 latch-bridge
+
+The built card (`CARDS["ps2-card"]` in `generators/gen_eagle.py`) hands the PS/2
+protocol to an **ATmega328 (U13)** running in firmware — 5 V-native, open-drain in
+software, so there is **no level translation anywhere** (the TXS0102 is only the
+3.3 V FPGA path). The '328 does framing / parity / ready / overrun for both ports
+and keeps four **74HC374** read latches (U7–U10 = `PSADAT`/`PSAST`/`PSBDAT`/`PSBST`)
+loaded over its `MB0–7` bus; each latch tri-states onto D0–7 under its read strobe.
+`PSLINE` (U11 74244) reads the four live PS/2 lines, and `PSID` (U12 74244) drives
+the constant `$4B` (`'K'`) presence byte. Decode is local to the card (the parked
+peripheral shared it): **U1 7430** detects the `$FFxx` page, **U2/U3 74138** turn
+DOE=7→`-RD` and DLD=7→`-MEMW`, **U4 74688** window-compares A3–7 = 01011 →
+`-PSSEL`, and **U5/U6 74138** decode A0–2 into the per-register read/write strobes.
+An AVR **ICSP** header (`JICSP`) programs the '328; **RRST** is its reset pull-up.
+
+TX (host→device) is a firmware stub, so the status-register *writes* are only
+decoded (the '328 senses `-WR1`/`-WR3`); there is no write-data capture latch — the
+mouse runs in its power-on stream mode, matching the emulator and `lib_ps2` stub.
+Verify item: the '328 reset (`-RESET`) is local (ICSP + pull-up), not tied to the
+bus `-RES`; wire it to `-RES` if you want a system reset to re-init the card.
+
+Everything below (§3 block diagram, §4 how-it-works, §6 chip inventory) is the
+earlier **pure-TTL** realisation (74HC164 shift register + 74HC161 counter +
+74HC574 + 7407 per channel). It is NOT what is built; it is retained as the
+fallback design and because its register map (§2) and bus codes (§7) are shared.
 
 ## 1. Inputs and outputs
 

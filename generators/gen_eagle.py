@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """P8X Eagle generator. Emits schematic+board pairs for all 7 boards, each in its
 own subdirectory:
-  backplane/p8x-backplane.sch/.brd      (rev C, 10 slots, fully routed 4-layer)
+  backplane/p8x-backplane.sch/.brd      (rev C, NSLOT slots; KiCad build is the routed one)
   memory-card/p8x-memory-card.sch/.brd  (rev C, placed + planes, signals unrouted)
   control-card/p8x-control-card.sch/.brd
   regbank-card/p8x-regbank-card.sch/.brd
@@ -1559,9 +1559,101 @@ pcsm={"X2":("OSC","2.4576MHZ"),"SW1":("DIP8SW","INPUT"),"RNP":("SIP9","8X10K"),
  "J4":("IDE40","IDE-40"),"RN2":("SIP9","8X10K"),
  "R6":("RES","1K"),"LED6":("LED","ACT-YEL"),
  "R7":("RES","330R"),"LED7":("LED","DASP-GRN")}
-card("peripheral-card","P8X PERIPHERAL CARD REV A - I/O + CF-IDE + PS/2",pcic,pcsm,pcn,
+# PARKED 2026-09-19: the user reverted the io+cf+ps2 combination back to three
+# separate cards (io-card + cf-card already exist; ps2-card built standalone
+# below). The peripheral files moved to hardware/parked/peripheral-card/. The
+# netlist above is kept intact so the combined card can return whole, but it is NO
+# LONGER registered as a card (not in CARDS, not built/checked). To un-park:
+# restore the git mv and drop the `if PARK_PERIPHERAL` guard.
+PARK_PERIPHERAL = True
+if not PARK_PERIPHERAL:
+    card("peripheral-card","P8X PERIPHERAL CARD REV A - I/O + CF-IDE + PS/2",pcic,pcsm,pcn,
+     {"D%d"%i for i in range(8)}|{"A%d"%i for i in range(16)}|
+     {"DOE%d"%i for i in range(4)}|{"DLD%d"%i for i in range(4)}|{"CLKB","-RES"},
+     emit_files=False)
+
+# ===================== PS/2 CARD rev A ($FF58-5F) =============================
+# Standalone keyboard+mouse card, split back out of the parked peripheral card
+# (2026-09-19). Same agreed design: an ATmega328 (U13) owns both PS/2 ports in
+# firmware (5V-native open-drain -- NO level shift; the TXS0102 is only the FPGA
+# path), and a latch bridge presents the exact $FF58-5F register window on the bus.
+# Front-end decode is now LOCAL (the peripheral shared it with I/O+CF): U1 7430
+# = $FFxx page, U2/U3 74138 = DOE->-RD / DLD->-MEMW. Window compare U4 74688
+# (A3-7 = 01011 -> -PSSEL); U5/U6 74138 decode A0-2 for read/write strobes; U7-U10
+# 74374 are the PSADAT/PSAST/PSBDAT/PSBST read latches the '328 keeps loaded; U11
+# 74244 = PSLINE live-line read, U12 74244 = PSID 'K' presence buffer. TX
+# (host->device) is a firmware stub, so status writes are only decoded (the '328
+# senses -WR1/-WR3). See hardware/ps2-card/p8x-ps2-card-theory.md.
+n={}
+ic={"U1":("7430","IO PAGE"),"U2":("74138","DOE DEC"),"U3":("74138","DLD DEC"),
+    "U4":("74688","WIN CMP"),"U5":("74138","PS RD DEC"),"U6":("74138","PS WR DEC"),
+    "U7":("74374","PSADAT"),"U8":("74374","PSAST"),"U9":("74374","PSBDAT"),
+    "U10":("74374","PSBST"),"U11":("74244","PSLINE"),"U12":("74244","PSID K"),
+    "U13":("ATMEGA328","PS/2 MCU")}
+# local front-end decode (page + DOE/DLD), same as the shared set on other cards
+for i in range(8): N(n,"A%d"%(8+i),("U1","ABCDEFGH"[i]))
+N(n,"IOPG",("U1","Y"))
+for u,fld in (("U2","DOE"),("U3","DLD")):
+    for i,pn in enumerate(("A","B","C")): N(n,"%s%d"%(fld,i),(u,pn))
+    N(n,"%s3"%fld,(u,"!G2A")); N(n,"VCC",(u,"G1")); N(n,"GND",(u,"!G2B"))
+N(n,"-RD",("U2","Y7")); N(n,"-MEMW",("U3","Y7"))
+# window compare: A3-7 vs 01011, enabled by IOPG (active low in the I/O page)
+N(n,"IOPG",("U4","!G"))
+N(n,"GND",("U4","P0"),("U4","Q0"),("U4","P1"),("U4","Q1"),("U4","P2"),("U4","Q2"))
+N(n,"A3",("U4","P3")); N(n,"A4",("U4","P4")); N(n,"A5",("U4","P5"))
+N(n,"A6",("U4","P6")); N(n,"A7",("U4","P7"))
+N(n,"VCC",("U4","Q3"),("U4","Q4"),("U4","Q6"))         # target bits A3,A4,A6 = 1
+N(n,"GND",("U4","Q5"),("U4","Q7"))                     # target bits A5,A7 = 0
+N(n,"-PSSEL",("U4","!PEQ"),("U5","!G2A"),("U6","!G2A"))
+# register decode: reads gated by -RD, writes by -MEMW
+N(n,"A0",("U5","A"),("U6","A")); N(n,"A1",("U5","B"),("U6","B"))
+N(n,"A2",("U5","C"),("U6","C")); N(n,"VCC",("U5","G1"),("U6","G1"))
+N(n,"-RD",("U5","!G2B")); N(n,"-MEMW",("U6","!G2B"))
+N(n,"-RR0",("U5","Y0"),("U7","!OC"),("U13","PD0"))     # PSADAT read (+ '328 clears ready)
+N(n,"-RR1",("U5","Y1"),("U8","!OC"))                   # PSAST read
+N(n,"-RR2",("U5","Y2"),("U9","!OC"),("U13","PD1"))     # PSBDAT read (+ '328 clears ready)
+N(n,"-RR3",("U5","Y3"),("U10","!OC"))                  # PSBST read
+N(n,"-RR4",("U5","Y4"),("U11","!G1"),("U11","!G2"))    # PSLINE read
+N(n,"-RR6",("U5","Y6"),("U12","!G1"),("U12","!G2"))    # PSID read
+N(n,"-WR1",("U6","Y1"),("U13","PC4"))                  # PSAST write -> '328 sense
+N(n,"-WR3",("U6","Y3"),("U13","PC5"))                  # PSBST write -> '328 sense
+# read latches: D = '328 MB[0:7] bus, Q -> P8X D0-7, CLK from '328 load lines
+_MB=["PB0","PB1","PB2","PB3","PB4","PB5","PD6","PD7"]
+for b in range(8):
+    N(n,"MB%d"%b,("U13",_MB[b]),
+      ("U7","D%d"%(b+1)),("U8","D%d"%(b+1)),("U9","D%d"%(b+1)),("U10","D%d"%(b+1)))
+    N(n,"D%d"%b,("U7","Q%d"%(b+1)),("U8","Q%d"%(b+1)),("U9","Q%d"%(b+1)),
+      ("U10","Q%d"%(b+1)),("U11","Y%d"%(b+1)),("U12","Y%d"%(b+1)))
+N(n,"LDA",("U13","PC0"),("U7","CLK")); N(n,"LDSA",("U13","PC1"),("U8","CLK"))
+N(n,"LDB",("U13","PC2"),("U9","CLK")); N(n,"LDSB",("U13","PC3"),("U10","CLK"))
+# PSLINE buffer: 4 live PS/2 lines -> D0-3; D4-7 strapped low
+N(n,"PS2CKA",("U11","A1")); N(n,"PS2DA",("U11","A2"))
+N(n,"PS2CKB",("U11","A3")); N(n,"PS2DB",("U11","A4"))
+N(n,"GND",("U11","A5"),("U11","A6"),("U11","A7"),("U11","A8"))
+# PSID buffer: strap to 0x4B ('K'): bit0..7 = 1,1,0,1,0,0,1,0
+N(n,"VCC",("U12","A1"),("U12","A2"),("U12","A4"),("U12","A7"))
+N(n,"GND",("U12","A3"),("U12","A5"),("U12","A6"),("U12","A8"))
+# ATmega328 PS/2 lines, power. VCC(7)/GND(8) auto-wired by card().
+N(n,"PS2CKA",("U13","PD2")); N(n,"PS2DA",("U13","PD4"))
+N(n,"PS2CKB",("U13","PD3")); N(n,"PS2DB",("U13","PD5"))
+N(n,"VCC",("U13","AVCC")); N(n,"GND",("U13","GND2"))
+# PS/2 sockets + 10k open-drain pull-ups (RN1)
+N(n,"PS2CKA",("PS2A","5")); N(n,"PS2DA",("PS2A","1"))
+N(n,"GND",("PS2A","3")); N(n,"VCC",("PS2A","4"))
+N(n,"PS2CKB",("PS2B","5")); N(n,"PS2DB",("PS2B","1"))
+N(n,"GND",("PS2B","3")); N(n,"VCC",("PS2B","4"))
+N(n,"VCC",("RN1","COM"))
+N(n,"PS2CKA",("RN1","R1")); N(n,"PS2DA",("RN1","R2"))
+N(n,"PS2CKB",("RN1","R3")); N(n,"PS2DB",("RN1","R4"))
+# ICSP (AVR 2x3): 1 MISO(PB4/MB4) 2 VCC 3 SCK(PB5/MB5) 4 MOSI(PB3/MB3) 5 !RESET 6 GND
+N(n,"MB4",("JICSP","1")); N(n,"VCC",("JICSP","2")); N(n,"MB5",("JICSP","3"))
+N(n,"MB3",("JICSP","4")); N(n,"-RESET",("JICSP","5"),("U13","!RESET"),("RRST","1"))
+N(n,"GND",("JICSP","6")); N(n,"VCC",("RRST","2"))
+sm={"PS2A":("MINIDIN6","PS2-KBD"),"PS2B":("MINIDIN6","PS2-MOUSE"),
+    "RN1":("SIP9","4X10K"),"JICSP":("JMP2X3","ICSP"),"RRST":("RES","10K")}
+card("ps2-card","P8X PS/2 CARD REV A - KEYBOARD + MOUSE (ATmega328, $FF58-5F)",ic,sm,n,
  {"D%d"%i for i in range(8)}|{"A%d"%i for i in range(16)}|
- {"DOE%d"%i for i in range(4)}|{"DLD%d"%i for i in range(4)}|{"CLKB","-RES"},
+ {"DOE%d"%i for i in range(4)}|{"DLD%d"%i for i in range(4)},
  emit_files=False)
 
 # ===================== MEMORY CARD rev E ======================================

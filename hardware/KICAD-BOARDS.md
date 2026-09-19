@@ -19,7 +19,7 @@ motherboard and is physically larger.
 | control-card | ✅ | 0 | 14-pin oscillator |
 | alu-card | ✅ | 0 | |
 | io-card | ✅ | 0 | ACIA/MAX232/RTC/DIP-sw subs; coin-cell GND healed via plane via |
-| peripheral-card | ✅ | 0 | combined I/O + CF + PS/2 (replaces io/cf/ps2); bespoke `gen_periph.py` |
+| ps2-card | ✅ | 0 | keyboard + mouse, ATmega328 latch-bridge at `$FF58-5F`; MiniDIN-6 + ICSP; no level-shift (5V-native) |
 | regbank-card | ✅ | 0 | 95 parts — routed (5m45s auto + ~13min optimizer) |
 | bustest-card | ✅ | 0 | Pico + 17 LEDs; routed with right-edge LED bank |
 | backplane | ✅ | 0 | **8-slot** DIN41612 motherboard, 262×128mm (28mm slot pitch, slots left-justified, power/pull-up parts on the right; power entry = Phoenix MSTBA 2,5/2-G-5,08, Digikey 1729128). Routes clean at **0.13mm clearance** (netclass in the `.kicad_pro`) with **nylon-screw** 2mm keepouts. |
@@ -29,21 +29,21 @@ motherboard and is physically larger.
 > `hardware/deprecated/led-card/` on 2026-09-18 and its I/O address `$FF0C` freed.
 > Not rebuilt or maintained going forward.
 
+> **Parked:** the **peripheral-card** (combined I/O + CF + PS/2, bespoke
+> `gen_periph.py`, routed + PASS) was moved to `hardware/parked/peripheral-card/`
+> on 2026-09-19 when the design reverted to three separate cards (io + cf + ps2).
+> Its netlist is kept intact behind `PARK_PERIPHERAL` in `gen_eagle.py` so it can
+> return whole; it is not built or checked in the active flow. Its I/O extras (a
+> 2nd ACIA at `$FF08` and two DB9s with RX/TX-swap jumpers) are parked with it.
+
 ## Known follow-ups
-- **regbank + bustest routing.** Placed + netlisted + planes at 280×140, but the
-  two densest boards defeated Freerouting's time budget. Options: a longer/tuned
-  Freerouting pass, or a touch more depth for just those two (breaks strict
-  uniformity), or hand-routing.
 - **Cosmetic silk crowding** on the densest cards — part values on every part get
   tight; readable and fab-clipped over pads, but not as clean as the memory card.
-- **1 stray net** on memory/io — a single Freerouting gap to finish by hand.
 - **Placement is auto** (courtyard-spaced flow, 0 overlaps) — a hand pass would
-  tidy grouping/silk further.
+  tidy grouping/silk further; the MiniDIN-6 / DB9 connectors are auto-placed, not
+  yet guaranteed on a board edge for cable access.
 
-## Not built (need input)
-- **PS/2 keyboard/mouse card** — docs only (`hardware/ps2-card/`), no net-level
-  netlist; deriving the wiring is a design task. Level-shifting: **NOYITO TXS0102
-  breakout** (user-specified) for the CLK/DATA lines.
+## Not built
 - **Graphics card** — Tang Nano 20K FPGA/video board; no TTL netlist.
 
 Exotic parts use the closest standard KiCad footprint (flagged at build time).
