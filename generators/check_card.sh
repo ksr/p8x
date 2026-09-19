@@ -21,7 +21,9 @@ MIN_TRACE=0.15   # mm -- conservative 2-layer/4-layer fab minimum (~6 mil)
 MIN_DRILL=0.25   # mm -- conservative min finished hole (~10 mil)
 
 cards="$1"
-[ "$cards" = "all" ] && cards=$("$PYK" -c "import sys;sys.path.insert(0,'$ROOT/generators');import gen_eagle as g;print(' '.join(sorted(g.CARDS)))")
+# 'all' = every gen_eagle card that still has a board, minus the deprecated led-card
+# (its board was moved to hardware/deprecated/); the backplane is checked on its own.
+[ "$cards" = "all" ] && cards=$("$PYK" -c "import sys;sys.path.insert(0,'$ROOT/generators');import gen_eagle as g;print(' '.join(c for c in sorted(g.CARDS) if c!='led-card'))")
 [ -z "$cards" ] && { echo "usage: check_card.sh <card>|all"; exit 2; }
 
 overall=0
