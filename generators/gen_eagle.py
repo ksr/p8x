@@ -1647,13 +1647,20 @@ N(n,"PS2CKA",("RN1","R1")); N(n,"PS2DA",("RN1","R2"))
 N(n,"PS2CKB",("RN1","R3")); N(n,"PS2DB",("RN1","R4"))
 # ICSP (AVR 2x3): 1 MISO(PB4/MB4) 2 VCC 3 SCK(PB5/MB5) 4 MOSI(PB3/MB3) 5 !RESET 6 GND
 N(n,"MB4",("JICSP","1")); N(n,"VCC",("JICSP","2")); N(n,"MB5",("JICSP","3"))
-N(n,"MB3",("JICSP","4")); N(n,"-RESET",("JICSP","5"),("U13","!RESET"),("RRST","1"))
+N(n,"MB3",("JICSP","4")); N(n,"-RESET",("JICSP","5"),("U13","!RESET"),("RRST","1"),("RRB","2"))
 N(n,"GND",("JICSP","6")); N(n,"VCC",("RRST","2"))
+# Bus reset -> '328 reset, through a 470R series isolation resistor (RRB). A system
+# -RES (push-pull driven by the control card) pulls -RESET below the AVR threshold
+# via the RRST(10k)/RRB(470R) divider, so a system reset re-inits the '328. During
+# ICSP the programmer pulls the LOCAL -RESET node low and RRB keeps that off the
+# bus, so it neither fights the -RES driver nor resets the rest of the machine.
+N(n,"-RES",("RRB","1"))
 sm={"PS2A":("MINIDIN6","PS2-KBD"),"PS2B":("MINIDIN6","PS2-MOUSE"),
-    "RN1":("SIP9","4X10K"),"JICSP":("JMP2X3","ICSP"),"RRST":("RES","10K")}
+    "RN1":("SIP9","4X10K"),"JICSP":("JMP2X3","ICSP"),"RRST":("RES","10K"),
+    "RRB":("RES","470R")}
 card("ps2-card","P8X PS/2 CARD REV A - KEYBOARD + MOUSE (ATmega328, $FF58-5F)",ic,sm,n,
  {"D%d"%i for i in range(8)}|{"A%d"%i for i in range(16)}|
- {"DOE%d"%i for i in range(4)}|{"DLD%d"%i for i in range(4)},
+ {"DOE%d"%i for i in range(4)}|{"DLD%d"%i for i in range(4)}|{"-RES"},
  emit_files=False)
 
 # ===================== MEMORY CARD rev E ======================================

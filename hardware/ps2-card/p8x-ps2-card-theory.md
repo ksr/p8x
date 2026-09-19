@@ -39,8 +39,16 @@ An AVR **ICSP** header (`JICSP`) programs the '328; **RRST** is its reset pull-u
 TX (host→device) is a firmware stub, so the status-register *writes* are only
 decoded (the '328 senses `-WR1`/`-WR3`); there is no write-data capture latch — the
 mouse runs in its power-on stream mode, matching the emulator and `lib_ps2` stub.
-Verify item: the '328 reset (`-RESET`) is local (ICSP + pull-up), not tied to the
-bus `-RES`; wire it to `-RES` if you want a system reset to re-init the card.
+
+The '328 reset (`-RESET`) is tied to the backplane **`-RES`** through a **470 Ω
+series isolation resistor (`RRB`)**, with the 10 kΩ `RRST` pull-up on the local
+node. A system reset (`-RES` is push-pull driven by the control card) pulls
+`-RESET` below the AVR reset threshold via the `RRB`/`RRST` divider, so the '328
+re-initialises with the rest of the machine. `RRB` also keeps in-system ICSP safe:
+the programmer pulls only the *local* `-RESET` node low, and the resistor keeps
+that off the bus, so it neither fights the `-RES` driver nor resets the other
+cards. (Program the '328 off-bus and it still resets normally — `RRST` holds it
+out of reset when `-RES` floats.)
 
 Everything below (§3 block diagram, §4 how-it-works, §6 chip inventory) is the
 earlier **pure-TTL** realisation (74HC164 shift register + 74HC161 counter +
