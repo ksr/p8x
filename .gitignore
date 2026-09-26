@@ -96,3 +96,6 @@ __pycache__/
 logs/
 p8x-*-drc.rpt
 *-drc.rpt
+
+# transient HTML from gen_memmap_pdf.py (Chrome render input)
+generators/memmap_pdf.gen.html

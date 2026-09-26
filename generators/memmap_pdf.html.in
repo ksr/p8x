@@ -1,0 +1,280 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1">
+<!-- TEMPLATE for gen_memmap_pdf.py -- the double-brace slots are filled from
+     generators/memmap.inc (the canonical data map). Edit layout/prose here; NEVER
+     hand-edit the addresses in those slots -- they come from gen_memmap.py.
+     Regenerate: python3 generators/gen_memmap_pdf.py -->
+<title>P8X Memory Map</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
+<style>
+  :root{
+    --bg:#eef1f5; --surface:#ffffff; --surface-2:#f7f9fb;
+    --ink:#141922; --muted:#5b6675; --faint:#8b95a4; --line:#d6dce4;
+    --accent:#2f6fb0;
+    --rom:#b0752b; --rom-bg:#f5ead7;
+    --ram:#3f6f9c; --ram-bg:#e3ecf4;
+    --tpa:#3a8a58; --tpa-bg:#e0efe6;
+    --buf:#7259a8; --buf-bg:#eae4f4;
+    --io:#bd4d45; --io-bg:#f6e2e0;
+    --isle:#b8892a; --isle-bg:#faf3e2;
+    --shadow:0 1px 2px rgba(20,25,34,.05),0 6px 22px rgba(20,25,34,.06);
+  }
+  *{box-sizing:border-box}
+  body{background:var(--bg);color:var(--ink);
+    font-family:"IBM Plex Sans",system-ui,sans-serif;line-height:1.5;
+    -webkit-font-smoothing:antialiased;padding:clamp(18px,4vw,52px)}
+  .mono{font-family:"IBM Plex Mono","SF Mono",ui-monospace,monospace;font-variant-numeric:tabular-nums}
+  .wrap{max-width:1080px;margin:0 auto}
+
+  header{margin-bottom:26px}
+  .eyebrow{font-size:12px;letter-spacing:.16em;text-transform:uppercase;color:var(--accent);font-weight:600;margin-bottom:10px}
+  h1{font-size:clamp(30px,5vw,46px);line-height:1.04;margin:0 0 12px;font-weight:700;letter-spacing:-.02em;text-wrap:balance}
+  .lede{color:var(--muted);max-width:64ch;font-size:16px;margin:0}
+  .lede b{color:var(--ink);font-weight:600}
+
+  .facts{display:flex;flex-wrap:wrap;gap:10px;margin:20px 0 4px}
+  .fact{background:var(--surface);border:1px solid var(--line);border-radius:10px;
+    padding:9px 14px;display:flex;flex-direction:column;gap:2px}
+  .fact .k{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--faint);font-weight:600}
+  .fact .v{font-size:15px;font-weight:600}
+  .fact .v .u{color:var(--muted);font-weight:400;font-size:13px}
+
+  .grid{display:grid;grid-template-columns:1fr;gap:22px;margin-top:26px}
+  @media(min-width:860px){.grid{grid-template-columns:minmax(0,1fr) 296px;align-items:start}}
+
+  .map{background:var(--surface);border:1px solid var(--line);border-radius:14px;
+    box-shadow:var(--shadow);overflow:hidden}
+  .map-h{display:flex;justify-content:space-between;align-items:baseline;
+    padding:14px 18px;border-bottom:1px solid var(--line);background:var(--surface-2)}
+  .map-h span{font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--faint);font-weight:600}
+
+  .band{display:grid;grid-template-columns:74px 1fr auto;align-items:stretch;
+    border-bottom:1px solid var(--line);position:relative}
+  .band:last-child{border-bottom:0}
+  .addr{font-size:12.5px;color:var(--muted);padding:10px 0 0 16px;white-space:nowrap}
+  .body{padding:11px 14px 12px;border-left:4px solid var(--c,var(--line));min-width:0}
+  .body.tint{background:var(--cbg,transparent)}
+  .rn{font-weight:600;font-size:15px;letter-spacing:-.01em}
+  .rn .tag{font-family:"IBM Plex Mono",monospace;font-size:11px;font-weight:500;color:var(--c);
+    border:1px solid var(--c);border-radius:5px;padding:1px 6px;margin-left:8px;vertical-align:1px;
+    background:color-mix(in srgb,var(--c) 12%,transparent)}
+  .rc{color:var(--muted);font-size:13px;margin-top:2px}
+  .sz{align-self:center;padding:0 16px 0 10px;text-align:right;font-size:13px;color:var(--faint);white-space:nowrap}
+  .sz b{color:var(--ink);font-weight:600;display:block;font-size:13.5px}
+
+  .isle-rows{margin-top:9px;border:1px solid color-mix(in srgb,var(--isle) 34%,var(--line));
+    border-radius:9px;overflow:hidden}
+  .ir{display:grid;grid-template-columns:58px 1fr auto;gap:8px;align-items:baseline;
+    padding:6px 11px;font-size:12.5px;border-top:1px solid color-mix(in srgb,var(--isle) 20%,var(--line))}
+  .ir:first-child{border-top:0}
+  .ir .ia{color:var(--isle);font-weight:600}
+  .ir .il{color:var(--ink)}
+  .ir .ic{color:var(--muted)}
+  .ir .is{color:var(--faint);text-align:right}
+
+  aside{display:flex;flex-direction:column;gap:16px;position:sticky;top:20px}
+  .card{background:var(--surface);border:1px solid var(--line);border-radius:12px;
+    box-shadow:var(--shadow);padding:16px 17px}
+  .card h2{font-size:12px;letter-spacing:.13em;text-transform:uppercase;color:var(--faint);
+    margin:0 0 12px;font-weight:600}
+  .leg{display:flex;flex-direction:column;gap:9px}
+  .leg-i{display:flex;gap:10px;align-items:center;font-size:13.5px}
+  .sw{width:13px;height:13px;border-radius:3px;flex:none;background:var(--c)}
+  .leg-i .lt{color:var(--muted)}
+  .leg-i b{font-weight:600}
+
+  .chg{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:11px}
+  .chg li{display:grid;grid-template-columns:auto 1fr;gap:10px;font-size:13.5px;line-height:1.4}
+  .chg .d{width:8px;height:8px;border-radius:50%;background:var(--tpa);margin-top:6px}
+  .chg b{font-weight:600}
+  .chg .sub{color:var(--muted)}
+
+  .io-list{display:flex;flex-direction:column;gap:0}
+  .io-list .iorow{display:flex;justify-content:space-between;gap:10px;align-items:baseline;
+    font-size:12.5px;padding:5px 0;border-top:1px solid var(--line)}
+  .io-list .iorow:first-child{border-top:0}
+  .io-list .p{color:var(--muted)}
+  .io-list .p small{color:var(--faint);font-weight:400}
+  .io-list .a{color:var(--io);font-weight:600;white-space:nowrap}
+  .io-list .iorow.pending .a{color:var(--faint)}
+  .io-note{margin-top:10px;font-size:11.5px;color:var(--faint);line-height:1.4}
+
+  footer{margin-top:24px;color:var(--faint);font-size:12.5px;display:flex;flex-wrap:wrap;gap:6px 16px}
+  footer b{color:var(--muted);font-weight:600}
+
+  /* per-page generated stamp -- print only (documentation PDF convention) */
+  .stamp{display:none}
+
+  /* --- print: one wide page, keep the tinted bands, force light --- */
+  @media print{
+    :root{color-scheme:light}
+    @page{size:1180px 1620px;margin:0}
+    html,body{background:#ffffff}
+    body{padding:40px 46px;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+    aside{position:static}
+    .map,.card{box-shadow:none}
+    .band,.card,.map,.fact,.isle-rows{break-inside:avoid}
+    .stamp{display:block;position:fixed;bottom:12px;left:46px;right:46px;
+      font-size:10px;color:var(--faint);display:flex;justify-content:space-between}
+  }
+</style>
+
+<div class="stamp mono"><span>P8X Memory Map</span><span>Generated {{STAMP}} · source generators/gen_memmap.py</span></div>
+
+<div class="wrap">
+  <header>
+    <div class="eyebrow">Homebrew 8-bit CPU · Address space $0000–$FFFF</div>
+    <h1>P8X Memory Map</h1>
+    <p class="lede">The 64&nbsp;KB address space after the <b>6&nbsp;KB-ROM reclaim</b>: the firmware ROM gave up its unused top 2&nbsp;KB, that became a low RAM island for relocated scratch, and the transient program area floor dropped to <b class="mono">{{TPABASE}}</b> — <b>+2&nbsp;KB</b> for every program, enough to let the C compiler self-host.</p>
+    <div class="facts">
+      <div class="fact"><span class="k">ROM</span><span class="v mono">{{FACT_ROM}}</span></div>
+      <div class="fact"><span class="k">TPA base</span><span class="v mono">{{TPABASE}}</span></div>
+      <div class="fact"><span class="k">TPA size</span><span class="v mono">{{FACT_TPA_SIZE}}</span></div>
+      <div class="fact"><span class="k">I/O page</span><span class="v mono">{{IOBASE}}</span></div>
+    </div>
+  </header>
+
+  <div class="grid">
+    <!-- ================= THE MAP ================= -->
+    <section class="map" aria-label="Address space, low to high">
+      <div class="map-h"><span>Address</span><span>Region &amp; contents</span><span>Size</span></div>
+
+      <div class="band">
+        <div class="addr mono">$0000</div>
+        <div class="body tint" style="--c:var(--rom);--cbg:var(--rom-bg)">
+          <div class="rn">Firmware ROM <span class="tag">ROM</span></div>
+          <div class="rc">Monitor + BIOS. Reset vector $0000, BIOS jump table $0100. ~5.2&nbsp;KB used; shrunk 8&nbsp;KB→6&nbsp;KB to open the island below.</div>
+        </div>
+        <div class="sz mono"><b>6&nbsp;KB</b>–$17FF</div>
+      </div>
+
+      <div class="band">
+        <div class="addr mono">$1800</div>
+        <div class="body tint" style="--c:var(--isle);--cbg:var(--isle-bg)">
+          <div class="rn">RAM island <span class="tag">RAM · reclaimed</span></div>
+          <div class="rc">The 2&nbsp;KB freed by the smaller ROM, now holding the scratch that used to pin the TPA floor.</div>
+          <div class="isle-rows">
+            <div class="ir"><span class="ia mono">$1800</span><span class="il">IBUF</span><span class="ic">stdin read-stream buffer</span><span class="is mono">512&nbsp;B</span></div>
+            <div class="ir"><span class="ia mono">$1A00</span><span class="il">PATHBUF + shell vars</span><span class="ic">PATH, drive &amp; run state</span><span class="is mono">256&nbsp;B</span></div>
+            <div class="ir"><span class="ia mono">$1B00</span><span class="il">APBUF</span><span class="ic">append / sh sector · tab-complete (overlay)</span><span class="is mono">512&nbsp;B</span></div>
+            <div class="ir"><span class="ia mono">$1D00</span><span class="il">SBUF</span><span class="ic">monitor sector buffer</span><span class="is mono">512&nbsp;B</span></div>
+            <div class="ir"><span class="ia mono">$1F00</span><span class="il">BIOS/FS scratch</span><span class="ic">FNAME · LBA · DIRLBA · flags</span><span class="is mono">256&nbsp;B</span></div>
+          </div>
+        </div>
+        <div class="sz mono"><b>2&nbsp;KB</b>–$1FFF</div>
+      </div>
+
+      <div class="band">
+        <div class="addr mono">$2000</div>
+        <div class="body tint" style="--c:var(--ram);--cbg:var(--ram-bg)">
+          <div class="rn">OS image <span class="tag">RAM</span></div>
+          <div class="rc">Shell + filesystem + the resident window-manager kernel. Syscall vector $2003–$204E. Loads here at boot.</div>
+        </div>
+        <div class="sz mono"><b>~13.5&nbsp;KB</b>–$5585</div>
+      </div>
+
+      <div class="band">
+        <div class="addr mono">$5700</div>
+        <div class="body" style="--c:var(--ram)">
+          <div class="rn">OS scratch</div>
+          <div class="rc">LINEBUF, CWDPATH ($5800), the FS / shell / make variables — the half of the band that stayed put.</div>
+        </div>
+        <div class="sz mono"><b>~0.5&nbsp;KB</b>–$58FF</div>
+      </div>
+
+      <div class="band">
+        <div class="addr mono">{{TPABASE}}</div>
+        <div class="body tint" style="--c:var(--tpa);--cbg:var(--tpa-bg)">
+          <div class="rn">TPA — transient program area <span class="tag">{{TPABASE}} = TPABASE</span></div>
+          <div class="rc">Every RUNnable program loads and executes here. The self-compiled C compiler is a 30.8&nbsp;KB image that fits with room to spare. A program's frame stack grows down from $F7FF.</div>
+        </div>
+        <div class="sz mono"><b>{{FACT_TPA_SIZE}}</b>–$F7FF</div>
+      </div>
+
+      <div class="band">
+        <div class="addr mono">$F800</div>
+        <div class="body" style="--c:var(--buf)">
+          <div class="rn">History ring · C-stack top</div>
+          <div class="rc">Shell history; the compiler C-stack ceiling (CSTACKTOP $F800, grows down).</div>
+        </div>
+        <div class="sz mono"><b>512&nbsp;B</b>–$F9FF</div>
+      </div>
+      <div class="band">
+        <div class="addr mono">$FA00</div>
+        <div class="body" style="--c:var(--buf)">
+          <div class="rn">FSDIRBUF</div>
+          <div class="rc">Directory-scan sector page for FNEXT / glob.</div>
+        </div>
+        <div class="sz mono"><b>512&nbsp;B</b>–$FBFF</div>
+      </div>
+      <div class="band">
+        <div class="addr mono">$FC00</div>
+        <div class="body" style="--c:var(--buf)">
+          <div class="rn">RDBUF</div>
+          <div class="rc">Compiler source-file read buffer.</div>
+        </div>
+        <div class="sz mono"><b>512&nbsp;B</b>–$FDFF</div>
+      </div>
+      <div class="band">
+        <div class="addr mono">$FE00</div>
+        <div class="body" style="--c:var(--buf)">
+          <div class="rn">Stack</div>
+          <div class="rc">Hardware stack, top $FEFF.</div>
+        </div>
+        <div class="sz mono"><b>256&nbsp;B</b>–$FEFF</div>
+      </div>
+
+      <div class="band">
+        <div class="addr mono">{{IOBASE}}</div>
+        <div class="body tint" style="--c:var(--io);--cbg:var(--io-bg)">
+          <div class="rn">Memory-mapped I/O <span class="tag">I/O</span></div>
+          <div class="rc">{{IO_SUMMARY}}</div>
+        </div>
+        <div class="sz mono"><b>256&nbsp;B</b>–$FFFF</div>
+      </div>
+    </section>
+
+    <!-- ================= RAIL ================= -->
+    <aside>
+      <div class="card">
+        <h2>Region type</h2>
+        <div class="leg">
+          <div class="leg-i"><span class="sw" style="--c:var(--rom)"></span><span class="lt"><b>ROM</b> — firmware</span></div>
+          <div class="leg-i"><span class="sw" style="--c:var(--isle)"></span><span class="lt"><b>Reclaimed RAM</b> — the island</span></div>
+          <div class="leg-i"><span class="sw" style="--c:var(--ram)"></span><span class="lt"><b>RAM</b> — OS &amp; scratch</span></div>
+          <div class="leg-i"><span class="sw" style="--c:var(--tpa)"></span><span class="lt"><b>TPA</b> — programs</span></div>
+          <div class="leg-i"><span class="sw" style="--c:var(--buf)"></span><span class="lt"><b>Buffers</b> &amp; stack</span></div>
+          <div class="leg-i"><span class="sw" style="--c:var(--io)"></span><span class="lt"><b>I/O</b> — devices</span></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>What changed</h2>
+        <ul class="chg">
+          <li><span class="d"></span><span><b>ROM 8&nbsp;KB → 6&nbsp;KB.</b> <span class="sub">The monitor only used ~5.2&nbsp;KB; the top 2&nbsp;KB became RAM.</span></span></li>
+          <li><span class="d"></span><span><b>Scratch → the island.</b> <span class="sub">SBUF and the BIOS/FS scratch moved into $1800–$1FFF.</span></span></li>
+          <li><span class="d"></span><span><b>TPABASE $6100 → {{TPABASE}}.</b> <span class="sub">+2&nbsp;KB per program (now ~39.8&nbsp;KB).</span></span></li>
+          <li><span class="d"></span><span><b>Compiler self-hosts.</b> <span class="sub">The extra room lets cc.c compile itself on the machine.</span></span></li>
+          <li><span class="d"></span><span><b>I/O page filled in.</b> <span class="sub">2nd ACIA ({{ACIA2S}}), GL graphics ({{GLDATA}}) and the PS/2 card ({{PSADAT}}) joined the map.</span></span></li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <h2>I/O page {{IOBASE}}</h2>
+        <div class="io-list mono">
+{{IO_ROWS}}
+        </div>
+        <div class="io-note">⚑ CF drive 1 is wired on the rev-B card but not yet in the firmware / emulator — drive 0 is the live volume.</div>
+      </div>
+    </aside>
+  </div>
+
+  <footer>
+    <span><b>Single source:</b> generators/gen_memmap.py</span>
+    <span><b>RAM:</b> 2× 62256</span>
+    <span><b>Diagram is schematic;</b> exact ranges &amp; sizes are labelled.</span>
+  </footer>
+</div>
+
+</body></html>
