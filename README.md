@@ -15,7 +15,7 @@ graphics language modeled on the Matrox PG-640A) — see the
 
 New to the abbreviations and signal names? See [GLOSSARY.md](GLOSSARY.md).
 
-**Who made it:** P8X is my project. Claude, Anthropic's AI, has been directly involved in its design, coding and documentation. — Ken Rother
+**Who made it:** I designed P8X, and it runs on an FPGA. Claude, Anthropic's AI, has been directly involved in its design, coding and documentation. — Ken Rother
 
 ## Architecture
 
