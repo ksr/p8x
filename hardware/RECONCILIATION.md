@@ -5,6 +5,35 @@ A build-readiness pass over the `hardware/` boards against the current emulator
 machine. **Docs + bus-definitions only** — no CAD was regenerated (the `.sch` is
 the source of truth and `.brd` placement is hand work in Fusion).
 
+> **Update 2026-10-02 — where the items below stand now.** The boards moved to a
+> KiCad flow on 2026-09-18 (the Eagle files are frozen in each board's
+> `eagle-deprecated/`), and every board is designed and routed there
+> ([KICAD-BOARDS.md](KICAD-BOARDS.md)); none has been fabricated yet.
+> - **Memory-card ROM decode — resolved in KiCad.** The rev F KiCad board
+>   implements the 6 KB decode (`ROM !CE` gains the `A11·A12` term on spare gates;
+>   U10 covers `$1800–$7FFF`); see [memory-card/kicad/](memory-card/kicad/README.md).
+>   Only the frozen Eagle `.sch` keeps the old 8 KB decode.
+> - **PS/2 card — designed and routed** (rev A, 2026-09-19), as an ATmega1284P
+>   behind a latch bridge rather than the pure-TTL receiver listed below.
+> - **Second serial port — on the I/O card** (rev B, 2026-09-19): a second 6850 at
+>   `$FF08/09`, both channels on one MAX232, two DB9s with RX/TX-swap jumpers.
+> - **Second CF drive — on the CF card** (rev B, 2026-09-19) at its own decode,
+>   `$FF18–$FF1F`. The firmware and the emulator still select drive 1 with the
+>   device bit on `$FF10–$FF17`, so drive 1 on this card needs a port-base change
+>   in the CF driver and the emulator first; drive 0 works as is.
+> - **Register bank — rev D still pending (a correction to "no architectural
+>   change" below).** The 16-bit ops `PHW`/`PLW`/`LPW` increment the scratch
+>   pointer PT, and `MOVW` needs a second one, PT2 (PSEL = 5). The routed board is
+>   the rev B netlist (PT as 74377 load-only latches, no PT2), so PT must become
+>   four 74169 counters and PT2 be added (~10 chips, regbank card only, no
+>   backplane change) before the current software can run on TTL — see the rev-D
+>   note in [regbank-card theory §3.1](regbank-card/p8x-regbank-card-theory.md).
+> - **Still open:** the register bank rev D (above); the IRQ controller card; a TTL MDU (optional; the GL port stays
+>   on the FPGA card). At build time the microcode EPROMs and the program ROM are
+>   burned from the current images in `rom/`.
+>
+> The text below is the pass as written on 2026-09-17.
+
 ## TL;DR
 
 Most of the built CPU cards (control, register bank, ALU, I/O, CF-IDE) plus the
@@ -20,10 +49,10 @@ emulator and/or on the FPGA graphics card.
 
 ## What is current (no board change needed)
 
-- **Control / microcode card.** The Tier A ISA growth (~149 opcodes now, up from
+- **Control / microcode card.** The Tier A ISA growth (143 opcodes now, up from
   88) is microcode: `microcode/genucode.py` → `u0-u3.bin` burned to the card's
   four microcode EPROMs. Those are **28C64 (8 KB) each** and `u0-u3.bin` are 8 KB,
-  so the full 256-opcode IR space is already there — 149 opcodes fit with room.
+  so the full 256-opcode IR space is already there — 143 opcodes fit with room.
   The address map (`IR | step | cond`) and sequencer are unchanged; a wider ISA is
   just fuller EPROM contents. Reburn from the current `genucode.py`; no rewire, no
   bigger part. (The CPU address space is still 16-bit/64 KB; word ops use it too.)

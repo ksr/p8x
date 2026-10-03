@@ -146,11 +146,12 @@ all slots. A useful mental model of one bus cycle:
   netted.
 - **Clock termination (DNP):** scope `CLK`/`CLKB` at the far slot after bring-up
   and decide whether to populate `RT/CT`.
-- **Clearance:** the clock verticals run close (~0.6 mm) to the slot-10 pad
-  columns — confirm against the fab's DRC rules (a board-routing item, tracked in
-  VERIFY).
-- **Fusion import / DRC / airwires** on the `.sch`/`.brd` pair before fab; order
-  the backplane first as the cheap validation article.
+- **Clearance:** the Eagle-era layout ran the clock verticals close (~0.6 mm) to
+  the slot-10 pad columns. The routed KiCad board (8 slots, [`kicad/`](kicad/README.md))
+  passes DRC at 0.13 mm clearance with 0 unconnected.
+- **Before fab:** check the DIN 41612 footprints against the physical connectors
+  (mated row orientation, mounting holes); order the backplane first as the cheap
+  validation article.
 
 See [p8x-backplane-design.md](p8x-backplane-design.md),
 [p8x-bus-definition.md](p8x-bus-definition.md), and

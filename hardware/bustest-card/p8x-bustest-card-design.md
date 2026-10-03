@@ -1,7 +1,11 @@
 # P8X Bus Test Card — Design
 
-> **Status: DESIGN, not built.** Nothing here has been fabbed or verified against
-> real silicon. Numbers are calculated, not measured. Open items are listed in §10.
+> **Status: designed and routed in KiCad, not fabricated.** The board is in
+> [`kicad/`](kicad/README.md) (280 × 140 mm, 4-layer, 0 unconnected, Gerbers +
+> renders), built from the same `gen_eagle` netlist as the rest of the machine.
+> Nothing here has been fabbed or verified against real silicon. Numbers are
+> calculated, not measured. Open items are listed in §10; the firmware
+> (`firmware/buscon.c`) has not been compiled yet (see `BACKLOG.md`).
 
 A USB-attached card that brings up the rest of the machine, one card at a time,
 by driving the backplane directly and diffing what it sees against the emulator.
@@ -68,7 +72,7 @@ Bring-up becomes **"run the tests against real silicon and diff"** rather than
 | Timing | **Static/stepped only.** Not a logic analyser. |
 | Bus role | Drives when the owning card is out; listens otherwise |
 | Host link | USB CDC, line-oriented ASCII (typable by a human, parseable by a script) |
-| Board | 160 × 100 mm standard Eurocard (`W=160, H=100`), DIN 41612 96-pin, MABC96R |
+| Board | 280 × 140 mm, 4-layer, as routed in KiCad (first designed as a 160 × 100 mm Eurocard, `W=160, H=100`), DIN 41612 96-pin, MABC96R |
 | Firmware | C, Pico SDK |
 
 **Static-only is the load-bearing decision.** It is what allows SPI port expanders
@@ -403,6 +407,12 @@ the io-card precedent are still there.
 
 ### 5.5 Board
 
+> **Superseded by the KiCad flow (2026-09-18).** Every plug-in card, this one
+> included, is now a uniform **280 × 140 mm** 4-layer board with the bus connector
+> on the left edge ([KICAD-BOARDS.md](../KICAD-BOARDS.md)); the routed board has
+> its LED bank on the right edge. The 160 × 100 mm reasoning below is the Eagle-era
+> design record.
+
 **160 × 100 mm — a standard Eurocard, same as every other card.**
 
 This card was originally scoped at `W=200` on the assumption it needed the extra
@@ -552,8 +562,8 @@ listen-only. That is inherent to the approach, not a fixable gap.
   is limited only by device R<sub>on</sub> (~25–50 mA, abs-max-safe but not
   indefinite). Accepted for a careful bench tool; reversible by adding 100 Ω bus
   series (caps at ~5 mA) if it proves too sharp in use.
-- **Layout** — hand placement and routing. Auto-flow confirms the 41 parts fit
-  160 × 100 at 31 % utilisation, but nothing has been placed deliberately and no
-  copper is routed.
+- **Layout** — done in KiCad (2026-09-18): auto-placed and Freerouting-routed on
+  the uniform 280 × 140 mm card, 0 unconnected. (The Eagle-era note here said the
+  41 parts fit 160 × 100 at 31 % utilisation, with nothing placed and no copper.)
 - **Nothing here is measured.** Every number above is calculated from datasheet
   values and the existing design docs.

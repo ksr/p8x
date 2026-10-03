@@ -6,6 +6,13 @@ serial console** (the terminal you type at), an 8-bit **switch input port**
 arrays** that display the address and data buses in real time, and DNP footprints
 for a **DS1302 real-time clock**. Everything lives in the `$FF00–$FF0F` I/O page.
 
+> **Rev B (2026-09-19).** The routed KiCad board ([`kicad/`](kicad/README.md), not
+> yet fabricated) adds a second serial channel: a second 6850 (U17, ACIA2) selected
+> by `-P4` (`$FF08/09`), enabled through a 74HCT14 inverter (U18) and `CLKB` like
+> ACIA1, on the MAX232's second channel. Each channel has a DB9 socket and a 2×3
+> RX/TX-swap jumper block (straight or null-modem). The DS1302 stays DNP and is not
+> memory-mapped (`$FF08` belongs to ACIA2). The sections below describe rev A.
+
 > Source of truth: the `# I/O CARD` section of
 > [`../../generators/gen_eagle.py`](../../generators/gen_eagle.py).
 
@@ -73,7 +80,7 @@ address bits A1–A3 into one-hot port selects:
 | `-P0` | `$FF00–01` | switch input |
 | `-P1` | `$FF02–03` | LED output |
 | `-P2` | `$FF04–05` | 6850 ACIA |
-| `-P3` | `$FF08` | DS1302 RTC (reserved, DNP) |
+| `-P4` | `$FF08–09` | ACIA2 (rev B) |
 
 The `DOE`/`DLD` fields are decoded locally (`U3`/`U4`) into `-RD`/`-MEMW`, and the
 glue gates (`U5`,`U6`,`U15`) combine a port-select with the right strobe to produce
@@ -113,7 +120,8 @@ is doing. Great for bring-up and demos.
 Fully isolated 3-wire peripheral: crystal `X3` (32.768 kHz), main supply from +5,
 backup supply from coin cell `BT1`, and CE/SCLK/IO broken out to header `J3`. It
 **cannot** contend with the bus (it's not connected to it) — connecting the 3-wire
-to a port is left for bring-up. Reserved address `$FF08`.
+to a port is left for bring-up. (It once reserved `$FF08`; since rev B that
+address is ACIA2's.)
 
 ---
 

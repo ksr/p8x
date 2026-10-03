@@ -1,11 +1,13 @@
 # P8X Card Design Standards
 
 Applies to every plug-in card (control, register bank, ALU, memory, I/O,
-CF-IDE, and future cards). The backplane has its own design notes and is
+CF-IDE, PS/2, the bus test card, and future cards). The backplane has its own design notes and is
 explicitly out of scope here. When a card deviates from a rule, the deviation
 and its reason go in that card's schematic notes — silent exceptions are bugs.
 
-Memory card rev D is the reference implementation of these standards.
+Memory card rev D was the reference implementation of these standards in the
+Eagle flow; since 2026-09-18 the boards are generated in KiCad, with the rev F
+memory card as the reference ([hardware/KICAD-BOARDS.md](../hardware/KICAD-BOARDS.md)).
 
 ---
 
@@ -13,11 +15,11 @@ Memory card rev D is the reference implementation of these standards.
 
 | Item | Standard |
 |---|---|
-| Board size | Eurocard 160 × 100 mm, 1.6 mm thickness |
-| Connector | DIN 41612, 3-row 96-pin male, right-angle, at the right board edge |
+| Board size | 280 × 140 mm, 1.6 mm thickness — the uniform KiCad card size since 2026-09-18 (first planned as a 160 × 100 mm Eurocard); the 140 mm connector edge leaves room beyond the ~94 mm DIN 41612 |
+| Connector | DIN 41612, 3-row 96-pin male, right-angle, on the left board edge as laid out in KiCad; status LEDs on the opposite edge |
 | Connector placement | Pin row spans y = 10.16–88.90 mm; row A nearest board surface — VERIFY against mated orientation before first fab and then freeze the footprint |
-| Component height | ≤ 20 mm (1" slot pitch minus card + clearance); nothing on the back side except pin protrusion |
-| Card extraction | Leave 5 mm strip at the left (front) edge free of components for a puller/handle; card name visible there |
+| Component height | ≤ 20 mm (planned for a 1" slot pitch; the KiCad backplane's pitch is 28 mm); nothing on the back side except pin protrusion |
+| Card extraction | Leave 5 mm strip at the front edge (opposite the connector) free of components for a puller/handle; card name visible there |
 | Mounting | No card-level mounting holes required; front strip may take an ejector later — keep it clear |
 
 ## 2. Stackup & Layout

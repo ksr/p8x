@@ -2,9 +2,18 @@
 
 > **Theory of operation:** [p8x-io-card-theory.md](p8x-io-card-theory.md) — deep walkthrough of inputs/outputs, signal flow, and logic.
 
-All memory-mapped I/O lives here: an 8-switch input port, an 8-LED output port, an
-RS-232 serial channel via a 6850 ACIA, and a passive **bus-monitor** LED display
-that turns the machine into an Altair-style "watch it think" front panel.
+All memory-mapped I/O lives here: an 8-switch input port, an 8-LED output port,
+**two** RS-232 serial channels via 6850 ACIAs (rev B), and a passive **bus-monitor**
+LED display that turns the machine into an Altair-style "watch it think" front panel.
+
+> **Rev B (2026-09-19)** — the routed KiCad board in [`kicad/`](kicad/README.md)
+> (not yet fabricated) adds a second 6850 (**U17**, ACIA2 at `$FF08/09`, the
+> Kermit / serial-terminal port) on the MAX232's second channel, with its E-gate
+> inverter in **U18** (74HCT14). Each channel has its own **DB9** socket and a
+> 2×3 jumper block that swaps RX/TX (straight or null-modem). A DS1302 real-time
+> clock (**U16**) is provisioned but not fitted (DNP): it is a bit-banged 3-wire
+> part on header J3, not memory-mapped. The text below describes the rev A
+> circuit, which rev B keeps.
 
 | Address | Port |
 |---------|------|
@@ -12,6 +21,8 @@ that turns the machine into an Altair-style "watch it think" front panel.
 | `$FF02` | LED output — 74374 latch → 8 LEDs on write |
 | `$FF04` | 6850 ACIA control/status |
 | `$FF05` | 6850 ACIA data (RS-232 TX/RX) |
+| `$FF08` | ACIA2 control/status (rev B) |
+| `$FF09` | ACIA2 data (rev B) |
 
 > This README describes the circuit as actually built in
 > [`generators/gen_eagle.py`](../../generators/gen_eagle.py). See
@@ -35,6 +46,9 @@ that turns the machine into an Altair-style "watch it think" front panel.
 | U11–U13 | 74244 | Bus monitors — A0–7, A8–15, D0–7 |
 | U14 | 6850 | ACIA (asynchronous serial) |
 | U15 | 74HCT00 | NAND glue |
+| U16 | DS1302 | Real-time clock, DNP (rev B; 3-wire on J3, not memory-mapped) |
+| U17 | 6850 | ACIA2 at `$FF08/09` (rev B) |
+| U18 | 74HCT14 | Inverter — ACIA2 enable gate (rev B) |
 | X2 | 2.4576 MHz osc | Baud clock source |
 
 ## How it works

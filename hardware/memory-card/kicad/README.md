@@ -2,14 +2,13 @@
 
 The P8X **memory card** realised as an orderable **KiCad 10** PCB. This is the
 first P8X *logic* card taken through KiCad (the XOR trial board was the first
-KiCad board overall; the rest of the machine uses the Eagle flow in
-`generators/gen_eagle.py`). Generators are canon here too — edit the scripts and
+KiCad board overall); every other board followed it into KiCad, from the netlists
+in `generators/gen_eagle.py`. Generators are canon here too — edit the scripts and
 re-run, don't hand-edit the `.kicad_pcb`.
 
-**210 × 100 mm, 4-layer.** The height is the Eurocard/DIN41612 standard (fixed by
-the backplane); the width was widened from the usual 160 mm for routing headroom
-and the labelled LED bank
-(the card is cantilevered off the connector — see the theory doc). Stackup:
+**280 × 140 mm, 4-layer** — the uniform plug-in card size since 2026-09-18 (it was
+first laid out at 210 × 100 mm; see [`../../KICAD-BOARDS.md`](../../KICAD-BOARDS.md)).
+Stackup:
 
 | Layer | Use |
 |-------|-----|

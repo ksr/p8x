@@ -1,6 +1,6 @@
 # P8X: An 8-Bit TTL CPU — Bus/Backplane Card Architecture
 
-Reorganized around a passive backplane with six plug-in CPU cards (plus an optional front-panel LED display card) and the 4×16-bit pointer register bank as the architectural centerpiece. The PC, SP, and MAR of the original SAP-8X design are all subsumed by the pointer bank.
+Reorganized around a passive backplane with six plug-in CPU cards (plus a PS/2 input card) and the 4×16-bit pointer register bank as the architectural centerpiece. The PC, SP, and MAR of the original SAP-8X design are all subsumed by the pointer bank.
 
 **Cards:**
 1. Control / Microcode card (clock, reset, sequencer, microcode EPROMs, IR, front-panel run controls)
@@ -9,9 +9,14 @@ Reorganized around a passive backplane with six plug-in CPU cards (plus an optio
 4. Memory card (ROM, RAM, address decode)
 5. I/O card (toggle-switch input port, LED output port, RS-232 via 6850 ACIA)
 6. CF-IDE card (CompactFlash in 8-bit True IDE mode, memory-mapped at $FF10–$FF17)
-7. LED display card (optional front-panel bus monitor — a passive address/data LED array; not required for operation)
+7. PS/2 card (keyboard + mouse at $FF58–$FF5F; optional — see [ps2-card/](../hardware/ps2-card/README.md))
 
-Total: ~130 logic ICs across the cards. Each card is independently testable on the backplane.
+(The optional front-panel LED display card of the first plan was dropped; the I/O
+card carries the bus-monitor LEDs. A bus test card for bring-up, and the backplane,
+complete the board set: [hardware/](../hardware/README.md). All boards are designed
+and routed in KiCad, 280 × 140 mm for the plug-in cards; none is fabricated yet.)
+
+Total: ~130 logic ICs across the six CPU cards. Each card is independently testable on the backplane.
 (The per-card "≈ N chips" notes below are original design estimates; the
 authoritative live count is `generators/gen_bom.py` → `hardware/p8x-bom.csv`.)
 
@@ -33,9 +38,9 @@ Every pointer supports synchronous **load, hold, increment, decrement** (full 16
 
 All I/O is memory-mapped in page **$FF00–$FFFF**.
 
-Memory map (rev E — see the memory card):
-- `$0000–$1FFF` EEPROM, 8 KB (monitor + BIOS, ~4.7 KB used; 28C64, or low 8 KB of a 28C256)
-- `$2000–$FEFF` SRAM, 56 KB (2× 62256)
+Memory map (rev E, single-sourced in `generators/gen_memmap.py` — see the memory card):
+- `$0000–$17FF` EEPROM, 6 KB (monitor + BIOS, ~4.9 KB used; a 28C256, or a 28C64) — shrunk from 8 KB on 2026-09-14
+- `$1800–$FEFF` SRAM, 58 KB (2× 62256); `$1800–$1FFF` is the OS/BIOS scratch island, the OS loads at `$2000`, programs at `$5900`
 - `$FF00–$FFFF` I/O page (RAM disabled here)
 
 Reset forces P0 to $0000 (pointer clear via 74169 synchronous load of zeros — see §4.2).
@@ -44,7 +49,7 @@ Reset forces P0 to $0000 (pointer clear via 74169 synchronous load of zeros — 
 
 ## 2. Backplane
 
-Passive backplane, **DIN 41612 96-pin (rows A/B/C)** connectors on 100×160 mm Eurocards. Row B is mostly ground guard between the signal rows, but B3–B26 alternate: odd pins are GND, even pins are spare bus lines SPARE12–SPARE23 (rev D); B27 = CLRC, B28 = BSEL, B29 = IRQ (rev C), B30 = SPARE11. See [p8x-bus-definition.md](../hardware/backplane/p8x-bus-definition.md) for the full pin map.
+Passive backplane, **DIN 41612 96-pin (rows A/B/C)** connectors; the cards were first planned as 100×160 mm Eurocards and are laid out in KiCad at 280×140 mm. Row B is mostly ground guard between the signal rows, but B3–B26 alternate: odd pins are GND, even pins are spare bus lines SPARE12–SPARE23 (rev D); B27 = CLRC, B28 = BSEL, B29 = IRQ (rev C), B30 = SPARE11. See [p8x-bus-definition.md](../hardware/backplane/p8x-bus-definition.md) for the full pin map.
 
 ### 2.1 Bus signals
 

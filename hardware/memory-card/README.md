@@ -6,13 +6,15 @@ Provides the system's ROM and RAM and gates them onto the data bus. It decodes t
 address bus to pick ROM vs RAM, keeps both off the data bus during I/O accesses,
 and generates a clean write strobe.
 
-> **⚠ Decode not yet regenerated (2026-09-17).** The tables below and the `.sch`
-> still carry the OLD 8 KB ROM decode (`$0000–$1FFF`). The 2026-09-14 ROM shrink
-> made the map **6 KB ROM `$0000–$17FF`** with **`$1800–$1FFF` a RAM scratch
-> island** (written by the OS/BIOS, so it must be RAM). Building this card as-is
-> would put that scratch in unwritable ROM and break the OS. See the ⚠ note in
-> [p8x-memory-card-theory.md](p8x-memory-card-theory.md) for the required decode
-> change (ROM `!CE` gains an `A11·A12` term; low-RAM U10 widens to `$1800–$7FFF`).
+> **Build the KiCad rev F board.** The 2026-09-14 ROM shrink made the map
+> **6 KB ROM `$0000–$17FF`** with **`$1800–$1FFF` a RAM scratch island** (written
+> by the OS/BIOS, so it must be RAM). The KiCad board in [`kicad/`](kicad/README.md)
+> (rev F, routed, not yet fabricated) implements that decode on three spare gates,
+> with no new chips: ROM `!CE` gains an `A11·A12` term and low-RAM U10 widens to
+> `$1800–$7FFF`. The chip-by-chip text below describes the **rev E** netlist in
+> `gen_eagle.py` (8 KB ROM, `$0000–$1FFF`), which `kicad/gen_mem.py` imports and
+> rewires to rev F; the frozen Eagle `.sch` in `eagle-deprecated/` is rev E too and
+> must not be built.
 
 | Region | Device | Size |
 |--------|--------|------|
@@ -34,16 +36,17 @@ and generates a clean write strobe.
 
 | Ref | Device | Role |
 |-----|--------|------|
-| U1 | 28C64 (or low 8 KB of a 28C256) | ROM (8 KB, $0000–$1FFF) |
+| U1 | 28C256 (low 8 KB used; or a 28C64) | ROM (rev E: 8 KB, $0000–$1FFF; rev F: 6 KB, $0000–$17FF) |
 | U2 | 62256 | SRAM, 32 KB (`$8000–$FEFF`) |
-| U10 | 62256 | SRAM, 24 KB (`$2000–$7FFF`, rev E) |
+| U10 | 62256 | SRAM, 24 KB (`$2000–$7FFF`, rev E; `$1800–$7FFF` in rev F) |
 | U3 | 74245 | Bidirectional data-bus transceiver |
 | U4 | 7430 | 8-input NAND — I/O page ($FFxx) detector |
 | U5 | 74138 | DOE decoder (read enable) |
 | U6 | 74138 | DLD decoder (write strobe) |
 | U7 | 74HCT00 | NAND — RAM chip-select logic |
 | U8 | 74HCT32 | OR — write-strobe gating |
-| U9 | 74HCT08 | AND — transceiver enable |
+| U9 | 74HCT08 | AND — transceiver enable (rev F: spare gate U9.4 = `A11·A12`) |
+| U11 | 74HCT32 | OR — ROM `!CE` (rev E: A13 OR A14 OR A15; rev F adds the `A11·A12` term on U11.2/U11.3) |
 
 ## How it works
 

@@ -1,8 +1,9 @@
 # PS/2 Card — Theory of Operation
 
-> **Status: BUILT (rev A, 2026-09-19).** Standalone keyboard+mouse card, split
-> back out of the (now parked) combined peripheral card. **The built design is the
-> ATmega328 latch-bridge**, not the pure-TTL receiver that §3–§4 and §6 below
+> **Status: designed and routed in KiCad (rev A, 2026-09-19); not fabricated yet.**
+> Standalone keyboard+mouse card, split back out of the (now parked) combined
+> peripheral card. **The routed design is the ATmega1284P latch-bridge** (an
+> ATmega328 in the first cut of the same day), not the pure-TTL receiver that §3–§4 and §6 below
 > describe — those sections are the ORIGINAL 2026-09-17 proposal, kept for the
 > rationale and the register semantics (which are identical); see
 > **§0 (built design)** for what `generators/gen_eagle.py` actually emits and
@@ -60,14 +61,14 @@ part), the four **status LEDs on the right edge** opposite the bus, the DIN41612
 **bus connector on the left**, ICS + decoupling caps + the PS/2 pull-ups in the
 interior.
 
-The '328 reset (`-RESET`) is tied to the backplane **`-RES`** through a **470 Ω
+The MCU reset (`-RESET`) is tied to the backplane **`-RES`** through a **470 Ω
 series isolation resistor (`RRB`)**, with the 10 kΩ `RRST` pull-up on the local
 node. A system reset (`-RES` is push-pull driven by the control card) pulls
-`-RESET` below the AVR reset threshold via the `RRB`/`RRST` divider, so the '328
+`-RESET` below the AVR reset threshold via the `RRB`/`RRST` divider, so the MCU
 re-initialises with the rest of the machine. `RRB` also keeps in-system ICSP safe:
 the programmer pulls only the *local* `-RESET` node low, and the resistor keeps
 that off the bus, so it neither fights the `-RES` driver nor resets the other
-cards. (Program the '328 off-bus and it still resets normally — `RRST` holds it
+cards. (Program the MCU off-bus and it still resets normally — `RRST` holds it
 out of reset when `-RES` floats.)
 
 Everything below (§3 block diagram, §4 how-it-works, §6 chip inventory) is the

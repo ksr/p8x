@@ -6,6 +6,16 @@ Adds mass storage: a CompactFlash card running in **8-bit True IDE mode**,
 memory-mapped into the I/O page at **$FF10–$FF17**. This is what lets the P8X load
 an OS and a filesystem from removable media instead of living entirely in ROM.
 
+> **Rev B (2026-09-19): two drives.** The routed KiCad board in
+> [`kicad/`](kicad/README.md) (not yet fabricated) carries a second, fully decoded
+> CF drive: drive 0 at `$FF10–$FF17` on header J2, drive 1 at `$FF18–$FF1F` on
+> header J5, each with its own 74245 buffer, strobe glue, pull-ups and activity
+> LED (master/slave on one channel was rejected as unreliable for True IDE CF).
+> **Software follow-up:** the firmware CF driver and the emulator select drive 1
+> with the device bit on `$FF10–$FF17`, so drive 1 on this card needs a
+> drive-selectable port base first; drive 0 works unchanged. The chip-by-chip text
+> below describes the drive-0 circuit.
+
 > This README describes the circuit as actually built in
 > [`generators/gen_eagle.py`](../../generators/gen_eagle.py). For the storage
 > software stack see [p8x-cf-os-design.md](p8x-cf-os-design.md) and

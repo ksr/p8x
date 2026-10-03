@@ -23,21 +23,31 @@ New to the abbreviations and signal names? See [GLOSSARY.md](GLOSSARY.md).
 - **4 × 16-bit pointer registers** (74169 up/down counters): P0 = PC, P1/P2 = general-purpose, P3 = stack pointer (empty-descending). The address bus is *always* driven by one of these — no separate MAR.
 - **Registers:** A, B (ALU operands), T/T2 (hidden microcode temporaries), FLAGS (C, Z, N, V)
 - **ALU:** 2 × 74181 + 74182 carry-lookahead, with a post-ALU shifter
-- **Microcoded control:** 4 × 28C64 EEPROMs; ROM address = IR | step<<8 | cond<<12
+- **Microcoded control:** 4 × 28C64 EEPROMs; ROM address = IR | step<<8 | cond<<12; **143 opcodes** defined in `microcode/genucode.py` (256 encodings available)
 - **Memory map (rev E):** `$0000–$17FF` ROM (6 KB; shrunk from 8 KB 2026-09-14), `$1800–$FEFF` RAM (2× 62256; $1800–$1FFF is a scratch island), `$FF00–$FFFF` I/O (every data address is single-sourced in [`generators/gen_memmap.py`](generators/gen_memmap.py) → `memmap.inc`/`.h`/`.py`; commands pull the scratch/graphics/TPA-base symbols via `//#use mem`)
 
-## Cards (6)
+## Cards
+
+The TTL machine is six core cards plus a PS/2 input card on the backplane, and a
+bus test card for bring-up. Every board is designed and routed in **KiCad** (4-layer;
+the plug-in cards are 280 × 140 mm) with orderable Gerbers in `hardware/<board>/kicad/`;
+none has been fabricated yet. See [hardware/KICAD-BOARDS.md](hardware/KICAD-BOARDS.md)
+and [hardware/RECONCILIATION.md](hardware/RECONCILIATION.md) (build readiness).
 
 | Card | Function |
 |------|----------|
 | Control / Microcode | Clock, reset, sequencer, microcode EPROMs, IR, condition mux, front-panel |
 | Register Bank | P0–P3 16-bit pointer registers, address bus drivers |
 | ALU | A, B, T, T2 registers; 74181 ALU; shifter; FLAGS |
-| Memory | 28C256 EEPROM + 62256 SRAM, address decode |
-| I/O | Switches, LEDs, 6850 ACIA (RS-232) |
-| CF-IDE | CompactFlash in 8-bit True IDE mode, memory-mapped at $FF10–$FF17 |
+| Memory | 28C256 EEPROM (6 KB ROM window) + 2× 62256 SRAM, address decode (rev F) |
+| I/O | Switches, LEDs, bus monitor, two 6850 ACIAs (RS-232, two DB9s) |
+| CF-IDE | Two CompactFlash drives in 8-bit True IDE mode, at $FF10–$FF17 and $FF18–$FF1F |
+| PS/2 | Keyboard + mouse ports at $FF58–$FF5F; an ATmega1284P behind a latch bridge |
+| Bus test | Bring-up tool: a Raspberry Pi Pico drives the bus one microcycle at a time over USB |
 
-All six cards plug into a passive 8-slot backplane over a 96-pin DIN 41612 bus (rev C2).
+The cards plug into a passive 8-slot backplane over a 96-pin DIN 41612 bus (rev C2).
+The Eagle CAD of the first board generation is frozen (rev E) in each board's
+`eagle-deprecated/` directory.
 
 ## Toolchain
 
@@ -53,9 +63,10 @@ All six cards plug into a passive 8-slot backplane over a 96-pin DIN 41612 bus (
 | `apps/p8xedit.asm`, `apps/p8xasm.asm`, `apps/p8xcc.asm` | `apps/` | On-target toolchain: line editor + native two-pass assembler + native C compiler (`cc`), as `/bin` programs ([guide](apps/README.md)) |
 | `compiler/p8cc.py` | `compiler/` | C cross-compiler (subset) → P8X asm → RUNnable `.bin` ([guide](compiler/README.md)) |
 | `generators/gen_p8xopc.py` | `generators/` | Opcode table for the native assembler, generated from `genucode.OPC` |
-| `generators/gen_eagle.py` | `generators/` | Generates Eagle schematics + boards for all 8 boards (backplane + 6 cards + LED test card) |
+| `generators/gen_eagle.py` | `generators/` | The canonical board netlists (`CARDS`, `busnet()`); its Eagle output is frozen at rev E |
+| `generators/gen_kicad.py`, `build.sh` | `generators/` | KiCad boards from those netlists: placement, Freerouting, Gerbers, and the ERC/DRC readiness check |
 
-**Generators are canon.** Never hand-edit Eagle `.sch`/`.brd` files or ROM binaries — they are build artifacts. Edit the generator and regenerate. See [generators/README.md](generators/README.md) for what each script does and how to run it.
+**Generators are canon.** Never hand-edit board files (`.kicad_pcb`, and the frozen Eagle `.sch`/`.brd`) or ROM binaries — they are build artifacts. Edit the generator and regenerate. See [generators/README.md](generators/README.md) for what each script does and how to run it.
 
 ## Quick Start
 
@@ -66,17 +77,16 @@ cd emulator && make
 # Run the smoke tests (message print, JSR/RTS round-trip, branch countdown)
 make test
 
-# Regenerate the Eagle boards + schematic PDFs. The schematic renderers import
-# gen_eagle.py, which writes the .sch/.brd files into per-board subdirectories of
-# the current directory, so run them from hardware/.
-cd ../hardware
-python3 ../generators/gen_eagle.py                # all 23 .sch/.brd files (hardware/<board>/)
-python3 ../generators/render_traditional_auto.py  # all 7 card schematic PDFs (hardware/<board>/)
-python3 ../generators/render_board_pdf.py         # placement-view PDFs (hardware/<board>/)
+# Rebuild a KiCad board: placement -> Freerouting -> Gerbers + renders -> the
+# ERC/gate-sim/DRC/keepout/fab readiness check (needs KiCad 10 and a Freerouting
+# jar; `all` builds every board). The netlists come from generators/gen_eagle.py.
+cd ..
+sh generators/build.sh memory-card
+sh generators/check_card.sh memory-card          # the readiness check alone
 
-# These write straight to hardware/backplane/ (and docs/) and run from anywhere:
-python3 ../generators/gen_bus_pdf.py              # bus definition PDF
-python3 ../generators/render_bp_traditional.py    # backplane schematic PDF
+# Reference PDFs (run from anywhere):
+cd hardware
+python3 ../generators/gen_bus_pdf.py              # bus definition PDF (hardware/backplane/)
 python3 ../microcode/gen_progguide.py             # programmer's guide (-> docs/)
 ```
 
@@ -89,7 +99,7 @@ EEPROM programmer:
   and tests load); the matching Intel HEX for the four 28C64 control-store EPROMs
   is produced into `rom/` by `make rom` (see below).
 - **Program ROM** — the assembled monitor + BIOS for the 28C256 at `$0000`
-  (~4.7 KB; BASIC is no longer ROM-resident). `make rom` builds it into `rom/`.
+  (about 4.9 KB of the 6 KB window; BASIC is no longer ROM-resident). `make rom` builds it into `rom/`.
 - **Any other binary** — `python3 tools/bin2hex.py in.bin out.hex [base]`
   (e.g. a monitor built directly with `p8xasm.py`).
 
@@ -100,7 +110,7 @@ are committed; see [rom/README.md](rom/README.md) for the chip map.
 
 ## Documentation
 
-The documents below are also built into a project website (`website/`, MkDocs; not published yet).
+The documents below are also built into the project website, [p8x.cottageworker.com](https://p8x.cottageworker.com) (`website/`, MkDocs; published on every push to `main`).
 
 | Document | Description |
 |----------|-------------|
@@ -122,8 +132,9 @@ The documents below are also built into a project website (`website/`, MkDocs; n
 ### Per-card guides
 
 Each board has its own directory under `hardware/` holding everything about it —
-the Eagle `.sch`/`.brd`, the schematic PDF, a README explaining how the circuit
-works chip by chip, and any board-specific design docs:
+the KiCad board and its Gerbers, placement PDF and renders (`kicad/`), a README
+explaining how the circuit works chip by chip, any board-specific design docs, and
+the frozen Eagle files (`eagle-deprecated/`):
 
 | Card | Directory |
 |------|-----------|
@@ -133,6 +144,8 @@ works chip by chip, and any board-specific design docs:
 | Memory | [hardware/memory-card/](hardware/memory-card/README.md) |
 | I/O | [hardware/io-card/](hardware/io-card/README.md) |
 | CF-IDE | [hardware/cf-card/](hardware/cf-card/README.md) |
+| PS/2 | [hardware/ps2-card/](hardware/ps2-card/README.md) |
+| Bus test | [hardware/bustest-card/](hardware/bustest-card/p8x-bustest-card-design.md) |
 | Backplane | [hardware/backplane/](hardware/backplane/p8x-backplane-design.md) |
 
 ## FPGA implementation
@@ -146,7 +159,7 @@ the monitor, OS, BASIC, C compiler and assembler run **unmodified**.
 | Milestone | State |
 |-----------|-------|
 | 0 First light (UART echo + heartbeat) | done |
-| 1 CPU core in simulation, all 88 opcodes | done |
+| 1 CPU core in simulation, all 88 opcodes of the time | done |
 | 2 ACIA + driven console in simulation | done |
 | 3 Core on real hardware, full 64K map | done |
 | 4 microSD disk — P8X/OS boots from card | done |
@@ -189,19 +202,21 @@ demonstrates all of them (`man cube`, `man g3d`).
 **Verification is the point.** Every milestone is "make the RTL match the
 emulator": the same program runs on both and their per-cycle architectural state
 is diffed, so a divergence is a bug with an exact microcycle and signal rather
-than a mystery. `fpga/sim/isa_test.asm` drives all 88 opcodes through that diff.
+than a mystery. `fpga/sim/isa_test.asm` drives the original 88 opcodes through that diff;
+the 55 added since are microcode only (no new hardware), and the RTL runs them from
+the same images.
 
 ```sh
-fpga/sim/run.sh 60000 isa_test.asm          # co-sim, all 88 opcodes
+fpga/sim/run.sh 60000 isa_test.asm          # co-sim, the original 88 opcodes
 fpga/sim/console.sh "" os/run-disk.img      # interactive console on the RTL
 fpga/tang-nano-20k/build.sh cpu load        # build + program the board
 ```
 
 ## Status
 
-- Emulator working: 88 opcodes, ACIA on stdin/stdout, CF-IDE disk model (`-c <img>`), interactive I/O card (switches `-s`, LED trace `-L`), verified against microcode images
+- Emulator working: 143 opcodes, ACIA on stdin/stdout, CF-IDE disk model (`-c <img>`), interactive I/O card (switches `-s`, LED trace `-L`), verified against microcode images
 - Assembler working: two-pass, full expression support, shares opcode table with microcode generator
-- Eagle schematics + boards generated for all 6 CPU cards and the backplane (7 boards). (The standalone LED test card was a CAD-workflow trial, never built — deprecated and moved to `hardware/deprecated/led-card/`; its I/O address `$FF0C` is now free.)
+- KiCad boards designed and routed for the six CPU cards, the PS/2 card, the bus test card and the backplane (9 boards, 0 unconnected, Gerbers in each `kicad/`); none fabricated yet. The Eagle files of the first generation are frozen in `eagle-deprecated/`. (The standalone LED test card was a CAD-workflow trial, never built — deprecated and moved to `hardware/deprecated/led-card/`; its I/O address `$FF0C` is now free.)
 - ROM monitor boots in the emulator; its filesystem hooks (`I`/`F`/`B`) run end to end against a CF image (`make test-cf`)
 - P8X/OS v1.0 — full shell over flat **and hierarchical (P8XFS v2)** volumes. Built-in commands: `cd`/`mkdir`/`rmdir`/`load`/`run`/`save`/`del`/`path`/`pack`/`fsck`/`format`/`mount`/`umount`/`help`/`exit`/`man`/`sh`/`make`/`bootload` (`make` builds a target from a CWD `Makefile`; `bootload file` installs a freshly-built OS image into the boot sectors so the next `exit`+`B` runs it — the on-target OS-update step, closing the self-hosting loop) (the minimal-kernel split moved the pure-viewer/memory commands to `/bin`, including `dump`/`dep` — only `pack`/`fsck` remain resident because they mutate/scan the filesystem). **Dual CompactFlash** — a second card is **mounted at `/d1`** in one unified namespace (drive 0 is the root), so ordinary paths reach it with drive-unaware commands: `cd /d1`, `cat /d1/NOTES`, `grep x /d1/SRC/*.C`, cross-mount `cp /d1/A /B`. A single mount redirect in `FRESOLVE`/`RV_START` does the routing; **`cp -r /d1/dir /dir`** recursively copies a subtree across the mount (card provisioning), creating directories via the `SYS_MKDIR` syscall. **Userland commands in `/bin`** (written in C, run by bare name via implicit RUN + a `/bin` search PATH, or explicit `run`): **`dir`/`pwd`/`tree`/`cat`/`wc`/`grep`/`cp`/`mv`/`head`/`tail`/`more`/`sort`/`uniq`/`sed`/`awk`/`find`/`diff`/`cmp`/`vi`/`touch`/`man`/`dump`/`dep`/`examine`/`disasm`** (`dir README.TXT` lists a file / `dir R*` a glob, `dir -R`, `cp -r`, a VT100 `vi` screen editor, `man <cmd>` reading `/man`, `awk '{print $2}'` field processing, `examine` = interactive memory examine/modify like the monitor's `E`, etc.) — see [os/commands/](os/commands/README.md). Path resolution + CWD-path prompt; I/O redirection (`<`/`>`) and two-stage pipes (`a | b`); line editing (backspace/DEL, Ctrl-D EOF, **up/down-arrow command history** — an 8-line RAM ring — and **Tab autocomplete** of commands/paths with common-prefix fill + a match list on the second Tab); **`pack`** compacts the directory tree and **`fsck`** checks integrity on-target; host-side `p8xfs.py` builds (`--v2`), navigates, and `fsck`s images (`make test-os`)
 - BASIC builds two ways from one source: disk-bootable (`B`) and a run-from-OS TPA program (`run BASIC.bin`) — `make test-basic` (ROM-resident BASIC was removed to reclaim ROM space; the old standalone `$0000` build was retired in 2026-08 when BASIC's console I/O moved onto the BIOS, which needs the monitor resident)
@@ -209,5 +224,5 @@ fpga/tang-nano-20k/build.sh cpu load        # build + program the board
 - **Native C compiler — Milestone B achieved.** `apps/p8xcc.asm` (`/bin/cc`) is a from-scratch, single-pass C compiler written directly in assembly, small enough to compile C **entirely on the machine** (front *and* back end) where the optimizing `p8cc.c` codegen — ~82 KB, larger than the whole 64 KB address space — never could. Through v0.28 it covers: functions, direct **and mutual** recursion, pointers + pass-by-reference, `int`/`char` arrays with `[]` and decay, **structs** (`.`/`->`), globals, the full operator set (`+ - * / % << >> & ^ | && || ?:`, `++`/`--`/`+=`/`-=`, comparisons, unary `- ! * &`), hex/char/string literals with escapes, `//`+`/* */` comments, a recursive **`//#use`** preprocessor (splices `/lib/lib_*.c`) plus object-like **`//#define`** macros (e.g. `//#use abi` names the BIOS/OS addresses so a command writes `bios(FOPEN, RDBUF, 0)`), and the `putchar`/`puts`/`getchar`/`peek`/`poke`/`argstr`/`bios` builtins. It compiles real OS command source: **`pwd.c` → `cc` → `asm` → runs** correctly on-target. Known gaps are listed under "cc — KNOWN LIMITATIONS" in `BACKLOG-DONE.md` (with the Milestone A/B record).
 - **Host C compiler** — `compiler/p8cc.py` (the primary build tool: every `/bin` command is compiled with it) plus `compiler/p8cc.c`, the same compiler rewritten in its own subset that **self-compiles** ("small C in small C", Milestone A). Full subset incl. `struct`/`union`, global initializers, and the operators above (`make test-c`, host-vs-self differential `c_selfhost_test`, see [compiler/](compiler/README.md)).
 - BIOS **file API**: byte streams (`FOPEN`/`FGETB`, `FWOPEN`/`FPUTB`/`FCLOSE`), path resolution into subdirectories (`FRESOLVE`), name formatting (`FNORM`), and directory iteration (`FOPENDIR`/`FNEXT`) — the assembler rides on the streams and self-hosts (`make test-cf`)
-- **FPGA (Tang Nano 20K):** the same microarchitecture in Verilog, verified against the emulator cycle-for-cycle across all 88 opcodes, then run on real hardware — monitor over USB serial, full 64K map, and **P8X/OS booting from a microSD** with the whole `/bin` toolchain. The board wrote its own disk: `fpga/tang-nano-20k/tools/imgload.asm` streams a P8XFS image over the console and writes it with `CFWRITE`, so no host root or card reader is needed. See [fpga/](fpga/README.md)
-- **Next:** multi-stage pipes (`a | b | c`); a `path` command; the IRQ-controller hardware card; hardware bring-up checklist (Fusion DRC, footprint confirmation, order backplane first); FPGA milestone 5 (clock-up + IRQ)
+- **FPGA (Tang Nano 20K):** the same microarchitecture in Verilog, verified against the emulator cycle-for-cycle across the original 88 opcodes, then run on real hardware — monitor over USB serial, full 64K map, and **P8X/OS booting from a microSD** with the whole `/bin` toolchain. The board wrote its own disk: `fpga/tang-nano-20k/tools/imgload.asm` streams a P8XFS image over the console and writes it with `CFWRITE`, so no host root or card reader is needed. See [fpga/](fpga/README.md)
+- **Next:** multi-stage pipes (`a | b | c`); open-by-name as one syscall (`SYS_OPEN`); the IRQ-controller hardware card; hardware bring-up (DIN 41612 footprint check against the physical connectors, order the backplane first); FPGA milestone 5 (clock-up + IRQ). Current state in [docs/p8x-status.md](docs/p8x-status.md), the working list in [BACKLOG.md](BACKLOG.md)

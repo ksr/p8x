@@ -10,7 +10,12 @@ gerbers.
 **Uniform card size: 280 × 140 mm** — status LEDs on the edge opposite the connector. Every plug-in card is the same dimensions
 (the connector-edge is 140 mm — the DIN41612 is only ~94 mm, so the extra room
 lets components use more rows and keeps the depth down). The backplane is the
-motherboard and is physically larger.
+motherboard (262 × 128 mm).
+
+**None of these boards has been fabricated yet.** Each `kicad/` directory holds the
+orderable Gerbers (`p8x-<board>-gerbers.zip`), the DRC report, a placement PDF and
+the renders. The DRC reports list 0 unconnected pads on every board; the remaining
+DRC items are silkscreen warnings.
 
 | Board | Routed | Unconn. | Notes |
 |-------|--------|---------|-------|
@@ -21,7 +26,7 @@ motherboard and is physically larger.
 | io-card | ✅ | 0 | **rev B: 2x ACIA/DB9** — ACIA1 `$FF04/5` + ACIA2 `$FF08`, two DB9 sockets with RX/TX-swap jumpers (one MAX232 for both), switches, LED bars, bus monitor; bespoke `gen_io.py` (DB9s+switch bottom, LED bars top). RTC/coin cell is DNP |
 | ps2-card | ✅ | 0 | keyboard + mouse, **ATmega1284P** latch-bridge at `$FF58-5F`; custom mini-DIN-6 sockets (bottom edge), 4 status LEDs (right edge), ICSP; no level-shift (5V-native); bespoke `gen_ps2.py` |
 | regbank-card | ✅ | 0 | 95 parts — routed (5m45s auto + ~13min optimizer) |
-| bustest-card | ✅ | 0 | Pico + 17 LEDs; routed with right-edge LED bank |
+| bustest-card | ✅ | 0 | Pico (RP2040) + 5× MCP23S17 + 16 LEDs; routed with right-edge LED bank |
 | backplane | ✅ | 0 | **8-slot** DIN41612 motherboard, 262×128mm (28mm slot pitch, slots left-justified, power/pull-up parts on the right; power entry = Phoenix MSTBA 2,5/2-G-5,08, Digikey 1729128). Routes clean at **0.13mm clearance** (netclass in the `.kicad_pro`) with **nylon-screw** 2mm keepouts. |
 
 > **Deprecated:** the **led-card** (previously routed here) was a CAD-workflow
@@ -34,7 +39,8 @@ motherboard and is physically larger.
 > on 2026-09-19 when the design reverted to three separate cards (io + cf + ps2).
 > Its netlist is kept intact behind `PARK_PERIPHERAL` in `gen_eagle.py` so it can
 > return whole; it is not built or checked in the active flow. Its I/O extras (a
-> 2nd ACIA at `$FF08` and two DB9s with RX/TX-swap jumpers) are parked with it.
+> 2nd ACIA at `$FF08` and two DB9s with RX/TX-swap jumpers) were carried over to
+> the standalone io-card rev B the same day.
 
 ## Known follow-ups
 - **Cosmetic silk crowding** on the densest cards — part values on every part get
