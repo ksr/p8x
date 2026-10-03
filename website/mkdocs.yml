@@ -10,7 +10,7 @@ edit_uri: blob/main/
 docs_dir: stage
 site_dir: site
 use_directory_urls: true
-copyright: "P8X by Ken Rother — <a href=\"https://cottageworker.com\">cottageworker.com</a>."
+copyright: "P8X by Ken Rother — <a href=\"https://cottageworker.com\">cottageworker.com</a> · Email ken at cottage worker dot com"
 not_in_nav: |
   /commands/*.md
 hooks:
