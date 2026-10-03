@@ -33,7 +33,8 @@ yet; the same microarchitecture also runs as an FPGA build (fpga/).
    build artifacts of generators/ (gen_eagle.py still produces the netlists;
    generators/build.sh turns them into KiCad boards) and
    firmware/microcode/genucode.py. Edit the generator, regenerate. The Eagle
-   files of the first generation are frozen in each board's eagle-deprecated/.
+   files of the first generation are frozen in eagle-deprecated/ (every board
+   but the KiCad-only ps2-card).
 2. **The emulator interprets the same ROM images burned to the EPROMs**
    (firmware/microcode/u0-u3.bin). Never give the emulator private opcode
    knowledge; all instruction semantics live in the microcode.
@@ -105,7 +106,7 @@ FPGA (needs `iverilog`; the board flow needs oss-cad-suite):
 
 ## Layout
 - hardware/<board>/ — everything for one board in one place: kicad/ (the
-  generated board, Gerbers, renders; see rule 1), eagle-deprecated/ (frozen),
+  generated board, Gerbers, renders; see rule 1), eagle-deprecated/ (frozen; not on ps2-card),
   README + theory/design docs. One dir per board: backplane, control-card,
   regbank-card, alu-card, memory-card, io-card, cf-card, ps2-card, bustest-card.
   Status of every board: hardware/KICAD-BOARDS.md; build readiness:
