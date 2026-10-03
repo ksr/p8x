@@ -10,7 +10,7 @@
 set -e
 cd "$(dirname "$0")"
 [ -x venv/bin/mkdocs ] || python3 -m venv venv
-venv/bin/pip install -q -r requirements.txt   # quick when already installed
+venv/bin/pip install -q --disable-pip-version-check -r requirements.txt   # quick when already installed
 venv/bin/python stage.py
 CONF=mkdocs.yml; [ "$1" = "publish" ] && CONF=mkdocs-publish.yml
 venv/bin/mkdocs build -f "$CONF" 2>&1 | grep -E "WARNING|ERROR|hooks:|Documentation built" || true
