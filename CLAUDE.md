@@ -1,8 +1,10 @@
 # P8X — 8-bit TTL homebrew CPU
 
 Hand-built 8-bit CPU, ~130 chips of 74HCT logic, microcoded, on an 8-slot
-DIN41612 backplane. Six cards: control/microcode, register bank, ALU,
-memory, I/O, CF-IDE.
+DIN41612 backplane. Six CPU cards: control/microcode, register bank, ALU,
+memory, I/O, CF-IDE; plus a PS/2 keyboard card and a bus test card. All nine
+boards (with the backplane) are designed and routed in KiCad, none fabricated
+yet; the same microarchitecture also runs as an FPGA build (fpga/).
 
 ## Architecture quick reference
 - 8-bit data, 16-bit address. Address bus is ALWAYS driven by one of four
@@ -26,9 +28,12 @@ memory, I/O, CF-IDE.
   flag driving A12 for the NEXT lookup (pipeline timing).
 
 ## Hard rules
-1. **Generators are canon.** Never hand-edit Eagle .sch/.brd files or ROM
-   binaries — they are build artifacts of generators/ and
-   firmware/microcode/genucode.py. Edit the generator, regenerate.
+1. **Generators are canon.** Never hand-edit the KiCad boards
+   (hardware/<board>/kicad/), their netlists or the ROM binaries — they are
+   build artifacts of generators/ (gen_eagle.py still produces the netlists;
+   generators/build.sh turns them into KiCad boards) and
+   firmware/microcode/genucode.py. Edit the generator, regenerate. The Eagle
+   files of the first generation are frozen in each board's eagle-deprecated/.
 2. **The emulator interprets the same ROM images burned to the EPROMs**
    (firmware/microcode/u0-u3.bin). Never give the emulator private opcode
    knowledge; all instruction semantics live in the microcode.
@@ -91,7 +96,7 @@ memory, I/O, CF-IDE.
 
 FPGA (needs `iverilog`; the board flow needs oss-cad-suite):
 - `fpga/sim/run.sh 20000`                        — co-sim vs the emulator
-- `fpga/sim/run.sh 60000 isa_test.asm`           — all 88 opcodes
+- `fpga/sim/run.sh 60000 isa_test.asm`           — the original 88 opcodes (143 today)
 - `fpga/sim/run.sh 200000 "" console_in.txt`     — driven monitor + console diff
 - `fpga/sim/console.sh "" os/run-disk.img`       — interactive console on the RTL
 - `fpga/tang-nano-20k/build.sh cpu load`         — build + program the board
@@ -99,15 +104,19 @@ FPGA (needs `iverilog`; the board flow needs oss-cad-suite):
   emulator is the golden model; a divergence names the exact microcycle.
 
 ## Layout
-- hardware/<board>/ — everything for one board in one place: generated CAD
-  (.sch/.brd, artifacts; see rule 1) + schematic PDF + README + design docs.
-  One dir per board: backplane, memory-card, control-card, regbank-card,
-  alu-card, io-card, cf-card
+- hardware/<board>/ — everything for one board in one place: kicad/ (the
+  generated board, Gerbers, renders; see rule 1), eagle-deprecated/ (frozen),
+  README + theory/design docs. One dir per board: backplane, control-card,
+  regbank-card, alu-card, memory-card, io-card, cf-card, ps2-card, bustest-card.
+  Status of every board: hardware/KICAD-BOARDS.md; build readiness:
+  hardware/RECONCILIATION.md. Build/check one: `sh generators/build.sh <card>`,
+  `sh generators/check_card.sh <card>` (KiCad 10 + a Freerouting jar)
 - docs/         — cross-cutting docs only: p8x-system-design.md,
   p8x-card-standards.md, p8x-programmers-guide.pdf
 - generators/   — Python generators for CAD + schematic PDF renderers (run from hardware/)
 - website/      — the project website: MkDocs + Material over these docs (website/README.md;
-  `website/build.sh [serve|publish]`); not published yet
+  `website/build.sh [serve|publish]`); published at https://p8x.cottageworker.com
+  by .github/workflows/website.yml on every push to main (strict build)
 - microcode/    — genucode.py + u0-u3.bin images + gen_progguide.py
 - assembler/    — p8xasm.py (two-pass assembler)
 - firmware/     — p8xmon.asm (ROM monitor source)
@@ -123,8 +132,12 @@ FPGA (needs `iverilog`; the board flow needs oss-cad-suite):
 ## Near-term roadmap (see BACKLOG.md)
 (The original three items — assembler sharing the opcode table, CF-IDE emulation,
 the decoupling-cap generator pass — are all long done; see BACKLOG-DONE.md.)
-1. TTL build: the IRQ-controller card wiring, then hardware bring-up (Fusion DRC,
-   footprint confirmation, order the backplane first).
-2. FPGA build: Milestone 5 — clock up (currently 9 MHz against a ~50 MHz Fmax,
+1. TTL build: the register bank rev D (PT2 for MOVW, a counting PT for
+   PHW/PLW/LPW — the routed rev B cannot run today's microcode), then footprint
+   confirmation and ordering (the backplane first); the KiCad DRC is already clean.
+2. FPGA build: first the RAM write window — the RTL writes RAM only from $2000,
+   but since the 6K ROM (2026-09-14) RAM starts at $1800 and the monitor/OS keep
+   scratch in $1800-$1FFF; move both boundaries to RAMBASE and bring the co-sim
+   file list up to date (BACKLOG NEXT). Then Milestone 5 — clock up (currently 9 MHz against a ~50 MHz Fmax,
    three fabric phases per microcycle) and wire IRQ through.
 3. OS: multi-stage pipes (`a | b | c`); a `path` command.
