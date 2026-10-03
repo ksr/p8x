@@ -9,6 +9,8 @@ metadata:
 
 P8X is a hand-built 8-bit microcoded CPU using ~130 74HCT chips (per generators/gen_bom.py — the old "~75" estimate was low; the register bank alone is 44 ICs) on a 10-slot DIN41612 backplane. Project lives at ~/Developer/p8x.
 
+**Branch (2026-10-02):** `graphics-card` (the long-running line since 2026-08-28) was fast-forward-merged into `main` at Ken's request after a full `emulator/make test` (136 PASS); work continues on `main` (the graphics-card branch is kept). "on graphics-card" in older notes = now in main. The project website lives in `website/` (MkDocs, not yet published).
+
 **Why:** Personal homebrew CPU project, hardware is being fabricated.
 
 **How to apply:** Always work from ~/Developer/p8x. Follow the hard rules in CLAUDE.md — generators are canon, never hand-edit Eagle files or ROM binaries. Check BACKLOG.md before/after work.
