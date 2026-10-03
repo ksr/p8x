@@ -1,0 +1,148 @@
+# Author: Claude (Anthropic) for Ken Rother, 2026
+# The P8X project website: MkDocs 1.6 + Material over the documents stage.py copies from this repository.
+# ./build.sh builds it (website/README.md).
+site_name: P8X
+site_description: A hand-built 8-bit microcoded TTL CPU, its FPGA twin with a graphics engine, and the monitor, disk OS, BASIC and C compilers that run on both.
+site_author: Ken Rother
+repo_url: https://github.com/ksr/p8x
+repo_name: ksr/p8x
+edit_uri: blob/main/
+docs_dir: stage
+site_dir: site
+use_directory_urls: true
+copyright: "P8X by Ken Rother — <a href=\"https://cottageworker.com\">cottageworker.com</a>."
+not_in_nav: |
+  /commands/*.md
+hooks:
+  - hooks.py
+
+theme:
+  name: material
+  features:
+    - navigation.sections
+    - navigation.top
+    - navigation.indexes
+    - search.highlight
+    - search.suggest
+    - content.code.copy
+    - toc.follow
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: blue grey
+      accent: amber
+      toggle: {icon: material/brightness-7, name: Dark mode}
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: blue grey
+      accent: amber
+      toggle: {icon: material/brightness-4, name: Light mode}
+
+markdown_extensions:
+  - attr_list
+  - md_in_html
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+  - tables
+  # GitHub-style heading ids (no collapsing of hyphens), so the anchors the p8x documents write for GitHub work here
+  - toc:
+      permalink: true
+      slugify: !!python/object/apply:pymdownx.slugs.slugify {kwds: {case: lower}}
+  - admonition
+  - pymdownx.superfences
+  - pymdownx.details
+
+nav:
+  - Home: index.md
+  - The machine:
+      - System design: docs/p8x-system-design.md
+      - Instruction set (quick reference): docs/p8x-isa-card.md
+      - Memory map: docs/memory-map.md
+      - Two-mode operation: docs/p8x-two-mode-design.md
+      - Card design standards: docs/p8x-card-standards.md
+      - Microcode: microcode/README.md
+      - Glossary: GLOSSARY.md
+      - Documentation index: docs/README.md
+  - Hardware:
+      - Overview: hardware/README.md
+      - KiCad boards: hardware/KICAD-BOARDS.md
+      - Build readiness: hardware/RECONCILIATION.md
+      - Backplane:
+          - Design: hardware/backplane/p8x-backplane-design.md
+          - Theory of operation: hardware/backplane/p8x-backplane-theory.md
+          - Bus definition: hardware/backplane/p8x-bus-definition.md
+      - Control / microcode card:
+          - Control / microcode card: hardware/control-card/README.md
+          - Theory of operation: hardware/control-card/p8x-control-card-theory.md
+      - Register bank card:
+          - Register bank card: hardware/regbank-card/README.md
+          - Theory of operation: hardware/regbank-card/p8x-regbank-card-theory.md
+      - ALU card:
+          - ALU card: hardware/alu-card/README.md
+          - Theory of operation: hardware/alu-card/p8x-alu-card-theory.md
+      - Memory card:
+          - Memory card: hardware/memory-card/README.md
+          - Theory of operation: hardware/memory-card/p8x-memory-card-theory.md
+      - I/O card:
+          - I/O card: hardware/io-card/README.md
+          - Theory of operation: hardware/io-card/p8x-io-card-theory.md
+      - CF-IDE card:
+          - CF-IDE card: hardware/cf-card/README.md
+          - Theory of operation: hardware/cf-card/p8x-cf-card-theory.md
+      - PS/2 card:
+          - PS/2 card: hardware/ps2-card/README.md
+          - Theory of operation: hardware/ps2-card/p8x-ps2-card-theory.md
+      - Bus test card: hardware/bustest-card/p8x-bustest-card-design.md
+      - Gate-level simulation: tools/gatesim/README.md
+  - FPGA + graphics:
+      - P8X on FPGA: fpga/README.md
+      - FPGA architecture: fpga/docs/architecture.md
+      - The shared core (RTL): fpga/rtl/README.md
+      - Co-simulation: fpga/sim/README.md
+      - Tang Nano 20K board: fpga/tang-nano-20k/README.md
+      - Installing a disk on the board: fpga/tang-nano-20k/tools/README.md
+      - Graphics theory of operation: docs/p8x-graphics-theory.md
+      - Graphics programmer's guide: docs/p8x-graphics-guide.md
+      - The FPGA as a graphics card: fpga/tang-nano-20k/CARD-EDGE-DESIGN.md
+      - PS/2 on the graphics card: fpga/tang-nano-20k/PS2-INTERFACE.md
+      - Matrox PG-640A reference: hardware/reference/README.md
+      - Graphics design records:
+          - "Where it stands (2026-08-20)": fpga/tang-nano-20k/sdram/HANDOFF.md
+          - "Stage 0: SDRAM": fpga/tang-nano-20k/sdram/README.md
+          - "Stage 2: screen modes": fpga/tang-nano-20k/sdram/STAGE2-DESIGN.md
+          - "Stage 4: drawing engine": fpga/tang-nano-20k/sdram/STAGE4-DESIGN.md
+          - "Stage 4: integration": fpga/tang-nano-20k/sdram/STAGE4-INTEGRATION.md
+          - "Stage 5: single mode": fpga/tang-nano-20k/sdram/STAGE5-SINGLE-MODE.md
+          - "Stage 6: RGB565 colour": fpga/tang-nano-20k/sdram/STAGE6-DESIGN.md
+          - "Stage 7: wireframe 3D": fpga/tang-nano-20k/sdram/STAGE7-DESIGN.md
+          - "Stage 8: the MDU": fpga/tang-nano-20k/sdram/STAGE8-DESIGN.md
+          - "Stage 8b: geometry engine": fpga/tang-nano-20k/sdram/STAGE8B-DESIGN.md
+          - "Stage 9: colour and faces": fpga/tang-nano-20k/sdram/STAGE9-DESIGN.md
+          - "Stage 10: the graphics language": fpga/tang-nano-20k/sdram/STAGE10-DESIGN.md
+  - Programming:
+      - Programmer's guide: docs/p8x-programmers-guide.md
+      - ROM monitor: docs/p8x-monitor.md
+      - ISA extensions for C: docs/p8x-isa-c-extensions.md
+      - Assembler: assembler/README.md
+      - C cross-compiler (p8cc): compiler/README.md
+      - On-target editor, assembler and cc: apps/README.md
+      - BASIC programmer's guide: basic/p8x-basic-guide.md
+      - BASIC internals: basic/README.md
+      - Emulator: emulator/README.md
+      - Firmware: firmware/README.md
+      - ROM images: rom/README.md
+      - Host tools: tools/README.md
+      - Generators: generators/README.md
+  - OS:
+      - P8X/OS: os/README.md
+      - Commands: commands/index.md
+      - Commands in C: os/commands/README.md
+      - Commands in assembler: os/commands-asm/README.md
+      - About the manual pages: os/man/README.md
+      - CF interface and OS design: hardware/cf-card/p8x-cf-os-design.md
+      - P8XFS v2 filesystem: hardware/cf-card/p8xfs-v2-hierarchical.md
+      - Mounting the second CF: docs/mount-drives-design.md
+      - Resident window manager: docs/p8x-wm-design.md
+  - Status and backlog: BACKLOG.md
+  - Working on the code: repository.md

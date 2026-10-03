@@ -106,6 +106,8 @@ FPGA (needs `iverilog`; the board flow needs oss-cad-suite):
 - docs/         — cross-cutting docs only: p8x-system-design.md,
   p8x-card-standards.md, p8x-programmers-guide.pdf
 - generators/   — Python generators for CAD + schematic PDF renderers (run from hardware/)
+- website/      — the project website: MkDocs + Material over these docs (website/README.md;
+  `website/build.sh [serve|publish]`); not published yet
 - microcode/    — genucode.py + u0-u3.bin images + gen_progguide.py
 - assembler/    — p8xasm.py (two-pass assembler)
 - firmware/     — p8xmon.asm (ROM monitor source)

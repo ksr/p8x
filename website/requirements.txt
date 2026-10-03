@@ -1,0 +1,5 @@
+# Packages for the project website (website/build.sh installs them into website/venv)
+mkdocs==1.6.1
+mkdocs-material==9.7.7
+pymdown-extensions==10.21.3
+pillow==11.3.0

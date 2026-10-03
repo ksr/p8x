@@ -100,6 +100,8 @@ are committed; see [rom/README.md](rom/README.md) for the chip map.
 
 ## Documentation
 
+The documents below are also built into a project website (`website/`, MkDocs; not published yet).
+
 | Document | Description |
 |----------|-------------|
 | [hardware/backplane/p8x-bus-definition.md](hardware/backplane/p8x-bus-definition.md) | Authoritative 96-pin bus pinout, signal descriptions, DOE/DLD encoding, microcode word layout |
