@@ -130,15 +130,19 @@ desktop with a Finder and full-screen applications; without one, it runs over th
 | look at the hardware | the [hardware overview](hardware/README.md) and each card's theory of operation |
 | draw on the screen | the [graphics programmer's guide](docs/p8x-graphics-guide.md) |
 | decode an abbreviation | the [glossary](GLOSSARY.md) |
-| see what is being worked on | [Status and backlog](BACKLOG.md) |
+| see what is being worked on | [Where P8X stands](docs/p8x-status.md), then the [backlog](BACKLOG.md) |
 | build it from source | [Working on the code](repository.md) |
 
 ## Status (October 2026)
 
 - **Running on the FPGA build:** the monitor, P8X/OS booting from a microSD card, the whole `/bin` toolchain, and the
-  graphics engine. Next there: a faster clock than today's 9 MHz, and interrupts.
-- **TTL cards:** all boards are designed and routed. Before ordering, the memory card's ROM decode has to follow the
-  6 KB ROM map, and the microcode EPROMs are reburned from the current microcode; the backplane is ordered first.
-  An interrupt controller card is still to be designed.
+  graphics engine. Next there: the RTL follows the 6 KB ROM map (`$1800`–`$1FFF` is RAM), then a faster clock than
+  today's 9 MHz, and interrupts.
+- **TTL cards:** all boards are designed and routed in KiCad; none is fabricated yet. The memory card (rev F) already
+  decodes the 6 KB ROM. Before ordering, the register bank gains a counting scratch pointer and a second one for the
+  16-bit instructions (rev D), and the second CF drive's port gets its software; the backplane is ordered first. An
+  interrupt controller card is still to be designed.
 - **Software:** the C compiler compiles itself on P8X. Next on the list: pipes of more than two stages
   (`a | b | c`), and opening a file by name as a single system call.
+
+More in [Where P8X stands](docs/p8x-status.md).

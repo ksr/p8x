@@ -23,8 +23,21 @@ GLOBS = ["docs/*.md", "fpga/**/*.md"] + ["hardware/%s/*.md" % b for b in BOARDS]
 # never on the site: Claude's memory mirror, frozen / parked / deprecated trees, logs, agent notes, the review dump
 SKIP = re.compile(r"(^|/)(docs/memory|eagle-deprecated|deprecated|parked|logs)(/|$)|(^|/)(CLAUDE|CODE_REVIEW)\.md$")
 
+# [[name]] (or [[name|text]]) is a wiki-link into the memory notes (docs/memory), which the site leaves out:
+# a staged document shows just the name (or the text), as plain text, instead of the literal brackets
+WIKILINK = re.compile(r"\[\[([^\[\]|\n]+)(?:\|([^\[\]\n]+))?\]\]")
+
+
+def plain_wikilinks(path):
+    text = open(path, encoding="utf-8").read()
+    new = WIKILINK.sub(lambda m: (m.group(2) or m.group(1)).strip(), text)
+    if new != text: open(path, "w", encoding="utf-8").write(new)
+    return text.count("[[") - new.count("[[")
+
+
 shutil.rmtree(OUT, ignore_errors=True)
 n = 0
+wikilinks = 0
 paths = set(FILES)
 for g in GLOBS:
     paths |= {os.path.relpath(p, REPO) for p in glob.glob(os.path.join(REPO, g), recursive=True)}
@@ -34,10 +47,13 @@ for rel in sorted(paths):
     dst = os.path.join(OUT, rel)
     os.makedirs(os.path.dirname(dst), exist_ok=True)
     shutil.copy2(src, dst); n += 1
+    if dst.endswith(".md"): wikilinks += plain_wikilinks(dst)
 # the visitor home page (home.md here) is the site's index; the repository README becomes the "Working on the code"
 # page (links to README.md from other documents are pointed at it by hooks.py)
 shutil.copy2(os.path.join(HERE, "home.md"), os.path.join(OUT, "index.md")); n += 1
 shutil.copy2(os.path.join(REPO, "README.md"), os.path.join(OUT, "repository.md")); n += 1
+for page in ("index.md", "repository.md"): wikilinks += plain_wikilinks(os.path.join(OUT, page))
+print("wiki-links made plain: %d" % wikilinks)
 
 
 def write(rel, lines):

@@ -6,6 +6,7 @@ their source in `../basic/`, `../os/`, etc.)
 
 | Document | Description |
 |----------|-------------|
+| [p8x-status.md](p8x-status.md) | Where P8X stands (October 2026): what runs today, the TTL card set's state, what is next. The detail is in [`../BACKLOG.md`](../BACKLOG.md). |
 | [p8x-system-design.md](p8x-system-design.md) | System and card-by-card architecture reference; §3.2 has the as-built control-word layout. |
 | [p8x-card-standards.md](p8x-card-standards.md) | Design rules every plug-in card must follow (form factor, connector, decoupling, etc.). |
 | [p8x-monitor.md](p8x-monitor.md) | ROM monitor command reference and memory map. |

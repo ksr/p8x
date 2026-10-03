@@ -144,5 +144,7 @@ nav:
       - P8XFS v2 filesystem: hardware/cf-card/p8xfs-v2-hierarchical.md
       - Mounting the second CF: docs/mount-drives-design.md
       - Resident window manager: docs/p8x-wm-design.md
-  - Status and backlog: BACKLOG.md
+  - Status:
+      - Where P8X stands: docs/p8x-status.md
+      - Backlog (working list): BACKLOG.md
   - Working on the code: repository.md
