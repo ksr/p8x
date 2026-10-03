@@ -5,7 +5,7 @@ tree, read only: nothing here writes to it.
 
 Generated on top of the copies: the home page (home.md here), the "Working on the code" page (the repository README),
 a memory-map page (from generators/memmap.py), one page per manual page (os/man/*), and the board renders (resized,
-and shown at the top of each board's page)."""
+and shown at the top of each board's page, plus the assembled-machine renders)."""
 import glob, os, re, shutil
 from hooks import BRANCH, GH                       # the one place the GitHub branch is named
 
@@ -15,10 +15,10 @@ OUT = os.path.join(HERE, "stage")
 BOARDS = ["control-card", "regbank-card", "alu-card", "memory-card", "io-card", "cf-card", "ps2-card", "backplane",
           "bustest-card"]
 FILES = ["BACKLOG.md", "GLOSSARY.md", "hardware/README.md", "hardware/KICAD-BOARDS.md", "hardware/RECONCILIATION.md",
-         "hardware/reference/README.md", "microcode/README.md", "firmware/README.md", "rom/README.md",
-         "assembler/README.md", "compiler/README.md", "basic/README.md", "basic/p8x-basic-guide.md", "apps/README.md",
-         "emulator/README.md", "tools/README.md", "tools/gatesim/README.md", "generators/README.md", "os/README.md",
-         "os/commands/README.md", "os/commands-asm/README.md", "os/man/README.md"]
+         "hardware/assembly/README.md", "hardware/reference/README.md", "microcode/README.md", "firmware/README.md",
+         "rom/README.md", "assembler/README.md", "compiler/README.md", "basic/README.md", "basic/p8x-basic-guide.md",
+         "apps/README.md", "emulator/README.md", "tools/README.md", "tools/gatesim/README.md", "generators/README.md",
+         "os/README.md", "os/commands/README.md", "os/commands-asm/README.md", "os/man/README.md"]
 GLOBS = ["docs/*.md", "fpga/**/*.md"] + ["hardware/%s/*.md" % b for b in BOARDS]
 # never on the site: Claude's memory mirror, frozen / parked / deprecated trees, logs, agent notes, the review dump
 SKIP = re.compile(r"(^|/)(docs/memory|eagle-deprecated|deprecated|parked|logs)(/|$)|(^|/)(CLAUDE|CODE_REVIEW)\.md$")
@@ -158,5 +158,15 @@ for b in BOARDS:
                   "*The board as routed in KiCad (3D render; [top view](kicad/p8x-%s-render-top.png)).*" % b]
         md[h1 + 1:h1 + 1] = figure
         open(page, "w", encoding="utf-8").write("\n".join(md))
+# the assembled-machine renders (hardware/assembly/*.png, 2400 px, from generators/render_assembly.py), resized for
+# the web; their gradient background bands at 256 colours, so they are dithered. hardware/assembly/README.md shows them
+for src in sorted(glob.glob(os.path.join(REPO, "hardware", "assembly", "*.png"))):
+    im = Image.open(src).convert("RGB")
+    im.thumbnail((1400, 1400))
+    dst = os.path.join(OUT, "hardware", "assembly", os.path.basename(src))
+    os.makedirs(os.path.dirname(dst), exist_ok=True)
+    pal = im.quantize(256, method=Image.Quantize.FASTOCTREE)
+    im.quantize(palette=pal, dither=Image.Dither.FLOYDSTEINBERG).save(dst, optimize=True)
+    renders += 1; n += 1
 print("board renders: %d" % renders)
 print("staged %d files" % n)

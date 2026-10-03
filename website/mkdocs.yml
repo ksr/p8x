@@ -68,6 +68,7 @@ nav:
       - Overview: hardware/README.md
       - KiCad boards: hardware/KICAD-BOARDS.md
       - Build readiness: hardware/RECONCILIATION.md
+      - Assembled machine: hardware/assembly/README.md
       - Backplane:
           - Design: hardware/backplane/p8x-backplane-design.md
           - Theory of operation: hardware/backplane/p8x-backplane-theory.md
