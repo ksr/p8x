@@ -1621,7 +1621,7 @@ pcsm={"X2":("OSC","2.4576MHZ"),"SW1":("DIP8SW","INPUT"),"RNP":("SIP9","8X10K"),
  "J4":("IDE40","IDE-40"),"RN2":("SIP9","8X10K"),
  "R6":("RES","1K"),"LED6":("LED","ACT-YEL"),
  "R7":("RES","330R"),"LED7":("LED","DASP-GRN")}
-# PARKED 2026-09-19: the user reverted the io+cf+ps2 combination back to three
+# PARKED 2026-09-19: the io+cf+ps2 combination was reverted back to three
 # separate cards (io-card + cf-card already exist; ps2-card built standalone
 # below). The peripheral files moved to hardware/parked/peripheral-card/. The
 # netlist above is kept intact so the combined card can return whole, but it is NO

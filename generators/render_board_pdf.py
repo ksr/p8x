@@ -148,7 +148,7 @@ def render(path,outpdf):
     return _os.path.basename(outpdf),len(els),dnp_n
 
 if __name__=="__main__":
-    # Skip "-a" boards: those are the user's live Fusion working copies, not
+    # Skip "-a" boards: those are the live, hand-edited Fusion working copies, not
     # generated artifacts. Rendering them would drop an untracked PDF beside a
     # file we do not own and that changes outside this toolchain.
     brds=[b for b in sorted(glob.glob(_os.path.join(_HW,"*","p8x-*.brd")))

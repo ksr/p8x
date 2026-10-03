@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Generate a Logisim-Evolution .circ from a P8X board netlist.
 
-PROOF OF CONCEPT — memory card only, and UNVERIFIED: I can't run Logisim here,
-so please open the output in Logisim-Evolution and report what happens.
+PROOF OF CONCEPT — memory card only, and UNVERIFIED: the output has not yet been
+opened in Logisim; open it in Logisim-Evolution to check what happens.
 
 v0 goal is to validate the format + netlist mapping, NOT to simulate logic yet.
 Each IC is drawn as a labelled box of pin stubs; every pin carries a Tunnel

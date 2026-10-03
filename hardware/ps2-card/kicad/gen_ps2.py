@@ -4,7 +4,7 @@ Run with KiCad's bundled Python (needs pcbnew):
 
     PYK hardware/ps2-card/kicad/gen_ps2.py
 
-Placement is bespoke so the external parts land where the user wants them:
+Placement is bespoke so the external parts land in chosen positions:
   * the two PS/2 mini-DIN-6 sockets on the BOTTOM long edge (openings facing off
     the edge for cable access), with the ICSP header + reset pull-ups beside them
   * the four status LEDs (power, kbd-read, mouse-read, keystroke-available) on the

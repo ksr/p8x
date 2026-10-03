@@ -113,7 +113,7 @@ def load_fp(ref):
 # The card is a Eurocard: its HEIGHT is fixed at 100mm by the DIN41612 connector
 # and the backplane slot. The WIDTH (the card's depth, projecting out from the
 # backplane) is free -- widened to 200mm here for routing headroom on this dense
-# bus board (the user opted for the larger card; it does not affect slot pitch).
+# bus board (the larger card was chosen; it does not affect slot pitch).
 BW, BH = 280.0, 140.0   # uniform card size (matches the generic cards)
 
 # Explicit placement (mm centre, rotation) for EVERY part, laid out in clear
@@ -163,7 +163,7 @@ CAPFOR = {"C1":"U1", "C2":"U2", "C3":"U3", "C4":"U4", "C5":"U5", "C6":"U6",
 # (horizontal, inboard) feeds an LED near the edge, rotated 180 so its anode
 # (pad 2) faces the resistor's pad 2 (same net). A silk label sits between the
 # resistor and the LED. 14mm vertical pitch.
-# top-to-bottom order (user 2026-09-18): PWR, ROM, RAML, RAMH, RD, WR. Each tuple
+# top-to-bottom order (chosen 2026-09-18): PWR, ROM, RAML, RAMH, RD, WR. Each tuple
 # keeps its (resistor, LED, function) pairing -- only the row position changes.
 LEDPAIR = [("RP1","LED3","PWR"), ("RS1","LED2","ROM"), ("RS5","LED7","RAML"),
            ("RS2","LED4","RAMH"), ("RS3","LED5","RD"),  ("RS4","LED6","WR")]

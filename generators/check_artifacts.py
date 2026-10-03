@@ -26,7 +26,7 @@ def main():
     diff = subprocess.run(["git", "status", "--porcelain", "--", "hardware/"],
                           cwd=ROOT, capture_output=True, text=True)
     # Only TRACKED changes mean an artifact drifted. Untracked ("??") files are
-    # not stale artifacts — they are scratch, e.g. the user's "-a" Fusion working
+    # not stale artifacts — they are scratch, e.g. the hand-edited "-a" Fusion working
     # copies, which live under hardware/ permanently. Counting them made the gate
     # fail every run, and a check that always fails gets ignored.
     dirty = [l for l in diff.stdout.splitlines()
