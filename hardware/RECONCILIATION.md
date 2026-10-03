@@ -3,7 +3,7 @@
 A build-readiness pass over the `hardware/` boards against the current emulator
 (the golden model) and the FPGA CPU, ahead of ordering and building the real
 machine. **Docs + bus-definitions only** — no CAD was regenerated (the `.sch` is
-the source of truth and `.brd` placement is the user's Fusion work).
+the source of truth and `.brd` placement is hand work in Fusion).
 
 ## TL;DR
 

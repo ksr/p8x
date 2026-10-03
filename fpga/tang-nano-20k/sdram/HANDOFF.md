@@ -103,7 +103,7 @@ The splash's 1-px border displayed with no left line and a doubled right line
 while every sim was pixel-exact. The chase burned three wrong theories
 (PLL-lock cold-init, capture-latency rotate, halfword-select skew -- each
 predicted a subtly different wrong picture and died on evidence), and the
-decisive instrument was the USER'S EYE on a two-line test pattern: both lines
+decisive instrument was a HUMAN EYE on a two-line test pattern: both lines
 visible, single width, but with SNOW -- frame-to-frame sparkle inside drawn
 lines. Snow meant intermittent capture errors, which reframed everything:
 
@@ -130,9 +130,9 @@ deterministic. No logic theory explains sparkle.
   tell is that it comes with an arithmetic story (−4,076 DFF and +1 BSRAM is
   one 512-byte buffer) rather than a fold-away.
 - **Attribute area before theorising about it.** Bucketing cells by flattened
-  instance path found this in minutes; the previous sessions guessed at the
-  module that had just changed and were wrong for hours. There is a throwaway
-  script for it in the session scratchpad; the logic is ten lines.
+  instance path found this in minutes; the earlier attempts guessed at the
+  module that had just changed and were wrong for hours. The throwaway
+  script for it was not kept in the repo; the logic is ten lines.
 - **A parallel write to a whole array costs a RAM.** Palette, then this. Any
   `for` loop that assigns every element of an array in one cycle is the tell.
 - **Placement cliff.** Always check `p8x_lcd.fs`'s mtime before believing a
@@ -231,7 +231,7 @@ READBACK (GEVAL/GEVALH read par[GESEL]) turned the engine into a
 PERSISTENT SCENE STORE, and the shell grew a console: `tri` builds and
 stacks (k appends via count readback), `rotate x y z [pivot]` respins
 (no pivot = translation preserved, cube-style; pivot = T=P-R*P,
-tri-style — the distinction was a user-found bug), `page` fronts the
+tri-style — the distinction was a bug found in use), `page` fronts the
 flip machinery. 9d: `camera ex ey ez ax ay az` — the look-at eye/aim
 camera, software-only on the matrix path (lib_g3cam, i3sqrt). 13,487
 LUT4 (65%). Everything verified emulator -> bench -> panel -> POINT.
@@ -277,7 +277,7 @@ c_gl_rtl_test now byte-compares BOTH scenes emulator-vs-RTL through the
 real pixel stack (10a and the 10b matrix scene: both identical, every
 pixel). Board verification pending (card was unplugged).
 
-**THE RECORD ENGINE IS RETIRED (2026-08-24, user-approved):** the $FF40
+**THE RECORD ENGINE IS RETIRED (2026-08-24):** the $FF40
 interface (GEUP/GECMD/GESEL/GEID) is gone from emulator and RTL; the GL
 port is the one hardware 3D path, and GLSTAT bit6 now covers the walker
 (there is no GESTAT to poll). Migrations shipped with it: image (C and
@@ -354,7 +354,7 @@ matched the emulator's prediction exactly: -32/2047 at the oblique
 camera view, 2016/-2048/31 on cube's three rings after `cube 32` spun
 a CLOOP list with the CPU idle. Stage 10a+10b+10c are on silicon,
 frame-exact. (Scripting note: BASIC's banner is "P8X BASIC V0", not
-READY — match that in future sessions.)
+READY — scripts must match that.)
 
 **2026-08-25 (later): stage 10d — ASCII mode — built and placed.** The
 translator front-end (keywords → opcodes, decimals → width-correct
@@ -458,9 +458,9 @@ Three operational notes for whoever drives the board over serial next:
   answers `?` or nothing; the panel sits on the splash). A scripted session
   cannot recover it — a HUMAN reset (button or power-cycle) can, and a
   bitstream reload usually can. So: every scripted session should begin
-  with the openFPGALoader reload, and when sessions repeatedly bounce, ask
-  the person at the bench to reset rather than burning retries -- their
-  eyes on the panel are also the best verdict available.
+  with the openFPGALoader reload, and when sessions repeatedly bounce, reset
+  the board by hand at the bench rather than burning retries -- eyes on
+  the panel are also the best verdict available.
 - **Opening the serial port resets the machine.** Any scripted interaction must
   do everything in ONE session; a second open finds the monitor again, and its
   `?` replies to BASIC lines look confusingly like an interpreter fault.

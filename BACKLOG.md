@@ -34,9 +34,9 @@ remainder is why it is still here.
       MISSED this (inventory + I/O-port level only; the doc says "Rev E" but is an
       earlier Rev E). See [[reference_p8x_memory_map]].
 
-- [ ] **OVERNIGHT BATCH (2026-09-16, user asleep -- do as much as possible without
+- [ ] **OVERNIGHT BATCH (2026-09-16, unattended -- as much as possible without
       input; all on `graphics-card`, no merge to main beyond the current one).**
-      Clarified answers locked with the user before they slept:
+      Scope settled before the unattended run:
       1. [x] **BASIC layer commands DONE 2026-09-17** (commits a526116 emulator+BASIC
          +tests, 8034620 RTL, a77b867 docs). TEXTON/TEXTOFF -> TXEN ($50); the NEW
          GXEN ($57) bitmap-visibility opcode -> GRAPHICSON/GRAPHICSOFF. Real 2-layer
@@ -81,7 +81,7 @@ remainder is why it is still here.
 
 - [~] **Hand-asm: from-scratch redesigns on the Tier A ISA (2026-09-12).**
       `tools/tierA_rewrite.py` only covered the idioms it could prove safe;
-      the user asked for genuine rewrites that use the ISA's shape (word
+      the goal is genuine rewrites that use the ISA's shape (word
       variables, `(Pn+d)` records, `LEAW`, `PHW (Pn+d)`, table dispatch) —
       order: assembler, compiler, BASIC, then the OS/WM kernel and monitor
       last; the asm twins of the C commands are left alone (C versions will be
@@ -99,7 +99,7 @@ remainder is why it is still here.
             2026-09-13: `.ascii`/`.asciiz` decode `\n \t \r \0 \\ \"` as the
             host assembler does (it copied bytes verbatim and a `\"` ended the
             string — the on-board cc emits C escapes raw); `asm.c` too; 4,116 B.
-      - [x] **`basic/p8xbasic.asm` DONE 2026-09-12** (the user moved it ahead of
+      - [x] **`basic/p8xbasic.asm` DONE 2026-09-12** (moved ahead of
             the compiler) — drop-in rewrite: token-indexed STMTTAB/FACTAB
             dispatch (CHECKLINE reads STMTTAB for legal leaders), PHW/PLW
             around the evaluator, one CMPW + a relation mask for every
@@ -659,7 +659,7 @@ Nothing below has been built or measured.
 
 ## IDEAS
 
-- [ ] **Off-screen content: scrolling / scroll bars (2026-09-17, user).** How to
+- [ ] **Off-screen content: scrolling / scroll bars (2026-09-17).** How to
       handle content that doesn't fit one 480x272 screen -- the immediate case is
       a DIRECTORY in finder with more entries than the icon grid holds, but the
       same problem hits the spreadsheet (sheets past A1..H12, deferred at its
@@ -677,7 +677,7 @@ Nothing below has been built or measured.
       Decide the interaction once and apply it to finder AND sheet so they feel
       the same. See finder.c (icon grid) and sheet.c (cell grid).
 
-- [ ] **BASIC graphics cursor (2026-09-17, user).** A software crosshair/pointer
+- [ ] **BASIC graphics cursor (2026-09-17).** A software crosshair/pointer
       for BASIC programs, matching what finder/paint already draw client-side.
       Three primitives to add (statements + maybe function forms):
       - **turn the cursor ON / OFF** -- e.g. `CURSORON` / `CURSOROFF`, an XOR/
@@ -699,7 +699,7 @@ Nothing below has been built or measured.
         an unassigned slot, or a `MOUSE`/`CURSOR` sub-keyword scheme). See the GXEN
         layer work for the pattern.
 
-- [ ] **write: rich text -- multiple fonts / sizes / colours (2026-09-17, user).**
+- [ ] **write: rich text -- multiple fonts / sizes / colours (2026-09-17).**
       The `write` editor currently lays one font at one size in one colour. Let a
       document carry runs with different **fonts**, **sizes**, and **colours**.
       The GL text layer already has the mechanisms: `TSIZE` scales glyphs, the pen
@@ -722,7 +722,7 @@ Nothing below has been built or measured.
       GTEXT 2D-text notes; the `md` panel-renderer idea wants the same size/colour
       plumbing.
 
-- [ ] **Shared app frame / consistent UI chrome (2026-09-17, user).** paint,
+- [ ] **Shared app frame / consistent UI chrome (2026-09-17).** paint,
       write, sheet, term (and finder) each hand-draw their own chrome -- menu bar,
       title, close/quit box, mouse cursor, status line -- with subtly different
       geometry and behaviour (the recent cursor + menu fixes had to be applied app
@@ -771,12 +771,12 @@ Nothing below has been built or measured.
       every local at function top, C89-style. Fix: p8cc block-scope
       allocator; add a compiler test with nested-block locals beside
       live function locals.
-- [ ] **Faster image transfer (2026-08-29, user; REGRESSION noted
-      2026-08-31, user).** Moving pixels is
+- [ ] **Faster image transfer (2026-08-29; REGRESSION noted
+      2026-08-31).** Moving pixels is
       the slowest thing the machine does: host->board rides the 115200
       bridge (a full-screen P8I is ~256KB = ~22 s of line time) and
       on-target IMAGE draws pixel-by-pixel through the register window
-      (563 cycles/px asm; the mandrill ~1.4 s). USER REPORTS the
+      (563 cycles/px asm; the mandrill ~1.4 s). OBSERVED on the board: the
       current BASIC and C IMAGE are noticeably SLOWER than they used
       to be. MEASURED 2026-09-01 (emulator cycle brackets, no board
       needed): BASIC IMAGE of the mandrill is 39.09M cycles TODAY and
@@ -807,7 +807,7 @@ Nothing below has been built or measured.
       RLE in P8I v2 for flat-colour art (photos won't compress, UI
       will). Measure (a) first; it may make (b) moot for the SD path.
 - [ ] **Restore a 16-line shell history by relocating the C commands' high
-      scratch pages (2026-09-07, user).** The command-history ring shrank
+      scratch pages (2026-09-07).** The command-history ring shrank
       32 -> 16 -> 8 lines when the WM kernel was folded into the OS image:
       the only free block above CSTACKTOP is $F800..$F9FF (512 B), because
       $FA00..$FBFF is the FSDIRBUF dir/glob sector page (dir, cat,
@@ -831,7 +831,7 @@ Nothing below has been built or measured.
       bare move), or decode the image once into a RAM/card scratch and
       BLIT from there. Cosmetic (correctness is fine); revisit if VIEW gets
       real use. See docs/p8x-wm-design.md rung 13.
-- [ ] **PS/2 keyboard + mouse card (2026-09-04, user; the sketch).**
+- [ ] **PS/2 keyboard + mouse card (2026-09-04; the sketch).**
       A TTL bus card giving the machine native human input -- and,
       with the LCD-as-a-terminal entry, a fully HEAD-DOWN P8X: panel,
       keyboard, mouse, no Mac. Philosophy: hardware receives, software
@@ -940,7 +940,7 @@ Nothing below has been built or measured.
         c. Tests: c_ps2_kbd / c_ps2_mouse (scripted), then Finder driven
            by the host-terminal mouse through lib_ps2 instead of
            lib_ptr/SGR.
-- [x] **LCD as a terminal (2026-08-29, user) — SHIPPED as the text overlay
+- [x] **LCD as a terminal (2026-08-29) — SHIPPED as the text overlay
       (2026-09-15).** Both missing pieces landed: the console state machine (the
       glass TTY, always-on 2026-09-10) and SCROLL. Scroll took a fourth option
       beyond the (a)/(b)/(c) below — a **char-gen overlay plane** (`gtxt.v`): the
@@ -960,7 +960,7 @@ Nothing below has been built or measured.
       Fits the FPGA-CPU era (idea 2): CPU and console on one board.
 - [ ] **Single-interface card: what remains after the BASIC migration
       (2026-08-31).** DONE: the category-2 statements (LINE, BOX,
-      CIRCLE, CLS, PIXELW) emit GL -- user-decided WINDOW-space
+      CIRCLE, CLS, PIXELW) emit GL -- chosen WINDOW-space
       semantics (y up), full-screen window established by BASIC at
       cold start and after the native RESETF (the raw port's is
       DEGENERATE), PRMFIL shadowed at PRMSH so BOX/CIRCLE restore it,
@@ -973,8 +973,8 @@ Nothing below has been built or measured.
       FIFO, ~50-80 LUT); (c) the card-side blit (the faster-image-
       transfer item) for IMAGE/GTEXT-class raw speed; then (d) the
       $FF20 window can close for ~100-150 LUT net of the read verb.
-- [ ] **Burn the font into the card (successor board; 2026-09-01,
-      user).** Today the OS streams /FONT.GL to the glyph bank at boot
+- [ ] **Burn the font into the card (successor board;
+      2026-09-01).** Today the OS streams /FONT.GL to the glyph bank at boot
       (FONTLD) -- zero fabric cost, user-replaceable font, but the card
       has no text STANDALONE (bare monitor, or a different host
       machine driving the card). The PGC-authentic alternative: a
@@ -986,7 +986,7 @@ Nothing below has been built or measured.
       board. Keep /FONT.GL as the OVERRIDE path either way (a file
       swap = a new typeface; TDEFIN = custom glyphs).
 - [ ] **Restore AREAPT, ARC/SECTOR and CLMOD on a successor board
-      (2026-08-30/09-01, user-approved removals).** CLMOD (opcode 78,
+      (removals decided 2026-08-30/09-01).** CLMOD (opcode 78,
       the one-byte in-place list patch) went 2026-09-01: its measured
       342 LUT4 funded BLIT at the placement cliff; zero ecosystem
       users beyond its own test, and CLRD-out + re-record is the
@@ -1205,7 +1205,7 @@ Nothing below has been built or measured.
       rewritten, p8xcc.asm's templates ported, native asm parses the shapes;
       only the TTL EPROM reburn remains from the list below.)**
       **Still open (historical):** the self-hosting compilers (`p8cc.c`, `p8xcc.asm`) emitting
-      **PARKED (user, 2026-09-11): monitor + OS rewrite for the new ISA.** The
+      **PARKED (2026-09-11): monitor + OS rewrite for the new ISA.** The
       hand-written monitor/OS/apps were only RE-ASSEMBLED for Tier A (gain: the
       3-byte `LDPn`, ~156 bytes). A measured idiom count shows the easy
       substitutions are small (monitor ~50 sites / 150–250 B, OS ~67 sites /
@@ -1218,7 +1218,7 @@ Nothing below has been built or measured.
       matters (16 KB ceiling). Revisit after the software-only compiler list.
       **2026-09-12: the `os-rewrite` branch (in-place rewrite with -ref
       copies, step 0 = native assembler two-operand/(Pn+d) shapes, WM kernel
-      pass 1: 14,681 → 13,965 B) was DROPPED by the user — the rewrite will
+      pass 1: 14,681 → 13,965 B) was DROPPED — the rewrite will
       restart from scratch. Its tip is kept as the tag
       `archive/os-rewrite-2026-09-11`; the native-assembler step 0 (commit
       3e0e3c8 there) is still worth cherry-picking when the on-target
@@ -1279,7 +1279,7 @@ Nothing below has been built or measured.
       `finder` 8,903; 143 opcodes. Tests: test_isa E6, c_compile ARG-OK,
       c_disasm decodes PHW (P3+d).
       **Microstep audit of control flow DONE (2026-09-11, minimal testing
-      by the user's choice: test-isa + test-quick, no full suite):** two
+      by choice: test-isa + test-quick, no full suite):** two
       datapath facts shorten every absolute transfer — a pointer can be
       loaded FROM THE BYTE IT ADDRESSES in one step (`doe=MEM, dld=PTRH,
       psel=0` reads mem[P0] into P0.hi; same timing as the fetch), and a pop's
@@ -1326,7 +1326,7 @@ Nothing below has been built or measured.
       cc/asm still build old-ISA binaries); the OS-resident shared runtime is
       PARKED (see the item below).
 
-- [ ] **OS-resident shared C runtime — PARKED (user, 2026-09-12).** After the
+- [ ] **OS-resident shared C runtime — PARKED (2026-09-12).** After the
       inlining work each compiled program carries only `__mul`, `__div`/`__mod`/
       `__divmod`, `__shl`/`__shr` and `__cmp16`, ~150 bytes, ≈6.7 KB across
       the 45 /bin commands (2.4%). Moving them into the OS would need a fixed

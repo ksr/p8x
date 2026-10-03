@@ -168,7 +168,7 @@ cc on the Mac against reference *,/ in 32-bit — the routine is pure).
 
 ## Not in this stage
 
-- **Double buffering / page flip** — explicitly deferred (user call). The
+- **Double buffering / page flip** — explicitly deferred. The
   viewport-scoped erase above is the interim answer; flicker within one
   viewport is accepted for v1.
 - **Colour** — trivially available (gcolor before g3render) but not in the
@@ -189,7 +189,7 @@ cc on the Mac against reference *,/ in 32-bit — the routine is pure).
    the budget table above.
 5. Emulator spot-pixel test; man pages; /src tree + mk scripts; docs.
 
-## Open question (user decision)
+## Open question (decision pending)
 
 The dual-language rule — every /BIN command ships as C AND byte-identical
 asm — has so far covered the file/text commands. Does it bind a 3D demo?

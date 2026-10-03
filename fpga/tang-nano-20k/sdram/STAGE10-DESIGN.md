@@ -10,7 +10,7 @@ including verb names, so the manual doubles as our background reading —
 and where they don't (16.16 reals, indexed colour + LUT, CGA emulator)
 we deliberately diverge.
 
-Decisions taken with the user 2026-08-23:
+Decisions taken 2026-08-23:
 
 - **Execution model: the PGC model.** Commands draw IMMEDIATELY when
   received; persistence comes from **command lists** stored on the card
@@ -25,7 +25,7 @@ Decisions taken with the user 2026-08-23:
   with the $FF20 register interface, which remains).
 - **Text commands, flood fill, and drawing modes (LINFUN) are IN
   scope** — as the final rungs, not deferred to the backlog.
-- Out of scope, per the user: the CGA emulator, LUT/palette operations,
+- Out of scope: the CGA emulator, LUT/palette operations,
   indexed colour.
 
 ## P8X flavour (deliberate divergences)
@@ -248,8 +248,8 @@ clocked ROMs** (gen_trig.py emits them that way now; callers hold the
 address stable a cycle, which the compose FSM's C_NRM state already
 guarantees).
 
-**The retirement ledger (2026-08-24).** The record front end was retired
-(user-approved): −2,504 LUT4. DSP inference was unlocked (`synth_gowin
+**The retirement ledger (2026-08-24).** The record front end was retired:
+−2,504 LUT4. DSP inference was unlocked (`synth_gowin
 -family gw2a` — the flag build.sh had never passed; 19 multipliers moved
 to the chip's idle MULT blocks). And still 10b does not place. The
 second lesson paid: **nextpnr's "LUT4: 92%" line under-reports on
@@ -569,7 +569,7 @@ byte-identical emulator-vs-RTL (c_gl_rtl_test), 92-PASS make test.
     LUT4 gross against ~1,800 of headroom. Serialization diets washed
     out (state-arm deletions trade evenly against the source muxes
     they need). What actually paid: RETIRING the redundant pre-PGC
-    device machinery (user-approved) -- the midpoint-circle rasterizer
+    device machinery -- the midpoint-circle rasterizer
     (a circle IS the ellipse rx=ry; cardinal pixels identical, r=0
     draws nothing now), the BOX-outline walker (four LINEs, same
     pixels), and the CLS pair-writer (BOXFILL 0,0-479,271; RESET's
@@ -587,7 +587,7 @@ byte-identical emulator-vs-RTL (c_gl_rtl_test), 92-PASS make test.
   - **The placement fight, round four (2026-08-30).** 20,679/20,736
     (99.7%) SYNTHESIZED but would not legalize: seeds 1-4 all failed
     placement ("design is probably at utilisation limit"). The design
-    fit logically; the placer had no slack to maneuver. User-approved
+    fit logically; the placer had no slack to maneuver. The chosen
     fix: REMOVE AREAPT (the patterned fill mask) end to end -- the E7
     stream state (G_AP), the WP_* run splitter, the W_APR restore and
     its regs, the scratch 784..799 rows, the keyword/glvtab entries
@@ -599,7 +599,7 @@ byte-identical emulator-vs-RTL (c_gl_rtl_test), 92-PASS make test.
     placement cliff is ~19,150-19,250 LUT4 (19,129 placed; 19,303 and
     everything above failed every seed; placer knobs -- heap-beta
     0.98, longer legalization timeouts, the SA placer -- all failed
-    too, SA by crashing). So ARC/SECTOR went as well, user-approved:
+    too, SA by crashing). So ARC/SECTOR went as well:
     the 3C/3D dispatch, G_CVN/G_CV/G_CV2D, the CVP0-4 arc-vertex
     subroutine and the angle-walk regs. CIRCLE/ELIPSE (CVE0-7) and
     the trig ROM (the rotation verbs' too) stay. Both removals are
@@ -611,10 +611,11 @@ byte-identical emulator-vs-RTL (c_gl_rtl_test), 92-PASS make test.
     ~1,100 under the cliff, real slack again.**
 
 Retirement of the stage-9 record front end is its own decision point
-after 10c — ASK the user (workflow rule: no silent breakage of shipped
-interfaces, and it is also a disk+bitstream lockstep change).
+after 10c — a deliberate decision, never a side effect (workflow rule:
+no silent breakage of shipped interfaces, and it is also a disk+bitstream
+lockstep change).
 
-## The single-interface migration (user-directed, 2026-08-31 ->)
+## The single-interface migration (2026-08-31 ->)
 
 The endgame: extend the language until nothing needs the $FF20 register
 door, then close it. One verb at a time, each shipped end to end.
@@ -636,8 +637,8 @@ door, then close it. One verb at a time, each shipped end to end.
   starved verb EATS the following PIXRD bytes -- split the string);
   and the RTL battery's PRX bench is SELF-checking (RB words, no
   frame to compare).
-- **GTEXT -- RETIRED OUTRIGHT 2026-09-01 (user: "go full with PGC
-  TEXT").** No migration: PGC TEXT with a LOADED font replaced it.
+- **GTEXT -- RETIRED OUTRIGHT 2026-09-01 (decided: go full with PGC
+  TEXT).** No migration: PGC TEXT with a LOADED font replaced it.
   The OS streams /FONT.GL to the GL port at boot (FONTLD, after
   PATHINIT; GLID probe + FOPEN/FGETB with GLSTAT backpressure; no
   engine or no file = silent skip) -- the glyph bank survives RESETF
@@ -671,8 +672,8 @@ door, then close it. One verb at a time, each shipped end to end.
   the anchor's high byte became the last byte sent and the image
   vanished off-window with no errors (IMX now \$DD/\$DE); and iverilog
   multi-line comments must not swallow code lines. FUNDED by removing
-  CLMOD (user-approved; measured 342 LUT4 by ablation synth -- always
-  measure before asking): 19,296 failed EVERY seed, 18,916/91% places
+  CLMOD (measured 342 LUT4 by ablation synth -- always
+  measure before proposing a removal): 19,296 failed EVERY seed, 18,916/91% places
   seed 1, Fmax 68/85. The cliff ledger stands at ~19,250. ON SILICON
   2026-09-01: silicon_blit.py PASSES (golden 4x3 spot reads, retired-
   CLMOD err1, the full mandrill streamed and file-verified by PIXRD),
@@ -735,7 +736,7 @@ door, then close it. One verb at a time, each shipped end to end.
 
 ## Not in stage 10
 
-CGA emulator, LUT/palette ops, indexed colour (user-excluded); S-series
+CGA emulator, LUT/palette ops, indexed colour (excluded); S-series
 direct-screen primitives (register interface already covers it);
 IMAGER/IMAGEW raster block moves (the image command + P8I flow covers
 it — revisit if GL scripts want inline blits); BLINK/RBAND; GIN/cursor

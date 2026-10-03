@@ -95,7 +95,7 @@
         root, and that an absolute path still works — and was confirmed to FAIL
         against the unfixed BASIC, so it actually detects the bug.
 
-- [x] **A C-written BASIC (user, 2026-09-12) — DONE 2026-09-13.** `basic/basic.c`
+- [x] **A C-written BASIC (2026-09-12) — DONE 2026-09-13.** `basic/basic.c`
       (~1,000 lines) is the same interpreter in the p8cc subset: same tokens,
       messages, GL streams and memory layout as the asm one; built by the host
       toolchain (`glkwtab.c` from gen_glkw.py + source → clib → p8cc.py) as
@@ -185,7 +185,7 @@
       CLRUNs) ships any time and proves the glyph format first.
 
 
-- [x] **Whole toolchain and all shipped code on the latest ISA (user, 2026-09-12; DONE the same day).**
+- [x] **Whole toolchain and all shipped code on the latest ISA (2026-09-12; DONE the same day).**
       Closing summary: every tool emits Tier A (p8cc.py, p8xasm.py, p8cc.c,
       on-board asm + cc), every C source is recompiled on each disk build,
       and every shipped hand-asm source went through tools/tierA_rewrite.py:
@@ -216,7 +216,7 @@
       `p8xcc.asm` (8.4k), the OS + WM kernel (6.8k), the monitor (2.4k) — to
       use the new instructions, module by module with its tests, keeping
       native/host byte-identity (so first cherry-pick the native assembler's
-      two-operand shapes from tag `archive/os-rewrite-2026-09-11`, ASK).
+      two-operand shapes from tag `archive/os-rewrite-2026-09-11`, a step to confirm before taking it).
       **Stage 1 DONE:** `compiler/p8cc.c`'s code generator rewritten to the
       Tier A model (P3 frames, word ops, CMPW conditions, JMP.A, same runtime);
       single-pass differences: deferred leaf operands + one-token peek, the

@@ -1,6 +1,6 @@
 # Dropping 240x136: the device becomes single-mode
 
-Decision (user, 2026-08-17): **no software needs the 240x136 4-pen mode**, so it
+Decision (2026-08-17): **no software needs the 240x136 4-pen mode**, so it
 goes, and `SCREEN` goes with it — with one mode there is nothing to select.
 
 The device becomes: **480x272, 8 bpp, 256 pens from a 4096 palette.**

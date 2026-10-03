@@ -225,7 +225,7 @@ not asserted. The proof chain, in escalating strength:
 The corollary rules: algorithms are written once in C and transcribed,
 never re-derived; a divergence is a bug in the RTL by definition; and
 anything the frame tests cannot see (scanout mapping, electrical
-margin) needs its own bench or the user's eye on the panel.
+margin) needs its own bench or a human eye on the panel.
 
 ## 9. What is deliberately NOT here
 

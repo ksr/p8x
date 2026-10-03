@@ -201,7 +201,7 @@ separate target:
 The pinout and the panel timings are **verified**, taken from Sipeed's own
 480x272 example for this board (`TangNano-20K-example`,
 `rgb_lcd/lcd_480_272/color_bar`) rather than derived. Three things that example
-settled, all of which I had guessed wrong:
+settled, all three of which the earlier guesses had wrong:
 
 - there is **no HSYNC or VSYNC** — their constraints file has pins for CLK, DEN
   and RGB only, so this is a DE-only panel;

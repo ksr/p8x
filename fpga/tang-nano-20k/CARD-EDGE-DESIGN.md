@@ -1,6 +1,6 @@
 # The Card Edge — the FPGA as a pure P8X graphics card
 
-The decision (2026-08-28, with the user): the FPGA CPU proved the P8X
+The decision (2026-08-28): the FPGA CPU proved the P8X
 design could live in silicon, and that proof is banked (tag
 `stage10-complete` rebuilds the all-in-one machine forever). The FPGA's
 FUTURE is the add-on GRAPHICS CARD for the machine that will live in
@@ -168,7 +168,7 @@ and drawn -- a graphics card with NO CPU ON THE CHIP -- and p8xemu -B
 ran the LINFUN rubber-band program against real silicon: -2017 / 31 /
 -1, the emulator's golden values from the card's actual framebuffer.
 The card bitstream ran from SRAM for first light; flashing it (or
-keeping lcd in flash) is the user's personality choice.
+keeping lcd in flash) is a per-board personality choice.
 
 ## 8b. Risks, named
 
@@ -176,7 +176,7 @@ keeping lcd in flash) is the user's personality choice.
   content checks) — the protocol's per-burst ack helps, a periodic
   CRC op can join v2 if reality demands it.
 - The lcd target must never break: it builds in CI-discipline (the
-  test ladder) until the day the user retires it on purpose.
+  test ladder) until the day it is retired on purpose.
 - One serial port, two personalities: scripts must PING to learn who
   is listening (a monitor banner means lcd personality; PING replies
   mean card) — never assume.

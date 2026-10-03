@@ -19,7 +19,7 @@ means *replacing desk in memory* and chaining back on exit. There is no
 "switch between running windows" because there is only one program at a time
 and desk is not one of them while an app runs.
 
-The user's insight: make desk **resident** (like the shell), so launching a
+The key idea: make desk **resident** (like the shell), so launching a
 program into the TPA does not destroy it. Then a saved-context scheme can
 switch focus between windows.
 
