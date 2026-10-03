@@ -41,6 +41,13 @@ remainder is why it is still here.
       `p8x_soc.v` instantiates `sdram_model`/`sdram_arb`/`gfx_mem`, which are not in
       its iverilog file list -- so the co-sim harness needs its sources brought up
       to date first.
+      **Planned for the evening of 2026-10-03, with the Tang Nano at hand.** Steps:
+      (1) gen_memmap.py also emits `memmap.vh`; both RTL files `include` it and test
+      `RAMBASE` instead of `16'h2000`; (2) the co-sim file list; all three co-sims
+      green; (3) rebuild the `cpu` (+ `lcd`) bitstreams with the current firmware;
+      (4) load the board: the monitor takes commands, the OS boots. Unaffected
+      meanwhile: `p8x_cpu.fs` (built 2026-09-12 with the old 8K firmware, consistent)
+      and the graphics-card personality (`card`, no CPU on chip).
 
 - [~] **Hand-asm: from-scratch redesigns on the Tier A ISA (2026-09-12).**
       `tools/tierA_rewrite.py` only covered the idioms it could prove safe;
