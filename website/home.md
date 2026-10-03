@@ -9,6 +9,11 @@ hide:
 
 # P8X — a hand-built 8-bit TTL CPU
 
+[![P8X in 3D: the backplane with its eight cards seated, three views, and the memory card](media/p8x-collage.jpg)](hardware/assembly/README.md)
+
+*The P8X boards as designed in KiCad: the assembled machine with its eight cards (three views) and the memory card.
+Renders, until the boards are built.*
+
 **P8X is an 8-bit computer designed from scratch in 74HCT logic** — about 130 chips on six cards plugged into a
 passive backplane, with no microprocessor. Every instruction is **microcoded**: four EPROMs hold a control word for
 each step of each instruction, and the same microcode images the EPROMs are burned from are what the emulator runs.

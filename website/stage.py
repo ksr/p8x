@@ -51,6 +51,11 @@ for rel in sorted(paths):
 # the visitor home page (home.md here) is the site's index; the repository README becomes the "Working on the code"
 # page (links to README.md from other documents are pointed at it by hooks.py)
 shutil.copy2(os.path.join(HERE, "home.md"), os.path.join(OUT, "index.md")); n += 1
+# the home page's lead picture: a collage of the assembled-machine renders and the memory card (website/p8x-collage.jpg,
+# made from hardware/assembly/*.png and hardware/memory-card/kicad/*-render-3d.png; replace it with photos once the
+# boards are built)
+os.makedirs(os.path.join(OUT, "media"), exist_ok=True)
+shutil.copy2(os.path.join(HERE, "p8x-collage.jpg"), os.path.join(OUT, "media", "p8x-collage.jpg")); n += 1
 shutil.copy2(os.path.join(REPO, "README.md"), os.path.join(OUT, "repository.md")); n += 1
 for page in ("index.md", "repository.md"): wikilinks += plain_wikilinks(os.path.join(OUT, page))
 print("wiki-links made plain: %d" % wikilinks)
