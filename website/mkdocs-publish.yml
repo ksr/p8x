@@ -1,8 +1,9 @@
 # Author: Claude (Anthropic) for Ken Rother, 2026
-# The settings for a build that will be published: mkdocs.yml plus Google Analytics (GA4, Ken's property for
+# The settings for a build that will be published: mkdocs.yml plus Google Analytics (GA4, the property for
 # cottageworker.com, 2026-10-02). Local previews use mkdocs.yml alone, so viewing the site on this Mac is not counted.
 #   ./build.sh publish
 INHERIT: mkdocs.yml
+site_url: https://p8x.cottageworker.com/
 extra:
   analytics:
     provider: google

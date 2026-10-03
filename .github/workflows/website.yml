@@ -1,0 +1,49 @@
+# Author: Claude (Anthropic) for Ken Rother, 2026
+# The project website (website/): on every push to main, build it with website/build.sh publish (MkDocs + Material,
+# with the Google Analytics tag) and, when deploying is switched on, put it on GitHub Pages.
+#
+# The switch: the repository variable PAGES_DEPLOY (Settings -> Secrets and variables -> Actions -> Variables).
+#   unset / anything but "true"  build only - every push still proves the site builds; nothing is published
+#   "true"                        build and deploy (needs Settings -> Pages -> Source: GitHub Actions)
+# Run it by hand: Actions -> website -> Run workflow.
+name: website
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:                       # one deployment at a time; a newer push waits rather than cancelling one mid-way
+  group: website
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - name: Build the site
+        run: sh website/build.sh publish
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: website/site
+
+  deploy:
+    if: ${{ vars.PAGES_DEPLOY == 'true' }}
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v5

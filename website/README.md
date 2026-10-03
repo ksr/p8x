@@ -21,5 +21,9 @@ a readable view of them, with navigation and search.
 `venv/`, `stage/` and `site/` are rebuilt each time and not committed. Previews leave the analytics tag out, so
 looking at the site locally is not counted as a visit.
 
-**Not published yet.** The plan: a GitHub Action builds `build.sh publish` on every push and deploys it to GitHub
-Pages, at `https://p8x.cottageworker.com` (a CNAME record at the domain's DNS host, Gandi).
+**Publishing.** `.github/workflows/website.yml` runs on every push to `main` (or by hand: Actions -> website -> Run
+workflow): it builds `website/build.sh publish` on GitHub's machine, so every push proves the site builds. It deploys
+to GitHub Pages only when the repository variable `PAGES_DEPLOY` is `true` (Settings -> Secrets and variables ->
+Actions -> Variables) and Pages is on (Settings -> Pages -> Source: GitHub Actions); until then nothing is published.
+The address will be `https://p8x.cottageworker.com` (a CNAME record at the domain's DNS host, Gandi, and the custom domain in
+Settings -> Pages); `site_url` in `mkdocs-publish.yml` already names it.
