@@ -15,6 +15,8 @@ graphics language modeled on the Matrox PG-640A) — see the
 
 New to the abbreviations and signal names? See [GLOSSARY.md](GLOSSARY.md).
 
+**Who made it:** P8X is my project. Claude, Anthropic's AI, has been directly involved in its design, coding and documentation. — Ken Rother
+
 ## Architecture
 
 - **8-bit data bus, 16-bit address bus**

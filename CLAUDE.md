@@ -58,6 +58,29 @@ memory, I/O, CF-IDE.
    add` appears to do nothing, that is why. Never "fix" it by deleting the
    `emulator/test/*` line; add the exception.
 
+9. **Documentation voice: the docs are Ken Rother's own project documentation.**
+   Write every doc, man page, comment and docstring in the plain documentation
+   voice — the subject is the machine, the card, the tool or the document.
+   - A decision is a dated fact ("chosen 2026-09-24", "X was dropped
+     (2026-09-12)"), never "Ken's pick" or "the user decided".
+   - A procedure is in the imperative ("Flash the Tang Nano with ...").
+   - First person ("I", meaning Ken) only where a person truly has to be in the
+     sentence, such as a first-hand bench observation; keep it rare.
+   - Never narrate requests or collaborators: no "Ken asked / wants / said /
+     prefers", "Ken's pick", "at Ken's request", "per Ken", "confirmed by Ken",
+     "the user" meaning Ken, and no "Claude", "the agent", "the assistant" or
+     "this session". "Ken's Macs" is "either Mac". History keeps its fact in
+     neutral words. ("The user" meaning a program's user — a key the user
+     presses — is fine.)
+   - Claude's involvement is stated once, by Ken, in README.md's "Who made it"
+     line; do not add credit claims elsewhere.
+   - A voice edit changes voice only: keep every fact, number, date, hash, path
+     and link.
+   Exempt: this CLAUDE.md, commit messages, `docs/memory/` (a deliberate mirror
+   of Claude's memory notes), any `deprecated/`, `parked/` or `eagle-deprecated/`
+   tree, `logs/`, third-party files, and generated files (fix prose in a
+   generated file by editing its generator — rule 1).
+
 ## Build & test
 - `cd emulator && make`         — build the emulator
 - `make ucode`                  — regenerate u0-u3.bin (UC var = microcode dir)
