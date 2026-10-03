@@ -42,6 +42,11 @@ DRC items are silkscreen warnings.
 > 2nd ACIA at `$FF08` and two DB9s with RX/TX-swap jumpers) were carried over to
 > the standalone io-card rev B the same day.
 
+**Assembly render.** [`assembly/`](assembly/README.md) holds 3D renders of the
+backplane with all eight cards seated in their slots, built from these boards by
+`generators/render_assembly.py` (`sh hardware/assembly/build.sh`). Rebuild it after
+a board's placement or parts change.
+
 ## Known follow-ups
 - **Cosmetic silk crowding** on the densest cards — part values on every part get
   tight; readable and fab-clipped over pads, but not as clean as the memory card.

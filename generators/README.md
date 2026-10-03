@@ -31,6 +31,7 @@ for the status of each board.
 | `check_card.sh <card>` (or `all`) | The manufacture-readiness check: ERC, gate-level simulation (where a testbench exists), DRC, mounting-hole keepout, fab minimums → PASS/FAIL |
 | `gen_erc.py` | The netlist electrical-rules check `check_card.sh` runs |
 | `gen_bom.py` | The bill of materials → `hardware/p8x-bom.csv` |
+| `render_assembly.py` | 3D renders of the assembled machine: each card exported as a STEP and seated in its backplane slot (transform derived from the connector pads and models) → `hardware/assembly/*.png`; driver `sh hardware/assembly/build.sh` |
 
 ```sh
 sh generators/build.sh memory-card        # one board, build + verify
