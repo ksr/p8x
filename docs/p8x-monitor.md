@@ -100,8 +100,8 @@ knowing the monitor's internal addresses. These entry points are **stable**:
 | `$0139` | FOPENDIR | begin iterating the directory at path `P1` (`""`/`"/"` = root); `C=1` if not a directory |
 | `$013C` | FNEXT | next live entry → `FNAME`/`FFLAG`/`LBA`/`FLEN`; `C=1` at end (skips deleted entries) |
 | `$013F` | FLOADAT | bulk-read `FLEN` bytes from sector `LBA` into `(P1)`, a whole sector at a time (the fast "slurp a file" primitive; EDIT + the OS loader use it) |
-| `$0142` | FOPENDIRAT | begin iterating the directory whose 4-sector extent starts at the 16-bit LBA `A` (low) + `LBA1` (`$6048`, high) — lets a caller iterate an extent it already resolved, e.g. the OS's CWD. Set `LBA1`=0 for LBA < 256 |
-| `$0145` | FSDIRBUF | point the directory sector buffer at the page in `A` (high byte; 512-byte page-aligned buffer; defaults to `SBUF`=`$61` at boot and is reset to `SBUF` by `FOPENDIR`/`FOPENDIRAT`). Used by **both** `FNEXT` iteration **and** `FSCAN` (the engine behind `FRESOLVE`/`FFIND`/`FOPEN`), so repointing it lets a program iterate **and** resolve paths while a write stream keeps `SBUF` — e.g. `DIR` redirected/piped, or `CAT *.X >OUT` (resolve+open each match without clobbering the open write stream's `SBUF`) |
+| `$0142` | FOPENDIRAT | begin iterating the directory whose 4-sector extent starts at the 16-bit LBA `A` (low) + `LBA1` (`$1F48`, high) — lets a caller iterate an extent it already resolved, e.g. the OS's CWD. Set `LBA1`=0 for LBA < 256 |
+| `$0145` | FSDIRBUF | point the directory sector buffer at the page in `A` (high byte; 512-byte page-aligned buffer; defaults to `SBUF`=`$1D` at boot and is reset to `SBUF` by `FOPENDIR`/`FOPENDIRAT`). Used by **both** `FNEXT` iteration **and** `FSCAN` (the engine behind `FRESOLVE`/`FFIND`/`FOPEN`), so repointing it lets a program iterate **and** resolve paths while a write stream keeps `SBUF` — e.g. `DIR` redirected/piped, or `CAT *.X >OUT` (resolve+open each match without clobbering the open write stream's `SBUF`) |
 
 | `$0148` | CFSEL | select the active CF drive for subsequent sector/FS I/O: `A` = drive (0/1) → `DRVSEL`. The OS's mount redirect (in `FRESOLVE`/`RV_START`) calls this to route a `/D1` path to drive 1 — there is no drive-letter prefix. Both cards share the `$FF10` task-file port; `DRVSEL` is ORed into `CFHEAD` as the ATA device bit |
 | `$014B` | CFCURDRV | current CF drive → `A` (0/1) |
@@ -120,10 +120,10 @@ tree and leaves the leaf name in `FNAME`): `FRESOLVE("/BIN/X")` then `FOPEN`
 reads `/BIN/X`; `FRESOLVE("/SUB/W")` then `FWOPEN`/`FPUTB`/`FCLOSE` writes
 `/SUB/W`. `FFIND`/`FOPEN`/`FCREATE`/`FDELETE`/`FCLOSE` are all path-aware this
 way. Parameters use fixed RAM:
-`FNAME` (`$604A`, 12-byte space-padded name), `FSRC` (`$6056`, FCREATE source
-address), `FLEN` (`$6058`, **24-bit** length, 3 bytes — FCREATE input, FFIND
+`FNAME` (`$1F4A`, 12-byte space-padded name), `FSRC` (`$1F56`, FCREATE source
+address), `FLEN` (`$1F58`, **24-bit** length, 3 bytes — FCREATE input, FFIND
 output; max file 16 MB, matching the 24-bit `ROLBA`); `FFIND` returns
-the start LBA in the shared `LBA` (`$6047`). (Subdirectory LBAs are 16-bit: the
+the start LBA in the shared `LBA` (`$1F47`). (Subdirectory LBAs are 16-bit: the
 directory-iteration/resolution path carries `DIRLBA`/`DILBA` plus their high
 bytes, so a directory whose extent starts at LBA ≥ 256 resolves and lists
 correctly.)
@@ -132,11 +132,12 @@ correctly.)
 
 | Range | Use |
 |-------|-----|
-| `$0000–$17FF` | EEPROM (6 KB; shrunk from 8 KB 2026-09-14 to free the $1800-$1FFF RAM island) — monitor + BIOS at `$0000` (~5.2 KB used). BASIC is no longer ROM-resident; it ships as `/BIN/BASIC.BIN` on disk. |
+| `$0000–$17FF` | EEPROM (6 KB; shrunk from 8 KB 2026-09-14 to free the $1800-$1FFF RAM island) — monitor + BIOS at `$0000` (~4.9 KB used). BASIC is no longer ROM-resident; it ships as `/BIN/BASIC.BIN` on disk. |
 | `$2000–$56FF` | RAM — **P8X/OS image** loads here (`$2000`, ~13.8 KB **including the resident window-manager kernel**, ending ~`$55E6`; the 16 KB cap = the on-disk LBA 1–32 boot region). |
-| `$5700–$5DFF` | RAM — **OS data** (relocated here 2026-09-13 to free TPA): shell variables + FS/PACK/FSCK state `$5700`, the stdin read buffer `IBUF`, search `PATH`, the `>>` prepend buffer `APBUF`. |
+| `$1800–$1CFF` | RAM — **OS buffers** in the low RAM island (moved there 2026-09-14): the stdin read buffer `IBUF` `$1800`, the search `PATH` `$1A00`, OS scratch, the `>>` prepend buffer `APBUF` `$1B00`. |
+| `$5700–$58FF` | RAM — **OS data**: shell variables (input line `$5700`), FS/PACK/FSCK state, the CWD path text `$5800`. |
 | `$1D00–$1EFF` | RAM — **`SBUF`** sector buffer (in the $1800-$1FFF island; was `$6100`, then `$5E00`; monitor-owned, but not part of the command `//#define` ABI). |
-| `$6000–$60FF` | RAM — **firmware/BIOS scratch** (fixed ABI — commands `//#define` these): monitor line buffer `$6000` (64 bytes, so an input line is capped at **63 characters**), the parameter block + read/write/dir-iteration state `$6040` (CF `LBA` `$6047–$6049`, `FNAME` `$604A`, `FSRC`/`FLEN`, `FFLAG` `$6075`, `DIBUFH` `$607E`). This block did **not** move. |
+| `$1F00–$1FFF` | RAM — **firmware/BIOS scratch** (fixed ABI — commands reach it through `//#use abi` / `//#use mem`): monitor line buffer `$1F00` (64 bytes, so an input line is capped at **63 characters**), the parameter block + read/write/dir-iteration state `$1F40` (CF `LBA` `$1F47–$1F49`, `FNAME` `$1F4A`, `FSRC`/`FLEN`, `FFLAG` `$1F75`, `DIBUFH` `$1F7E`), the console and glass-TTY state `$1FA1–$1FAF`. Moved from `$6000–$60FF` with the 2026-09-14 ROM shrink. |
 | `$5900–$F7FF` | RAM — **TPA**: user programs + data (`RUN` loads at `$5900`, ~39.8 KB; the C stack grows down from `CSTACKTOP $F800`). Above `$F800` sit the fixed scratch pages: the shell's **8-line command-history ring at `$F800–$F9FF`**, commands' glob/dir-iteration page (FSDIRBUF) at `$FA00`, and the file-read buffer (RDBUF) at `$FC00`. |
 | `$FE00–$FEFF` | RAM — stack (P3 grows down from `$FEFF`). |
 | `$FF00` | switch input port (read) |
@@ -177,8 +178,8 @@ Two consequences worth knowing:
 
 | Address | Name | Meaning |
 |---------|------|---------|
-| `$60A1` | `TTYRAW` | 0 = expand; nonzero = pass bytes through untouched |
-| `$60A2` | `TTYLST` | last byte transmitted (the anti-doubling state) |
+| `$1FA1` | `TTYRAW` | 0 = expand; nonzero = pass bytes through untouched |
+| `$1FA2` | `TTYLST` | last byte transmitted (the anti-doubling state) |
 
 The **two-mode / glass-TTY** state lives just above, in the same console page
 (generated in [generators/gen_memmap.py](../generators/gen_memmap.py); see
@@ -186,9 +187,9 @@ The **two-mode / glass-TTY** state lives just above, in the same console page
 
 | Address | Name | Meaning |
 |---------|------|---------|
-| `$60A4` | `GFXPRES` | 1 = a GL card is fitted (the mode flag the monitor sets at wake); GL programs and the on-screen console gate on it |
-| `$60A5–$60AE` | glass-TTY state | the on-screen console's own cursor and scratch: `GTCOL`/`GTROW` (text cursor), `GTSUSP` (`$60A7`, 1 = a full-screen program owns the screen, so the console stops drawing), `GTXL…GTYH` (pixel position), `GTCH`/`GTTMP`/`GTCNT` |
-| `$60AF` | `GCONEN` | 1 = mirror `CONOUT` onto the GL screen (the glass TTY). **On by default whenever a card is fitted** — `DISPINIT` sets it at wake, installs the stroke font from `/FONT.GL` on the CF root, and blanks the screen, so the monitor itself is on the LCD pre-boot; `screen off` disables the mirror for a session |
+| `$1FA4` | `GFXPRES` | 1 = a GL card is fitted (the mode flag the monitor sets at wake); GL programs and the on-screen console gate on it |
+| `$1FA5–$1FAE` | glass-TTY state | the on-screen console's own cursor and scratch: `GTCOL`/`GTROW` (text cursor), `GTSUSP` (`$1FA7`, 1 = a full-screen program owns the screen, so the console stops drawing), `GTXL…GTYH` (pixel position), `GTCH`/`GTTMP`/`GTCNT` |
+| `$1FAF` | `GCONEN` | 1 = mirror `CONOUT` onto the GL screen (the glass TTY). **On by default whenever a card is fitted** — `DISPINIT` sets it at wake, installs the stroke font from `/FONT.GL` on the CF root, and blanks the screen, so the monitor itself is on the LCD pre-boot; `screen off` disables the mirror for a session |
 
 `TTYRAW` is the escape hatch for sending **binary** down the serial link, where a
 `$0A` is data rather than a newline — the equivalent of `stty raw`. Nothing in the

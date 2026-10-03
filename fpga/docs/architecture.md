@@ -62,7 +62,7 @@ the single-interface migration retired it — it floats `$FF` everywhere now.)
 | Range | Size | Contents | FPGA realization |
 |-------|------|----------|------------------|
 | `$0000–$1FFF` | 8 KB | firmware ROM (monitor) | BRAM, **initialized** from the ROM image |
-| `$2000–$FEFF` | ~56 KB | RAM: OS + scratch + TPA (`$6A00`) | BRAM, uninitialized |
+| `$2000–$FEFF` | ~56 KB | RAM: OS + scratch + TPA (`$5900`) | BRAM, uninitialized |
 | `$FF00–$FFFF` | 256 B | memory-mapped I/O | address-decoded to peripherals |
 
 Address decode: `$FF00–$FFFF` → I/O; else BRAM (the ROM/RAM split is just which
@@ -106,12 +106,18 @@ BRAM region and whether writes are allowed below `$2000`).
 
 It did **not** fit on the board: 256 Kbit of microcode plus 512 Kbit of memory
 needs 47 BSRAM blocks and the GW2AR-18 has 46. All 32 control-word bits are used,
-so nothing could be shaved off the width — but only 88 of the 256 opcode
-encodings exist and all 168 undefined ones hold the same word. So the board build
-squeezes IR through a combinational 256-entry map into a 7-bit index (88 opcodes
-plus one shared undefined slot), halving the store to **4096 × 32**:
-`fpga/tang-nano-20k/mk_compact_ucode.py`, which re-verifies both properties and
-refuses to emit anything if either stops holding. Result: 40/46 blocks with the
+so nothing could be shaved off the width — but 113 of the 256 opcode
+encodings are undefined and all hold the same word, and most opcodes finish in
+eight steps or fewer. So the board build gives each opcode a 16-word **slot**
+(8 steps × 2 condition planes) addressed as `{slot, step[2:0], cond}`: a defined
+opcode's steps 0–7 live in its own slot, the steps 8–15 of the long opcodes borrow
+slots from undefined encodings, and one shared UNDEF slot and one RAIL slot cover
+the rest — halving the store to **4096 × 32**. (The first version mapped IR to a
+7-bit index, 88 opcodes plus one shared undefined slot; it stopped fitting when the
+ISA reached 143 opcodes on 2026-09-12, and the slot scheme has room for ~250.)
+`fpga/tang-nano-20k/mk_compact_ucode.py` builds it, checks that the undefined
+encodings really share one word and that the compact image reproduces all 8192
+original addresses, and refuses to emit anything if a check fails. Result: 40/46 blocks with the
 full 64K map, and no SDRAM controller needed.
 
 ## Graphics (`gfx.v` + `video_rgb.v`)

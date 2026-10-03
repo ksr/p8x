@@ -54,7 +54,7 @@ test, and a divergence names the exact microcycle:
 
 ```sh
 ../sim/run.sh 20000                        # monitor boot
-../sim/run.sh 60000 isa_test.asm           # all 88 opcodes
+../sim/run.sh 60000 isa_test.asm           # the original 88 opcodes
 ../sim/run.sh 200000 "" console_in.txt     # driven monitor + console diff
 ```
 

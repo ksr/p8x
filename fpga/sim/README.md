@@ -60,7 +60,7 @@ diff is now identical regardless of how stdin is wired.
 |------|------|
 | `mk_ucode_mem.py` | 4 ROM images → `ucode.hex` (8192 × 32-bit `$readmemh`) |
 | `tb_p8x.v` | testbench: run N cycles, emit the canonical trace |
-| `isa_test.asm` | directed all-88-opcode exerciser (assembled by `run.sh`) |
+| `isa_test.asm` | directed exerciser of the original 88 opcodes (assembled by `run.sh`) |
 | `console_in.txt` | scripted keystrokes for the driven-monitor run (LF → CR) |
 | `cf_id.txt`, `boot_in.txt` | CF scripts: IDENTIFY, and boot the OS from disk |
 | `run.sh` | build + run + diff; `run.sh [CYCLES] [ROM] [RXSCRIPT] [CFIMAGE]` |
@@ -88,7 +88,9 @@ its prompt the monitor sits in the console-poll loop, and with `-N` no key ever
 arrives. Raising the cycle count buys nothing.
 
 `isa_test.asm` closes that gap with stimulus instead of cycles. It executes **all
-88 opcodes** in `genucode.py`'s `OPC` table, choosing operands that move the flags
+88 opcodes** that `genucode.py`'s `OPC` table held when it was written (the table has
+143 since the Tier A C-compiler instructions of 2026-09; those run in the co-sim only
+as far as the monitor and OS payloads use them), choosing operands that move the flags
 rather than merely executing: carry out (`$FF + 1`), borrow (`$00 - 1`), signed
 overflow at both sign boundaries (`$7F + 1`, `$80 - 1`), zero, and carry-in for
 `ROL`/`ROR`. Every branch is taken **and** not taken. The interrupt path is real —
@@ -105,7 +107,7 @@ clean against the emulator.
 
 ```bash
 ./run.sh 20000                            # monitor boot   -> PASS, 20000 cycles
-./run.sh 60000 isa_test.asm               # all 88 opcodes -> PASS, 509 cycles
+./run.sh 60000 isa_test.asm               # the 88 opcodes -> PASS, 509 cycles
 ./run.sh 200000 "" console_in.txt         # driven monitor -> PASS + console diff
 ```
 

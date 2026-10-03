@@ -61,7 +61,7 @@ cd emulator && make
 
 ```sh
 fpga/sim/run.sh 20000                        # monitor boot, RTL vs emulator
-fpga/sim/run.sh 60000 isa_test.asm           # all 88 opcodes
+fpga/sim/run.sh 60000 isa_test.asm           # the original 88 opcodes
 fpga/sim/run.sh 200000 "" console_in.txt     # driven monitor + console diff
 fpga/sim/run.sh 2000000 "" boot_in.txt os/run-disk.img   # boots P8X/OS
 ```
@@ -186,7 +186,7 @@ fpga/
 │   ├── console.sh            interactive console on the RTL (not diffed)
 │   ├── mk_ucode_mem.py       4 ROM images → 32-bit ucode.hex
 │   ├── tb_p8x.v              testbench: canonical per-cycle trace, ACIA, CF
-│   ├── isa_test.asm          directed all-88-opcode exerciser
+│   ├── isa_test.asm          directed exerciser, the original 88 opcodes
 │   └── console_in.txt, cf_id.txt, boot_in.txt   scripted keystrokes
 └── tang-nano-20k/            the board build
     ├── README.md             toolchain, pinout, flashing, board-sim benches

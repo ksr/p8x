@@ -119,10 +119,10 @@ The word burned to the 4× 28C64 EPROMs and interpreted by the emulator. Bit map
 
 | Term | Meaning |
 |------|---------|
-| **EEPROM** | `$0000–$17FF` (6 KB; shrunk from 8 KB 2026-09-14 to free the $1800–$1FFF RAM island) — monitor + BIOS at `$0000` (~5.2 KB used). BASIC is no longer ROM-resident; it runs as the disk program `/bin/basic.bin`. |
+| **EEPROM** | `$0000–$17FF` (6 KB; shrunk from 8 KB 2026-09-14 to free the $1800–$1FFF RAM island) — monitor + BIOS at `$0000` (~4.9 KB used). BASIC is no longer ROM-resident; it runs as the disk program `/bin/basic.bin`. |
 | **SRAM / RAM** | `$2000–$FEFF` (56 KB, rev E — 2× 62256). |
 | **SBUF** | 512-byte sector buffer at `$1D00` (in the $1800–$1FFF RAM island; was `$6100`, then `$5E00`). Fixed by the BIOS — `CFWRITE` reads from it. |
-| **LBA** | Logical Block Address — the CF sector number; the BIOS reads the target LBA byte from a fixed `$6047`. |
+| **LBA** | Logical Block Address — the CF sector number; the BIOS reads the target LBA from fixed bytes at `$1F47`–`$1F49` (`LBA`/`LBA1`/`LBA2`). |
 | **RBUF** | The OS's `>`-redirect capture buffer (= the TPA base, `$5900`). |
 | **CONIN / CONOUT / CONST** | BIOS console in / out / status (`$0100/$0103/$0106`). |
 | **CFINIT / CFREAD / CFWRITE** | BIOS CompactFlash init / read-sector / write-sector (`$0109/$010C/$010F`). |
@@ -131,7 +131,7 @@ The word burned to the 4× 28C64 EPROMs and interpreted by the emulator. Bit map
 | **GCLS** | BIOS clear-the-glass-TTY + home-cursor (`$014E`) — the on-screen text console of two-mode operation. A no-op when no GL card is fitted. |
 | **two-mode operation** | The same OS runs headless over serial OR as a GL graphics desktop, auto-selected at wake by the `GFXPRES` flag. See [`docs/p8x-two-mode-design.md`](docs/p8x-two-mode-design.md). |
 | **glass TTY** | The on-screen text console: with a GL card, `CONOUT` MIRRORS every byte onto the display via stroke `TEXT` as well as the serial port — so the ROM monitor, the OS and every program are on the LCD. On by default whenever a card is fitted (the monitor switches it on and installs the font at wake); `screen off` disables it for a session. |
-| **GFXPRES / GCONEN / GTSUSP** | The two-mode flags at `$60A4`/`$60AF`/`$60A7`: GL card present / glass-TTY console enabled / console suspended because a full-screen program owns the screen. Generated in `generators/gen_memmap.py`. |
+| **GFXPRES / GCONEN / GTSUSP** | The two-mode flags at `$1FA4`/`$1FAF`/`$1FA7`: GL card present / glass-TTY console enabled / console suspended because a full-screen program owns the screen. Generated in `generators/gen_memmap.py`. |
 | **2nd ACIA** | The second 6850 serial port at `$FF08`/`$FF09` (status/data), register-identical to the console ACIA — added for two-mode operation; the `kermit` command transfers files over it while the console keeps `$FF04`. Emulator: `-2i`/`-2o`. |
 
 ---
@@ -282,5 +282,5 @@ set and one golden model (`gpu_*` in `emulator/p8xemu.c`) serve both.
 | **p8xasm.py** | Two-pass assembler (imports the opcode table from `genucode.py`). |
 | **p8xemu.c** | Cycle-level emulator — interprets the same `u*.bin` the hardware burns. |
 | **p8xfs.py** | Host tool for P8XFS images (create/boot/put/get/ls/mkdir/tree/fsck). |
-| **gen_eagle.py** | Board (schematic + layout) generator for all 7 cards. |
-| **gen_bom.py / render_board_pdf.py / gen_bus_pdf.py** | BOM, placement-view PDFs, bus-map PDF. |
+| **gen_eagle.py** | The canonical board netlists (`CARDS`, `busnet()`) that the KiCad flow (`gen_kicad.py`) builds the boards from; its own Eagle output is frozen at rev E (2026-09-18). |
+| **gen_bom.py / render_board_pdf.py / gen_bus_pdf.py** | BOM, placement-view PDFs (of the frozen Eagle boards), bus-map PDF. |

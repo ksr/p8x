@@ -33,7 +33,7 @@ asking.
 Presence probe: `GLID` ($FF54) reads 'G' when the engine is fitted. An
 absent card floats the bus — software must know before poking. Since
 2026-09-09 the monitor probes `GLID` **once** at wake and records the
-result in the resident byte `GFXPRES` ($60A4); the OS re-affirms it at
+result in the resident byte `GFXPRES` ($1FA4); the OS re-affirms it at
 boot. Programs read that flag — `has_graphics()` in `lib_gfx.c`, which
 `gpresent()` now sources from — rather than re-probing the bus. This is
 the two-mode selector (headless serial console vs. graphics desktop; see

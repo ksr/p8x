@@ -30,7 +30,7 @@ where the code and its data live and how you start it):
 |-------|------|------|------------|
 | ~~Standalone~~ | `$0000` | `$8000` | **retired 2026-08** — BASIC's console I/O now goes through the BIOS, which this build replaces. See [README](README.md). |
 | Disk | `$2000` | `$A000` | a bootable P8XFS image, started with the monitor's `B` command (rev E loads the OS region at `$2000`) |
-| Run-from-OS | `$6A00` | `$C500` | a TPA program (`BASIC.BIN`); `RUN` it from the OS, `BYE` returns to the OS |
+| Run-from-OS | `$5900` | `$C500` | a TPA program (`BASIC.BIN`); `RUN` it from the OS, `BYE` returns to the OS |
 
 `Code` is where the interpreter runs and `Data` is the base of its variables and
 program storage; everything else about the language is the same. The usual way
@@ -566,8 +566,9 @@ disk and run-from-OS builds (the standalone whole-ROM build has no card access).
 
 | Address (dec / hex) | What |
 |---------------------|------|
-| 0–8191 / `$0000–$1FFF` | EEPROM (the interpreter ROM — read-only; 8 KB on rev-E hardware) |
-| 8192–65279 / `$2000–$FEFF` | RAM, 56 KB (BASIC's program + variables live around `$8000`/`$A000`) |
+| 0–6143 / `$0000–$17FF` | EEPROM (the monitor + BIOS ROM — read-only; 6 KB on rev-E hardware) |
+| 6144–8191 / `$1800–$1FFF` | RAM — the OS/BIOS scratch island (input line, sector buffer, BIOS scratch); leave it alone |
+| 8192–65279 / `$2000–$FEFF` | RAM, 56 KB (the OS from `$2000`; the run-from-OS BASIC at `$5900`, its data from `$C500`) |
 | 65280 / `$FF00` | switch input port (`PEEK`) |
 | 65282 / `$FF02` | LED output port (`POKE`) |
 | 65284–65285 / `$FF04–05` | 6850 ACIA status / data |
@@ -601,8 +602,8 @@ every address to 255. A hand-poked white pixel at the centre of the window:
 (The `GL` statement does exactly this with less typing.) The old device
 register window at `$FF20–2F` closed with the single-interface migration —
 those addresses read 255 now. **Caution:** BASIC keeps its program and
-variables in low RAM (around `$8000–$82xx`); poking there can corrupt your
-program.
+variables from its data base upward (`$C500` in the run-from-OS build, `$A000` in
+the disk build); poking there can corrupt your program.
 
 ## Examples
 

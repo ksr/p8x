@@ -63,17 +63,15 @@ PIO Mode 0 wants ≥165 ns strobes and ~600 ns cycles. At 2 MHz the CLK̄-gated 
 
 A two-stage system: a permanent **BIOS in EEPROM**, and the **OS proper loaded from CF into RAM** at boot — so you iterate on the OS by writing sectors from the shell (or popping the CF into your Mac), not by pulling and reburning the EEPROM every time.
 
-### 2.1 Memory map (revised)
+### 2.1 Memory map (current, from `generators/gen_memmap.py`)
 
 | Range | Contents |
 |---|---|
-| $0000–$1FFF | BIOS ROM: drivers, boot loader, syscall jump table |
-| $1100–$1FFF | ROM: erased ($FF) — monitor + BIOS end ~$1100 (BASIC is no longer ROM-resident) |
-| $2000–$5FFF | OS RAM: P8X/OS kernel + shell, **loaded from CF to $2000 (rev E)**. ~9.5 KB today; the 16 KB reserve ($2000–$5FFF) matches the on-disk OS region (LBA 1–32 = 16 KB), so both impose the same **16 KB max** |
-| $6047–$6049 | CF LBA, 24-bit little-endian (LBA0/LBA1/LBA2; fixed by the BIOS). LBA1/LBA2 default 0 after CFINIT — set them for sectors >255 |
-| $6100–$62FF | Sector buffer SBUF (512 bytes, fixed by the BIOS) |
-| $6300–$69FF | OS variables + stdin/PATH/APBUF buffers |
-| $6A00–$FDFF | **TPA** — transient program area (~37.9 KB; RUN load addr + `>` capture) |
+| $0000–$17FF | BIOS ROM (6 KB since 2026-09-14): monitor, drivers, boot loader, BIOS jump table at $0100; ~4.9 KB used (BASIC is no longer ROM-resident) |
+| $1800–$1FFF | RAM island: stdin buffer IBUF $1800, PATH $1A00, APBUF $1B00, sector buffer SBUF $1D00 (512 bytes, fixed by the BIOS), BIOS scratch $1F00 (CF LBA $1F47–$1F49, 24-bit little-endian, LBA1/LBA2 0 after CFINIT — set them for sectors >255) |
+| $2000–$56FF | OS RAM: P8X/OS kernel + shell (with the resident window-manager kernel), **loaded from CF to $2000**, ~13.8 KB today; the on-disk OS region (LBA 1–32 = 16 KB) caps it at **16 KB** |
+| $5700–$58FF | OS variables (shell line, FS state, CWD path) |
+| $5900–$F7FF | **TPA** — transient program area (~39.8 KB; RUN load addr + `>` capture); the C stack grows down from $F800, fixed system pages above it |
 | $FE00–$FEFF | Stack page (P3, grows down from $FEFF) |
 | $FF00–$FFFF | I/O |
 
@@ -105,7 +103,7 @@ Fixed **jump table at $0100** so user programs and the OS call stable entry poin
 | $0139 | FOPENDIR | begin iterating directory at path (P1); C=1 bad path |
 | $013C | FNEXT | next live entry → FNAME/FFLAG/LBA/FLEN; C=1 at end |
 | $013F | FLOADAT | read FLEN bytes from LBA into (P1) (whole sectors) |
-| $0142 | FOPENDIRAT | iterate dir at 16-bit LBA = A (low) + LBA1 $7048 (high) |
+| $0142 | FOPENDIRAT | iterate dir at 16-bit LBA = A (low) + LBA1 $1F48 (high) |
 | $0145 | FSDIRBUF | point FNEXT's sector buffer at page A (call after FOPENDIR) |
 
 The table is **append-only** — entries are never reordered or removed, so every OS image on every card keeps working across BIOS revisions. (The directory-iteration calls `FOPENDIRAT`/`FNEXT` carry a full 16-bit LBA, so directories may live anywhere on the volume, not just below sector 256.)
