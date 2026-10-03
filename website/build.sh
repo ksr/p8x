@@ -13,6 +13,9 @@ cd "$(dirname "$0")"
 venv/bin/pip install -q --disable-pip-version-check -r requirements.txt   # quick when already installed
 venv/bin/python stage.py
 CONF=mkdocs.yml; [ "$1" = "publish" ] && CONF=mkdocs-publish.yml
-venv/bin/mkdocs build -f "$CONF" 2>&1 | grep -E "WARNING|ERROR|hooks:|Documentation built" || true
-[ "$1" = "publish" ] && echo "built with $CONF (Google Analytics on)"
-[ "$1" = "serve" ] && cd site && exec python3 -m http.server 8766 --bind 127.0.0.1
+STRICT=; [ "$1" = "publish" ] && STRICT=--strict   # a published build fails on any warning (a broken link, a missing page)
+venv/bin/mkdocs build $STRICT -f "$CONF" > build.log 2>&1 || { cat build.log; echo "build.sh: mkdocs failed" >&2; exit 1; }
+grep -E "WARNING|ERROR|hooks:|Documentation built" build.log || true
+if [ "$1" = "publish" ]; then echo "built with $CONF (Google Analytics on)"; fi
+if [ "$1" = "serve" ]; then cd site && exec python3 -m http.server 8766 --bind 127.0.0.1; fi
+exit 0
