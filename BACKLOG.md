@@ -1,7 +1,7 @@
 # P8X Project Backlog
 
 Add ideas as they come; move items between sections as they progress.
-Last updated: 2026-09-16
+Last updated: 2026-10-02
 
 ## How to use
 - **NEXT** — committed, in rough priority order
@@ -20,64 +20,27 @@ remainder is why it is still here.
 
 ## NEXT
 
-- [ ] **Memory-card ROM decode revision (BUILD-BLOCKER, found 2026-09-17).** The
-      memory card's `.sch` + theory still carry the pre-2026-09-14 **8 KB ROM
-      window `$0000-$1FFF`** (`ROM !CE = A13 OR A14 OR A15`). The current map is
-      **6 KB ROM `$0000-$17FF`** with **`$1800-$1FFF` a RAM scratch island** (IBUF/
-      SBUF `$1D00`/BIOS scratch `$1F00`), which the OS/BIOS WRITES -- so as drawn,
-      that scratch lands in unwritable ROM and a real board fails. Change: ROM
-      `!CE` gains an `(A11·A12)` deselect term (one AND gate) so ROM answers only
-      `$0000-$17FF`; low-RAM U10 widens to `$1800-$7FFF`. Docs corrected 2026-09-17
-      (memory-card theory + README, RECONCILIATION.md); REMAINING is the CAD:
-      update the decode in `generators/gen_eagle.py` (or the live Fusion `-a`
-      files) and regenerate the memory-card `.sch`. The overnight hardware pass
-      MISSED this (inventory + I/O-port level only; the doc says "Rev E" but is an
-      earlier Rev E). See [[reference_p8x_memory_map]].
+- [ ] **CF drive 1 port base: firmware + emulator vs the cf-card rev B (2026-09-19).**
+      The routed cf-card rev B decodes drive 1 at its own `$FF18-$FF1F` (header
+      J5, own buffer + strobes); the firmware CF driver (`CFSEL`/`DRVSEL` ORed into
+      `CFHEAD`) and the emulator's `-c2` model select drive 1 with the ATA device
+      bit on the shared `$FF10-$FF17` task file. Drive 0 works as is; drive 1 on
+      this card needs a drive-selectable port base in `CFSETL`/`CFINIT` (and the
+      rest of the CF driver) plus the emulator's port decode -- data-integrity
+      code, so test-validated (the `/d1` mount tests). Or decide the card goes back
+      to one port.
 
-- [ ] **OVERNIGHT BATCH (2026-09-16, unattended -- as much as possible without
-      input; all on `graphics-card`, no merge to main beyond the current one).**
-      Scope settled before the unattended run:
-      1. [x] **BASIC layer commands DONE 2026-09-17** (commits a526116 emulator+BASIC
-         +tests, 8034620 RTL, a77b867 docs). TEXTON/TEXTOFF -> TXEN ($50); the NEW
-         GXEN ($57) bitmap-visibility opcode -> GRAPHICSON/GRAPHICSOFF. Real 2-layer
-         compositor: gpu_tx_sample bg = gx_en?base:0, overlay on top; RTL gtxt.v
-         gx_en reg (reset 1) + sdram_video mux gate, byte-identical co-sim
-         (c_gl_ovl_rtl_test now ends in GXEN 0). Tokens $FC..$FF (NOT $B4..$B7 --
-         those collide with the GL-verb block $B4..$F5; fixed in both twins). BASIC
-         cold-starts GRAPHICS OFF, BYE restores GXEN 1 for the shell. Draw-while-
-         hidden verified (PIXELR reads RAM while scanout is black). basic_gfx part 7
-         + basic_gl updated; man basic + README + HELP updated. Both twins build
-         (asm 9330 B, C 21761 B); basic_gfx/basic_gl/basic_c green.
-      2. [~] **Doc sweep IN PROGRESS 2026-09-17.** DONE: man pages for all 16
-         shared //#use / ;#use LIBRARIES (abi mem ptr ps2 wm g3cam stdin rdline
-         glob globx regex dirent apath streq err distab -- commit 12e6f22; only
-         gfx+g3d had one before); man basic + BASIC README + HELP for the layer
-         commands (a77b867); graphics-guide GTEXT-retired confusion fixed +
-         two-mode compositor/mouse currency (0328b56); isa-card rev-E memory line
-         fixed. REMAINING: rebuild the /docs SD disk to install the new man pages
-         + changed docs; regenerate the PDFs whose CONTENT changed (graphics-guide,
-         system-design, card-standards? bus-definition, isa-card) with per-page
-         date+time stamps [[feedback_pdf_timestamp_per_page]]; a final pass over
-         the remaining theory/programmer docs for other stale "retired" notes.
-      3. [~] **Hardware reconciliation IN PROGRESS 2026-09-17** (docs + bus defs
-         only -- NO CAD/.brd gen). DONE: STANDALONE PS/2 card designed --
-         hardware/ps2-card/ (README + theory: 74HC164/161/574 + 7407 per port,
-         $FF58-$FF5F, 5V TTL no bus level-shift, receive path + software-owned
-         bit-banged TX + 'K' probe; DESIGN/PROPOSAL, no CAD per scope). Bus defs
-         brought current: gen_memmap.py now names SWITCHES/LEDS/IRQGEN (0fa7ad5);
-         p8x-bus-definition.md sec5 memory map completed (2nd ACIA, MDU, GL, PS/2,
-         retired doors) + PS/2 allocation registered; hardware/README "not yet
-         realised as TTL boards" table (PS/2 design, MDU/GL on FPGA, IRQ planned);
-         system-design expansion-I/O pointer (all commit 97e3d4c). REMAINING: a
-         short board-vs-emulator/FPGA reconciliation writeup (ISA growth is
-         microcode-only, cards unchanged; the real gaps are the unbuilt IRQ card +
-         no TTL MDU/GL board -- captured in hardware/README but could be its own
-         doc); confirm docs/p8x-card-standards.md needs no PS/2-specific edit (it
-         states the rule; the allocation lives in the bus-definition, done).
-         See [[reference_p8x_memmap_singlesource]].
-      Pre-req (in progress): full `make test` green, then merge graphics-card ->
-      main (fast-forward, includes the -W console mouse-mode SWALLOW fix so the
-      terminal stops spewing SGR chars on mouse move), then start task 1.
+- [ ] **FPGA RTL write-protects `$0000-$1FFF`, the map says ROM ends at `$17FF`
+      (found 2026-10-02).** `fpga/tang-nano-20k/rtl/p8x_top.v` (the `cpu`/`lcd`
+      board builds) and `fpga/rtl/p8x_soc.v` (the co-sim SoC) write RAM only for
+      `mem_addr >= $2000`; since the 2026-09-14 ROM shrink the emulator (`RAMBASE`
+      `$1800`), the firmware and the OS keep scratch in `$1800-$1FFF` (`IBUF`,
+      `SBUF $1D00`, the BIOS block at `$1F00` incl. the monitor line buffer). Move
+      both boundaries to `RAMBASE` (`$1800`), then re-run the co-sims and rebuild +
+      reflash the board. Related: `fpga/sim/run.sh` does not elaborate today --
+      `p8x_soc.v` instantiates `sdram_model`/`sdram_arb`/`gfx_mem`, which are not in
+      its iverilog file list -- so the co-sim harness needs its sources brought up
+      to date first.
 
 - [~] **Hand-asm: from-scratch redesigns on the Tier A ISA (2026-09-12).**
       `tools/tierA_rewrite.py` only covered the idioms it could prove safe;
@@ -524,7 +487,7 @@ remainder is why it is still here.
       high-churn / low-value (they're working temps, not layout).
 
 - [ ] **memmap: auto-single-source the compiler-emitted `.org`.** `apps/p8xcc.asm`
-      and `compiler/p8cc.c` emit `.org $6A00` (= `TPABASE`) as literal text — they
+      and `compiler/p8cc.c` emit `.org $5900` (= `TPABASE`) as literal text — they
       can't `.include memmap.inc` (their TPA buffers reuse OS-scratch names like
       `NAMEBUF`) nor interpolate a symbol into emitted text. `p8cc.py` already reads
       `memmap.TPABASE`. Options: rename the internal buffers to avoid the clash then
@@ -540,19 +503,8 @@ remainder is why it is still here.
       temp files), or the splitter could iterate left-to-right. Until then,
       `CAT f | GREP x | WC` silently drops the `| WC`.
 
-- [ ] Fusion import acceptance test: open backplane .sch/.brd pair, pour planes,
-      run DRC, confirm zero airwires
-
 - [ ] Verify DIN 41612 footprints against physical connectors in stock
       (row A/C orientation when mated, mounting holes, press-fit vs solder)
-
-- [ ] Add mounting holes to backplane board (6× M3, clear of planes or
-      stitched to GND)
-
-- [ ] Add DIN connector mounting/flange holes at every backplane slot per
-      connector datasheet (mechanical retention against card insertion force)
-
-- [ ] Route memory card signals in Fusion (planes already done)
 
 - [ ] Order backplane PCB first as the cheap validation article
 
@@ -610,8 +562,9 @@ remainder is why it is still here.
 
 ### Bus test card (USB bring-up controller)
 
-Design is settled and the schematic is complete at 27 parts on a standard
-160×100 Eurocard. See `hardware/bustest-card/p8x-bustest-card-design.md`. The
+Design is settled; the board is routed in KiCad (2026-09-18, the uniform
+280×140 card, 0 unconnected; first designed at 27 parts on a 160×100 Eurocard).
+See `hardware/bustest-card/p8x-bustest-card-design.md`. The
 thesis: a control card you can *type at*, driving the backplane one microcycle
 at a time over a USB serial line, with the emulator as the reference model.
 Nothing below has been built or measured.
@@ -624,7 +577,7 @@ Nothing below has been built or measured.
       compiled**, and `mcp_write`/`mcp_read` are empty shells marked `TODO(hw)`.
       Needs: pico-sdk build wiring, the real MCP23S17 SPI transaction, and SPI
       timing chosen against the datasheet (clock rate, CS setup/hold).
-      **Do this before placing copper.** It is the cheapest way to find a design
+      **Do this before ordering the board** (the copper is already routed). It is the cheapest way to find a design
       error: the pin map, the field→(chip,bit) allocation and the netlist all
       have to agree, and a compile plus a host-side harness catches a swapped
       chip or an off-by-one bit while it is still a text edit.
@@ -637,14 +590,6 @@ Nothing below has been built or measured.
       bench. `gen_eagle` already computes the allocation (`alloc`), so it can
       emit a `buscon_pins.h` the firmware includes, making the two structurally
       one source. Same pattern as `gen_memmap.py`.
-
-- [ ] **Place and route the bus test card (2026-07-22).** The `.brd` is
-      forward-annotated but unplaced — all 27 parts parked off the outline, zero
-      copper. Auto-flow confirms they fit 160×100 at 31 % area with ~10 mm slack,
-      so this is a layout job, not a fit problem. Note the workflow rule: once
-      the `.brd` is touched in Fusion the generator is retired as an emitter for
-      it (regenerating would discard placement); schematic, BOM, PDFs and docs
-      can still be updated after that.
 
 - [ ] **Resolve the design doc's own open items before fab (2026-07-22).**
       Carried in §10: where `CLK` parks when halted (affects listen-mode sampling
@@ -1470,8 +1415,12 @@ Nothing below has been built or measured.
 - [ ] **`MOVW` register-bank hardware regen (rev D).** See the MOVW item above and
       the regbank theory rev-D note: turn `PT` into 74169 counters, add `PT2`
       (PSEL=5) counters + `-SEL5` buffers, extend `U39`/`U40` count/load decode.
-      Regenerate `gen_eagle.py` → regbank `.sch/.brd`, `gen_bom.py`, the placement
-      PDFs; DRC for one-hot pointer-bus drive. No backplane/control-card change.
+      Change the regbank netlist in `gen_eagle.py` (`CARDS["regbank-card"]`), then
+      rebuild the KiCad board (`generators/build.sh regbank-card`: ERC + gate-sim +
+      DRC) and `gen_bom.py`; check one-hot pointer-bus drive. No backplane/control-
+      card change. **TTL build-blocker (2026-10-02):** the routed KiCad regbank is
+      still the rev B netlist, and compiled code uses `PHW`/`PLW` (C argument
+      pushes and pops), which `PINC` PT.
       Also teach the on-target assembler (`apps/p8xasm.asm` + `gen_p8xopc.py`) the
       two-operand shape if MOVW is ever to be assembled on the target (host-only
       today; the opcode table and cover-test currently skip two-operand shapes).
@@ -1776,9 +1725,6 @@ Nothing below has been built or measured.
       mode; then wire the Q outputs onto D0-7 + a decoded read/latch-clock (design
       with DRC — it drives the data bus).
 
-- [ ] Clock-channel verticals on backplane: ~0.6 mm clearance to slot-10 pad
-      columns — confirm against house DRC rules
-
 - [ ] Backplane CLK at far slot on scope after bring-up → decide whether to
       populate RC terminators (R2/C13, R3/C14 shipped DNP)
 
@@ -1850,7 +1796,10 @@ with real analysis; the full reasoning is in
   is still computed: it orders the parked parts and answers "do these parts
   fit?". It is just not emitted as if it were a layout.
 
-- **Do NOT widen the bus test card past 160×100** (2026-07-22, `5576bcb`). It
+- **SUPERSEDED (2026-09-18):** the KiCad flow made every plug-in card, this one
+  included, a uniform 280×140 mm (`hardware/KICAD-BOARDS.md`); the decision below
+  is the Eagle-era record.
+  **Do NOT widen the bus test card past 160×100** (2026-07-22, `5576bcb`). It
   was scoped at `W=200` when it was ~45 parts. After the cuts it is 27 and
   auto-flow fits them in two rows at 31 % area with 10 mm of slack. The reason
   to stay standard is mechanical, not spatial: 200 mm cantilevered off the DIN

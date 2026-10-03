@@ -2,6 +2,104 @@
 
 <!-- migrated from BACKLOG.md 2026-09-14 (category review: [x] done items belong here) -->
 
+<!-- 2026-10-02: hardware items closed by the KiCad flow, and the 2026-09-16 overnight batch -->
+
+- [x] **Publish the project website (2026-10-02).** `website/` builds the site
+      from these documents (MkDocs + Material; `sh website/build.sh publish` is a
+      strict build), and `.github/workflows/website.yml` builds it on every push to
+      `main` and, with deploy switched on (2026-10-02), publishes it to
+      https://p8x.cottageworker.com. The visitor status page is
+      `docs/p8x-status.md`; keep it current with BACKLOG.md.
+
+- [x] **Memory-card ROM decode revision (BUILD-BLOCKER, found 2026-09-17).** The
+      memory card's `.sch` + theory still carry the pre-2026-09-14 **8 KB ROM
+      window `$0000-$1FFF`** (`ROM !CE = A13 OR A14 OR A15`). The current map is
+      **6 KB ROM `$0000-$17FF`** with **`$1800-$1FFF` a RAM scratch island** (IBUF/
+      SBUF `$1D00`/BIOS scratch `$1F00`), which the OS/BIOS WRITES -- so as drawn,
+      that scratch lands in unwritable ROM and a real board fails. Change: ROM
+      `!CE` gains an `(A11·A12)` deselect term (one AND gate) so ROM answers only
+      `$0000-$17FF`; low-RAM U10 widens to `$1800-$7FFF`. Docs corrected 2026-09-17
+      (memory-card theory + README, RECONCILIATION.md); REMAINING is the CAD:
+      update the decode in `generators/gen_eagle.py` (or the live Fusion `-a`
+      files) and regenerate the memory-card `.sch`. The overnight hardware pass
+      MISSED this (inventory + I/O-port level only; the doc says "Rev E" but is an
+      earlier Rev E). See [[reference_p8x_memory_map]].
+      **RESOLVED in KiCad (2026-09-17, 0d4d38a): the rev F memory-card board (`hardware/memory-card/kicad/gen_mem.py`) applies the 6 KB decode on three spare gates (U9.4 = A11·A12, U11.2 = ROM !CE, U11.3 -> U7.3), no new chips, routed to Gerbers. The Eagle CAD was frozen at rev E on 2026-09-18 when the KiCad flow replaced it (eagle-deprecated/), so gen_eagle.py is deliberately NOT brought to rev F.**
+
+- [x] **OVERNIGHT BATCH (2026-09-16, unattended -- as much as possible without
+      input; all on `graphics-card`, no merge to main beyond the current one).**
+      Scope settled before the unattended run:
+      1. [x] **BASIC layer commands DONE 2026-09-17** (commits a526116 emulator+BASIC
+         +tests, 8034620 RTL, a77b867 docs). TEXTON/TEXTOFF -> TXEN ($50); the NEW
+         GXEN ($57) bitmap-visibility opcode -> GRAPHICSON/GRAPHICSOFF. Real 2-layer
+         compositor: gpu_tx_sample bg = gx_en?base:0, overlay on top; RTL gtxt.v
+         gx_en reg (reset 1) + sdram_video mux gate, byte-identical co-sim
+         (c_gl_ovl_rtl_test now ends in GXEN 0). Tokens $FC..$FF (NOT $B4..$B7 --
+         those collide with the GL-verb block $B4..$F5; fixed in both twins). BASIC
+         cold-starts GRAPHICS OFF, BYE restores GXEN 1 for the shell. Draw-while-
+         hidden verified (PIXELR reads RAM while scanout is black). basic_gfx part 7
+         + basic_gl updated; man basic + README + HELP updated. Both twins build
+         (asm 9330 B, C 21761 B); basic_gfx/basic_gl/basic_c green.
+      2. [~] **Doc sweep IN PROGRESS 2026-09-17.** DONE: man pages for all 16
+         shared //#use / ;#use LIBRARIES (abi mem ptr ps2 wm g3cam stdin rdline
+         glob globx regex dirent apath streq err distab -- commit 12e6f22; only
+         gfx+g3d had one before); man basic + BASIC README + HELP for the layer
+         commands (a77b867); graphics-guide GTEXT-retired confusion fixed +
+         two-mode compositor/mouse currency (0328b56); isa-card rev-E memory line
+         fixed. REMAINING: rebuild the /docs SD disk to install the new man pages
+         + changed docs; regenerate the PDFs whose CONTENT changed (graphics-guide,
+         system-design, card-standards? bus-definition, isa-card) with per-page
+         date+time stamps [[feedback_pdf_timestamp_per_page]]; a final pass over
+         the remaining theory/programmer docs for other stale "retired" notes.
+      3. [~] **Hardware reconciliation IN PROGRESS 2026-09-17** (docs + bus defs
+         only -- NO CAD/.brd gen). DONE: STANDALONE PS/2 card designed --
+         hardware/ps2-card/ (README + theory: 74HC164/161/574 + 7407 per port,
+         $FF58-$FF5F, 5V TTL no bus level-shift, receive path + software-owned
+         bit-banged TX + 'K' probe; DESIGN/PROPOSAL, no CAD per scope). Bus defs
+         brought current: gen_memmap.py now names SWITCHES/LEDS/IRQGEN (0fa7ad5);
+         p8x-bus-definition.md sec5 memory map completed (2nd ACIA, MDU, GL, PS/2,
+         retired doors) + PS/2 allocation registered; hardware/README "not yet
+         realised as TTL boards" table (PS/2 design, MDU/GL on FPGA, IRQ planned);
+         system-design expansion-I/O pointer (all commit 97e3d4c). REMAINING: a
+         short board-vs-emulator/FPGA reconciliation writeup (ISA growth is
+         microcode-only, cards unchanged; the real gaps are the unbuilt IRQ card +
+         no TTL MDU/GL board -- captured in hardware/README but could be its own
+         doc); confirm docs/p8x-card-standards.md needs no PS/2-specific edit (it
+         states the rule; the allocation lives in the bus-definition, done).
+         See [[reference_p8x_memmap_singlesource]].
+      Pre-req (in progress): full `make test` green, then merge graphics-card ->
+      main (fast-forward, includes the -W console mouse-mode SWALLOW fix so the
+      terminal stops spewing SGR chars on mouse move), then start task 1.
+      **CLOSED 2026-10-02. Task 1 done (2026-09-17). Task 2: the man pages and docs landed; the isa-card PDF was regenerated 2026-09-17 (ca1b064); the remaining stale-fact pass was the 2026-10-02 website sweep, which also rebuilt the /docs disk. Task 3: the reconciliation write-up is hardware/RECONCILIATION.md (2026-09-17); docs/p8x-card-standards.md now names the PS/2 card in its scope. graphics-card was merged into main (2026-10-02).**
+
+- [x] Fusion import acceptance test: open backplane .sch/.brd pair, pour planes,
+      run DRC, confirm zero airwires
+      **SUPERSEDED (2026-09-18): the Fusion/Eagle flow was replaced by KiCad; the KiCad backplane is routed with 0 unconnected and DRC-clean (hardware/backplane/kicad/).**
+
+- [x] Add mounting holes to backplane board (6× M3, clear of planes or
+      stitched to GND)
+      **DONE in KiCad: the backplane board carries 6x MountingHole_3.2mm_M3 (nylon screws, 2 mm keepout).**
+
+- [x] Add DIN connector mounting/flange holes at every backplane slot per
+      connector datasheet (mechanical retention against card insertion force)
+      **DONE in KiCad: every DIN41612_C_3x32_Female_Vertical_THT footprint carries its two mounting holes.**
+
+- [x] Route memory card signals in Fusion (planes already done)
+      **SUPERSEDED (2026-09-17/18): the memory card is routed in KiCad (rev F, 4-layer, 0 unconnected).**
+
+- [x] **Place and route the bus test card (2026-07-22).** The `.brd` is
+      forward-annotated but unplaced — all 27 parts parked off the outline, zero
+      copper. Auto-flow confirms they fit 160×100 at 31 % area with ~10 mm slack,
+      so this is a layout job, not a fit problem. Note the workflow rule: once
+      the `.brd` is touched in Fusion the generator is retired as an emitter for
+      it (regenerating would discard placement); schematic, BOM, PDFs and docs
+      can still be updated after that.
+      **DONE in KiCad (2026-09-18, 682ab0d): auto-placed and Freerouting-routed on the uniform 280x140 card, 0 unconnected, Gerbers in hardware/bustest-card/kicad/.**
+
+- [x] Clock-channel verticals on backplane: ~0.6 mm clearance to slot-10 pad
+      columns — confirm against house DRC rules
+      **RESOLVED by the KiCad re-layout: the 8-slot KiCad backplane routes clean at 0.13 mm clearance (netclass in the .kicad_pro), DRC 0 unconnected, silk-only warnings.**
+
 - [x] **Glass-TTY text overlay — the console is now a hardware char-gen plane
       (2026-09-15).** The glass TTY was retired as a *bitmap* console (per-glyph
       GTEXT programs drawn into the framebuffer, clear-on-full, no per-cell erase)
