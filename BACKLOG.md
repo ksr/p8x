@@ -1,7 +1,7 @@
 # P8X Project Backlog
 
 Add ideas as they come; move items between sections as they progress.
-Last updated: 2026-10-02
+Last updated: 2026-10-04
 
 ## How to use
 - **NEXT** — committed, in rough priority order
@@ -466,14 +466,20 @@ remainder is why it is still here.
 - **P8XFS v2 — remaining loose ends** (the hierarchy itself is DONE; see DONE):
     - **on-target FORMAT — DONE** (2026-06-22, see DONE). Added the `FORMAT`
       command; it fit once the OS moved to $4000 (rev D).
-    - **OS code size — 16 KB ceiling (rev E).** The boot loader (CMD_B) loads the
-      OS to $2000 upward. The firmware/BIOS scratch sits at $6000 (monitor line
-      buffer $6000, param/state block $6040, SBUF $6100), so the OS image must end
-      **below $6000** — i.e. **16 KB** of RAM ($2000–$5FFF). This now matches the
-      on-disk OS region (LBA 1–32 = 16 KB) exactly, so RAM and disk impose the same
-      cap. The OS is ~9.5 KB today → ~6.5 KB headroom. (rev E dropped the OS to
-      $2000 and the scratch/TPA −$1000, growing the TPA to ~37.9 KB.) BIOS
-      scratch/SBUF/OS vars: LBA $6047, SBUF $6100, OS vars $6300.
+    - **OS code size — the ceiling is now $5700, with 282 B of headroom
+      (restated 2026-10-04).** The boot loader (CMD_B) loads the OS to $2000
+      upward, and the OS scratch band starts at `LINEBUF` $5700 (`$5700-$58FF`:
+      LINEBUF, CWDPATH $5800, the FS/shell/PACK/FSCK/make variables), so the OS
+      image must end **below $5700** — 14,080 B of RAM. The image is 13,798 B today
+      (`$2000-$55E5`, the resident WM kernel included), leaving **282 B**. The
+      on-disk OS region (LBA 1–32 = 16 KB) is no longer the binding cap: RAM is.
+      History: rev E set the ceiling at $6000 (BIOS scratch $6000, SBUF $6100, OS
+      variables $6300, 16 KB matching the disk region); the 2026-09-13/14 TPABASE
+      drops ($6A00 → $5900) moved SBUF and the BIOS scratch into the
+      `$1800-$1FFF` island and brought the OS scratch down to $5700, which is
+      what made the TPA bigger and the OS ceiling lower. Growing the OS now means
+      moving the OS scratch band up (and TPABASE with it — a flag day, see
+      `docs/memory/reference_p8x_tpabase.md`), or moving code out to `/bin`.
 
 - [ ] **History persistence (optional).** The history ring is RAM-only (cleared at
       cold start). If cross-session history is wanted, add explicit `history -w
@@ -538,16 +544,23 @@ remainder is why it is still here.
       CORE routine. So SYS_OPEN is roughly `P2 = P1; JSR RESOLVE; bridge
       SDIR/NAMEBUF -> the BIOS FNAME/DIRLBA; JSR FOPEN`. See `FINDP2` (:1484) for
       the existing resolve-then-find bridge — reuse it rather than reinvent.
-      Free syscall slots: **$2024 and $2027** (the table ends at SYS_MKDIR $2021).
-      **Open design decision — no free 512-byte page in OS scratch** for SYS_OPEN to
-      own a private dir buffer ($6000-$62FF is BIOS scratch + SBUF $6100; $6300-$69FF
-      is fully allocated: RUNPATH $6740, PATHBUF, APBUF $6800...). Three routes:
+      **Syscall slot:** none is free inside the table any more ($2024 became
+      SYS_EXEC and $2027-$204E the WM calls); SYS_OPEN appends at **$2054**, after
+      SYS_RUNSH $2051. (Restated 2026-10-04.)
+      **Code budget:** the OS image has **282 B** left below the $5700 scratch band
+      (see "OS code size" above), so SYS_OPEN has to fit in that or pay for itself.
+      **Open design decision — no free 512-byte page anywhere below the TPA** for
+      SYS_OPEN to own a private dir buffer (restated 2026-10-04, after the TPABASE
+      drops): the `$1800-$1FFF` island is all taken (IBUF $1800-$19FF, PATHBUF/
+      RUNPATH $1A00, APBUF $1B00-$1CFF, SBUF $1D00-$1EFF, BIOS scratch $1F00), and the
+      OS scratch band `$5700-$58FF` is allocated up to ~$58F0. Three routes:
         1. bounded OS-side path buffer only; caller still supplies the scan page.
            Kills the overflow class; cheapest; leaves FSDIRBUF with the caller.
            RECOMMENDED — most of the win, least risk.
         2. flush the write stream before the dir scan — no page needed and kills the
            footgun outright, but partial-sector flush-then-append is FS surgery.
-        3. reclaim a page from $63xx-$69xx.
+        3. take a page from the TPA (TPABASE +$200, a flag day) — the old route,
+           reclaiming a page from the $63xx-$69xx band, went with the band.
       Pairs with shell-side glob+argv (IDEAS): together they are the whole "stop
       making commands resolve paths and expand globs" thesis. This is the cheap half.
 
@@ -558,8 +571,10 @@ remainder is why it is still here.
       string to programs to resolve relative paths, a command run from a deep
       directory can resolve against the wrong (truncated) path. `CWDL`/`CWDN` stay
       exact, so the OS itself is fine; only the string is short.
-      Bounded, not solved. Options: (a) grow CWDPATH — needs space in OS scratch
-      ($6300-$69FF is fully allocated, same wall as `SYS_OPEN`'s dir buffer);
+      Bounded, not solved. Options: (a) grow CWDPATH — it sits at $5800 in the
+      `$5700-$58FF` OS scratch band, which is allocated up to ~$58F0, so growing it
+      means moving TPABASE up (same wall as `SYS_OPEN`'s dir buffer; restated
+      2026-10-04 — the old "$6300-$69FF is fully allocated" band no longer exists);
       (b) make `cd` refuse a path that would not fit, which is honest but makes a
       legal directory unreachable; (c) store the CWD as LBAs and *render* the text
       on demand by walking parents, which removes the buffer as a limit but costs

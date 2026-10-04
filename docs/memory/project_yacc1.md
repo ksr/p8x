@@ -1,12 +1,16 @@
 ---
 name: project-yacc1
-description: "YACC1 homebrew TTL CPU (separate from P8X) at ~/Documents/YACCS; architecture, where the newest copy of each component actually lives among the duplicate trees, GitHub repo, port plan"
+description: "YACC1 homebrew TTL CPU (separate from P8X); today all in ~/Developer/YACC1-D (ksr/YACC1-D), ~/Documents/YACCS = the archive these 2026-09-19 notes describe; architecture, where the newest copy of each component actually lives among the duplicate trees, GitHub repo, port plan"
 metadata: 
   node_type: memory
   type: project
   originSessionId: 05007751-a1c3-49f6-8fff-5b14d1ceec67
   modified: 2026-09-19T21:38:34.302Z
 ---
+
+**Current (2026-10-04):** YACC1 work lives in `~/Developer/YACC1-D` (github.com/ksr/YACC1-D), which has its own
+CLAUDE.md, BACKLOG and Claude session; `~/Documents/YACCS` is the read-only archive it was migrated from (first Mac
+only). The notes below are the 2026-09-19 survey of that archive, kept as history. See [[one-session-per-project]].
 
 YACC1 ("Yet Another Custom CPU", 2020 build) is a SEPARATE project from P8X with its own tree at
 `/Users/ksr77/Documents/YACCS/`. Built and operational (video on YouTube). As of 2026-09-18 the user

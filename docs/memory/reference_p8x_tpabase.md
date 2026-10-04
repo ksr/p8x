@@ -1,6 +1,6 @@
 ---
 name: reference_p8x_tpabase
-description: Every place that must change when TPABASE (the TPA base / default program load address) moves — it is NOT truly single-sourced; ~all of it is hardcoded. Checklist from the 2026-09-13 $6A00->$6300->$6100 flag-days (OS scratch, then SBUF).
+description: Every place that must change when TPABASE (the TPA base / default program load address) moves — it is NOT truly single-sourced; ~all of it is hardcoded. Checklist from the 2026-09-13/14 $6A00->$6300->$6100->$5900 flag-days (OS scratch, then SBUF, then the BIOS scratch into the $1800 island). The BIOS scratch CAN move (it did, to $1F00) but ~28 sources hardcode it.
 metadata: 
   node_type: memory
   type: reference
@@ -82,7 +82,7 @@ Also update the size caps (symtab - TPABASE): os_asm 9984, asm_c 20224, cc_c 243
 To drop TPABASE past $6300, `SBUF` (was $6100) moved DOWN to $5E00, below the
 BIOS scratch; OS scratch shifted another -$200 to $5700-$5DFF. Extra touch
 points beyond the step-1 checklist:
-- **The BIOS scratch $6000-$60FF MUST NOT MOVE.** FNAME/LBA/LBA1/DIRLBA/FLEN
+- **SUPERSEDED 2026-09-14 (see the $5900 step above): the BIOS scratch moved to $1F00.** Original rule: **The BIOS scratch $6000-$60FF MUST NOT MOVE.** FNAME/LBA/LBA1/DIRLBA/FLEN
   etc. are the stable ABI that commands `//#define` (lib_abi.c / lib_abi.inc)
   and low-level fixtures hardcode. I moved it once by mistake -> every command
   and hilba (LBA=$6047) broke. Only `SBUF` and the OS scratch may move; the

@@ -24,7 +24,7 @@ P8X **rev E** memory map (2026-07-13, commit 6cadf38):
   which let TPABASE drop to $5900.
 - **Final low layout:** RAM island **$1800–$1FFF** (IBUF $1800, PATHBUF $1A00,
   APBUF $1B00, **SBUF $1D00–$1EFF**, **BIOS scratch $1F00–$1FFF**), OS code
-  $2000–~$5585, OS scratch (stay band) **$5700–$58FF** (LINEBUF, CWDPATH $5800,
+  $2000–~$55E5 (13,798 B on 2026-10-04: 282 B below the $5700 scratch band), OS scratch (stay band) **$5700–$58FF** (LINEBUF, CWDPATH $5800,
   the FS/shell/PACK/FSCK/make vars), **TPA = $5900**; stack down from $FEFF.
   **The BIOS scratch moved** ($6000–$60FF → $1F00–$1FFF): FNAME/LBA/DIRLBA/FLEN
   and the graphics flags (GFXPRES/GTSUSP/GCONEN) + ROSTATE/ROSDRV are hardcoded
