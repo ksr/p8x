@@ -70,6 +70,10 @@ The Eagle CAD of the first board generation is frozen (rev E) in each board's
 
 ## Quick Start
 
+Setting up a new machine? See [SETUP.md](SETUP.md) for the full toolchain, tier by
+tier, and run `python3 tools/setup_check.py` to see what is installed and what each
+work area still needs. Only the core-software tier is required to build and test.
+
 ```sh
 # Build the emulator and regenerate microcode images
 cd emulator && make
