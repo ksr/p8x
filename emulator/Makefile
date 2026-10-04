@@ -121,7 +121,7 @@ test-quick: p8xemu ucode
 	@echo "TEST-QUICK: PASS (representative subset; run the full 'make test' before committing compiler/microcode/assembler/OS changes)"
 
 test-isa: p8xemu ucode
-	cd test && cp ../$(UC)/u?.bin . && \
+	cd test && cp ../$(UC)/u?.bin . && rm -f tisa.bin tisa.out && \
 	python3 ../../assembler/p8xasm.py test_isa.asm -o tisa.bin && \
 	../p8xemu tisa.bin 2>tisa.out; \
 	grep -q ' A=00 ' tisa.out && echo "ISA TEST: PASS" || \

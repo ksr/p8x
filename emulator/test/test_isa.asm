@@ -891,20 +891,17 @@ n32b:
 ; ---- D7: relative JMP forward and backward (forced .R), flags untouched ----
         LDA #$D7
         STA TID
-        SEC
         JMP.R d7_f                  ; forward
         LDA #$01                    ; skipped
         STA TID
-d7_b:   JNC fail                    ; C must still be set after the taken branch
-        JMP.R d7_ok
-d7_f:   JNC fail
-        JMP.R d7_b                  ; backward
+d7_b:   JMP.R d7_ok                 ; (a taken branch clobbers A and the flags
+d7_f:   JMP.R d7_b                  ;  since f93eee0 -- only the path is tested)
         HLT                         ; never
 d7_ok:  LDA #$00
         LDB #$00
         CMP                         ; Z=1
         JNZ fail
-; ---- D8: conditional relative branches: taken, not taken, flags kept ----
+; ---- D8: conditional relative branches: taken, not taken (not taken keeps the flags) ----
         LDA #$D8
         STA TID
         LDA #$05
@@ -913,17 +910,14 @@ d7_ok:  LDA #$00
         JNZ.R fail_r                ; not taken
         JZ.R d8_a                   ; taken
         JMP fail
-d8_a:   JNC fail                    ; C survived the taken JZ.R
-        JNZ fail                    ; Z survived too
-        LDA #$03
+d8_a:   LDA #$03                    ; (no flag checks after a taken branch: it
+                                    ;  clobbers A and the flags -- see DA)
         LDB #$07
         CMP                         ; A<B: C=0, Z=0
         JC.R fail_r                 ; not taken
         JNC.R d8_b                  ; taken
         JMP fail
-d8_b:   JC fail
-        JZ fail
-        JMP.R d8_c
+d8_b:   JMP.R d8_c
 fail_r: JMP fail
 ; ---- D9: signed relative branches after CMP ----
 d8_c:   LDA #$D9
@@ -968,7 +962,7 @@ da_2:   LDA #$A5                    ; B survived the second taken branch too
         LDA #0                      ; the NOT-taken path leaves the flags alone:
         LDB #0
         CMP                         ; Z=1
-        JNZ.R fail                  ; not taken ...
+        JNZ.R fail_r                ; not taken ...
         JNZ fail                    ; ... and Z is still 1 here
         JZ.R da_3                   ; (taken: fine, nothing tested after it)
         HLT
