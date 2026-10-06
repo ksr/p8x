@@ -66,3 +66,5 @@
 - [YACC1 ADDR-REG-ID bus signals](reference_yacc1_addr_reg_id.md) — C3-C6: Bus V3.1 (2020-08) = -ADDR-REG-RD/LD for the retired Address+TMP card; Bus V3.2 (2020-11) = ADDR-REG-ID0..3 (the machine); Blank V3.1 template still carries the OLD names; not 16-bit related
 - [Docs in Ken's voice](feedback_doc_voice.md) — plain documentation voice, no "Ken asked/Ken's pick/Claude" narration; Claude's part stated once (README "Who made it" + site home)
 - [One session per project](one-session-per-project.md) — P8X and YACC1-D each have their own Claude session; the other repo is reference-only unless Ken asks
+- [cottageworker.com site](project_cottageworker_site.md) — repo ~/Developer/cottageworker-site has its own CLAUDE.md (read it first); snapshot job removed from this Mac 2026-10-05, second Mac install UNVERIFIED
+- [ELF repo](reference_elf_repo.md) — System-5 1802 ELF = github ksr/elf (private), cloned at ~/Developer/elf; own CLAUDE.md; old elf-1/elf-2/1802 folders are import sources
