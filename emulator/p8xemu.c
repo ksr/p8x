@@ -1821,7 +1821,9 @@ static void gpu_writeascii(void){
     fputc('+',stderr); for(int i=0;i<gw/2;i++) fputc('-',stderr); fputs("+\n",stderr);
 }
 
-/* ---- 74181, active-high data. Returns F; *cn4 gets the RAW pin level. */
+/* ---- 74181, active-high data. Returns F; *cn4 gets the CONVENTIONAL carry-out
+   (1 = carry / A>=B) -- the inverse of the active-low Cn+4 pin, i.e. what the
+   ALU card's U25 inverter feeds the C flag (rev B). */
 static uint8_t alu181(uint8_t a,uint8_t b,int s,int m,int cinpin,int*cn4){
     int c = !cinpin;                       /* logical carry-in */
     unsigned r;                            /* arithmetic interpretation of S */

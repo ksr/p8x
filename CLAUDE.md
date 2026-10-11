@@ -45,7 +45,7 @@ yet; the same microarchitecture also runs as an FPGA build (fpga/).
    A>=B after SUB/CMP. The 74181 Cn+4 pin is active-low; the ALU card inverts
    it (U25 NAND, net CFLGI) before the C-flag source mux; p8xemu.c's alu181()
    and fpga/rtl/p8x_cpu.v compute that conventional carry-out directly (bit 8
-   of the sum; alu181's "RAW pin level" header comment is stale). Microcode,
+   of the sum). Microcode,
    emulator, monitor and FPGA RTL all use this sense — never reintroduce the
    raw-pin polarity in one of them. (Rev A latched the raw pin, C=1 meaning NO
    carry; resolved in BACKLOG-DONE.md.)
