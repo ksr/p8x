@@ -32,20 +32,27 @@ yet; the same microarchitecture also runs as an FPGA build (fpga/).
    (hardware/<board>/kicad/), their netlists or the ROM binaries — they are
    build artifacts of generators/ (gen_eagle.py still produces the netlists;
    generators/build.sh turns them into KiCad boards) and
-   firmware/microcode/genucode.py. Edit the generator, regenerate. The Eagle
+   microcode/genucode.py. Edit the generator, regenerate. The Eagle
    files of the first generation are frozen in eagle-deprecated/ (every board
    but the KiCad-only ps2-card).
 2. **The emulator interprets the same ROM images burned to the EPROMs**
-   (firmware/microcode/u0-u3.bin). Never give the emulator private opcode
+   (microcode/u0-u3.bin). Never give the emulator private opcode
    knowledge; all instruction semantics live in the microcode.
-3. **The assembler (when built) must share genucode.py's opcode table** —
+3. **The assembler must share genucode.py's opcode table** —
    one source of truth for mnemonics/encodings.
 4. Active-low signals use a leading dash: -RES, -RD, -MEMW.
-5. **C flag quirk (deliberate, matches hardware):** the flag register
-   latches the RAW 74181 Cn+4 pin, which is active-LOW carry
-   (C=1 means NO carry out). Do not "fix" this in the emulator; it is a
-   VERIFY item in BACKLOG.md (invert in rev B vs adopt as convention).
-6. V flag is hardwired 0 in rev A (matches the ALU card).
+5. **C flag is conventional active-HIGH carry (rev B):** C=1 = carry out /
+   A>=B after SUB/CMP. The 74181 Cn+4 pin is active-low; the ALU card inverts
+   it (U25 NAND, net CFLGI) before the C-flag source mux; p8xemu.c's alu181()
+   and fpga/rtl/p8x_cpu.v compute that conventional carry-out directly (bit 8
+   of the sum; alu181's "RAW pin level" header comment is stale). Microcode,
+   emulator, monitor and FPGA RTL all use this sense — never reintroduce the
+   raw-pin polarity in one of them. (Rev A latched the raw pin, C=1 meaning NO
+   carry; resolved in BACKLOG-DONE.md.)
+6. **V flag is signed overflow (rev C),** derived on the ALU card by the
+   sign-bit method (U34/U35, ungated by M) and modelled the same way in the
+   emulator; it drives the signed-compare conditions NV = N^V and NVZ.
+   (It was hardwired 0 in rev A.)
 7. Check BACKLOG.md before and after working; keep it current
    (NEXT / IDEAS / VERIFY / WONT-DO sections — live work only). Completed items
    move OUT to BACKLOG-DONE.md; don't let finished work pile up in BACKLOG.md.
