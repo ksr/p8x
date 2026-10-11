@@ -21,14 +21,16 @@ the source of truth and `.brd` placement is hand work in Fusion).
 >   `$FF18–$FF1F`. The firmware and the emulator still select drive 1 with the
 >   device bit on `$FF10–$FF17`, so drive 1 on this card needs a port-base change
 >   in the CF driver and the emulator first; drive 0 works as is.
-> - **Register bank — rev D still pending (a correction to "no architectural
->   change" below).** The 16-bit ops `PHW`/`PLW`/`LPW` increment the scratch
->   pointer PT, and `MOVW` needs a second one, PT2 (PSEL = 5). The routed board is
->   the rev B netlist (PT as 74377 load-only latches, no PT2), so PT must become
->   four 74169 counters and PT2 be added (~10 chips, regbank card only, no
->   backplane change) before the current software can run on TTL — see the rev-D
->   note in [regbank-card theory §3.1](regbank-card/p8x-regbank-card-theory.md).
-> - **Still open:** the register bank rev D (above); the IRQ controller card; a TTL MDU (optional; the GL port stays
+> - **Register bank — rev D done (2026-10-11).** The 16-bit ops `PHW`/`PLW`/`LPW`
+>   increment the scratch pointer PT, and `MOVW` needs a second one, PT2 (PSEL = 5),
+>   so the rev B board (PT as 74377 load-only latches, no PT2) could not run the
+>   current software. Rev D makes PT four 74169 counters (`U41–U44`), adds PT2 as
+>   four more (`U45–U48`) with its own select buffers (`U51/U52`) and `-SEL5` gate,
+>   widens the count decoder `U39` to a 3-bit 74138 (`-CNT0..5`) and adds `U53` for
+>   the PT2 load strobes — ~10 chips, regbank card only, no backplane change. 53 ICs
+>   total; routes clean (0 unconnected). See the rev-D note in
+>   [regbank-card theory §3.1](regbank-card/p8x-regbank-card-theory.md).
+> - **Still open:** the IRQ controller card; a TTL MDU (optional; the GL port stays
 >   on the FPGA card). At build time the microcode EPROMs and the program ROM are
 >   burned from the current images in `rom/`.
 >

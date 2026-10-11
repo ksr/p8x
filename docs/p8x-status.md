@@ -58,9 +58,11 @@ The latest revisions follow the current software: the memory card (rev F) decode
 6 KB ROM, the I/O card (rev B) has a second serial port, and the CF card (rev B) has
 two drives. Before ordering ([build readiness](../hardware/RECONCILIATION.md)):
 
-- **Register bank rev D.** The 16-bit instructions count the hidden scratch pointer
-  PT, and `MOVW` needs a second one, PT2; the routed board still has PT as load-only
-  latches. About ten more chips, on the register bank card only.
+- **Register bank rev D — done (2026-10-11).** The 16-bit instructions count the
+  hidden scratch pointer PT, and `MOVW` needs a second one, PT2. Rev D makes PT and
+  PT2 four 74169 counters each (PT was load-only latches) with a 3-bit count
+  decoder — about ten more chips, on the register bank card only; the board routes
+  clean.
 - **CF drive 1.** The CF card decodes drive 1 at its own `$FF18–$FF1F`; the firmware
   and the emulator still select it with the device bit on `$FF10–$FF17`.
 - **Bench checks.** The DIN 41612 footprints against the physical connectors, and

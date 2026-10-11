@@ -941,10 +941,18 @@ ic.update({"U25":("74244","ADDR LO"),"U26":("74244","ADDR HI"),
  "U30":("74138","DLD DEC"),"U31":("74138","DOE DEC"),"U32":("74139","LOAD DEC"),
  "U33":("74138","SEL DEC"),"U34":("7402","74HCT02"),"U35":("HEX14","74HCT14"),
  "U36":("74244","ZERO P0"),"U37":("GATES14","74HCT08"),"U38":("GATES14","74HCT08"),
- # rev B: PT (5th pointer, PSEL=4) + 3-bit decode support
- "U39":("74139","CNT DEC"),"U40":("GATES14","74HCT32"),
- "U41":("74377V2","PT LO"),"U42":("74377V2","PT HI"),
- "U43":("74244","PT SEL LO"),"U44":("74244","PT SEL HI")})
+ # rev D: PT (PSEL=4) and PT2 (PSEL=5) are both four 74169 counters now -- the
+ # 16-bit ops PHW/PLW/LPW increment PT, and MOVW needs a second cursor PT2. U39
+ # widens to a 3-bit 74138 count decoder (-CNT0..5, so PT/PT2 count too); U53
+ # ORs the PT2 load strobes. (Rev B/C had PT as two 74377 load-only latches.)
+ "U39":("74138","CNT DEC"),"U40":("GATES14","74HCT32"),
+ "U41":("74169","PT L0"),"U42":("74169","PT L1"),
+ "U43":("74169","PT H0"),"U44":("74169","PT H1"),
+ "U45":("74169","PT2 L0"),"U46":("74169","PT2 L1"),
+ "U47":("74169","PT2 H0"),"U48":("74169","PT2 H1"),
+ "U49":("74244","PT SEL LO"),"U50":("74244","PT SEL HI"),
+ "U51":("74244","PT2 SEL LO"),"U52":("74244","PT2 SEL HI"),
+ "U53":("GATES14","74HCT32")})
 sm={"RP1":("RES","1K"),"LED3":("LED","PWR-GRN"),
  "R4":("RES","1K"),"LED4":("LED","RD-GRN"),"R5":("RES","1K"),"LED5":("LED","LD-YEL")}
 for p in range(4):
@@ -956,7 +964,7 @@ for p in range(4):
             N(n,"D%d"%((s%2)*4+bit),(u,"ABCD"[bit]))
         N(n,("-LDL0E" if (p==0 and s<2) else "-LDH0E" if p==0 else
              "-LDL%d"%p if s<2 else "-LDH%d"%p),(u,"!LOAD"))
-        if s==0: N(n,"-CNT%d"%p,(u,"!ENT"))
+        if s==0: N(n,"GND",(u,"!ENT"))   # stage-0 !ENT tied low (standard 74169 cascade); -CNTp gates counting via !ENP, so it needn't jumper to pin 10 too
         else: N(n,"RC%d_%d"%(p,s-1),(u,"!ENT"))
         if s<3: N(n,"RC%d_%d"%(p,s),(u,"!RCO"))
         for bit in range(4):
@@ -995,6 +1003,12 @@ N(n,"PSEL2",("U40","1B"),("U40","2B"))
 N(n,"-SEL4",("U40","3B"),("U40","4B"))
 N(n,"-LDLG",("U40","1Y"),("U32","!G1")); N(n,"-LDHG",("U40","2Y"),("U32","!G2"))
 N(n,"-LDL4",("U40","3Y")); N(n,"-LDH4",("U40","4Y"))
+# rev D: PT2 (PSEL=5) load strobes -- same OR pattern as PT's on U40.
+# -LDL5 = -LDL | -SEL5 ; -LDH5 = -LDH | -SEL5 (active only when PT2 selected).
+N(n,"-LDL",("U53","1A")); N(n,"-LDH",("U53","2A"))
+N(n,"-SEL5",("U53","1B"),("U53","2B"))
+N(n,"-LDL5",("U53","1Y")); N(n,"-LDH5",("U53","2Y"))
+N(n,"GND",("U53","3A"),("U53","3B"),("U53","4A"),("U53","4B"))   # spare gates
 N(n,"-POEL",("U31","Y0"),("U37","3A")); N(n,"-POEH",("U31","Y1"),("U37","3B"),("U35","2A"))
 N(n,"POEHP",("U35","2Y"))
 N(n,"-POE",("U37","3Y"),("U38","1A"),("U38","1B"))
@@ -1006,12 +1020,14 @@ for p in range(4):
 N(n,"PSEL0",("U33","A")); N(n,"PSEL1",("U33","B")); N(n,"PSEL2",("U33","C"))
 N(n,"VCC",("U33","G1")); N(n,"GND",("U33","!G2A"),("U33","!G2B"))
 for p in range(4): N(n,"-SEL%d"%p,("U33","Y%d"%p))
-N(n,"-SEL4",("U33","Y4"))
-# U39 count decoder (74139 gate1): PSEL0/1, enabled by CNTN (P0-P3 only)
-N(n,"PSEL0",("U39","A1")); N(n,"PSEL1",("U39","B1"))
-for p in range(4): N(n,"-CNT%d"%p,("U39","1Y%d"%p))
-N(n,"VCC",("U39","!G2")); N(n,"GND",("U39","A2"),("U39","B2"))
-N(n,"CNTN",("U34","1Y"),("U39","!G1"))
+N(n,"-SEL4",("U33","Y4")); N(n,"-SEL5",("U33","Y5"))   # rev D: PSEL=5 = PT2
+# U39 count decoder (74138, full 3-bit PSEL, enabled by CNTN low): -CNT0..5 so
+# PT (PSEL=4) and PT2 (PSEL=5) count too (rev D). Y6/Y7 unused. This also removes
+# the rev-B latency where PSEL>=4 aliased the 74139 gate onto -CNT0/-CNT1.
+N(n,"PSEL0",("U39","A")); N(n,"PSEL1",("U39","B")); N(n,"PSEL2",("U39","C"))
+N(n,"VCC",("U39","G1")); N(n,"GND",("U39","!G2B"))
+N(n,"CNTN",("U34","1Y"),("U39","!G2A"))
+for p in range(6): N(n,"-CNT%d"%p,("U39","Y%d"%p))
 N(n,"PINC",("U34","1A")); N(n,"PDEC",("U34","1B"),("U35","1A"))
 N(n,"UDB",("U35","1Y"))
 N(n,"GND",*[("U34",p) for p in ("2A","2B","3A","3B","4A","4B")],
@@ -1028,19 +1044,32 @@ N(n,"RDK",("U38","1Y"),("LED4","K")); N(n,"LDK",("U38","2Y"),("LED5","K"))
 N(n,"VCC",("RP1","1"),("R4","1"),("R5","1"))
 N(n,"LEDP",("RP1","2"),("LED3","A"))
 N(n,"LEDRD",("R4","2"),("LED4","A")); N(n,"LEDLD",("R5","2"),("LED5","A"))
-# PT scratch pointer (PSEL=4): 74377 latches loaded from D0-7 on -LDL4/-LDH4,
-# driven onto the pointer bus PB via 74244 buffers when -SEL4.
-for half,ureg,ubuf,lds in ((0,"U41","U43","-LDL4"),(1,"U42","U44","-LDH4")):
-    N(n,"CLK",(ureg,"CLK"))
-    N(n,lds,(ureg,"!E"))
-    for b in range(8):
-        N(n,"D%d"%b,(ureg,"D%d"%(b+1)))
-        N(n,"PTQ%d_%d"%(half,b),(ureg,"Q%d"%(b+1)),(ubuf,"A%d"%(b+1)))
-    N(n,"-SEL4",(ubuf,"!G1"),(ubuf,"!G2"))
-    for b in range(8):
-        N(n,"PB%d"%(half*8+b),(ubuf,"Y%d"%(b+1)))
+# PT (PSEL=4) and PT2 (PSEL=5) scratch pointers -- rev D. Both are now four
+# 74169 counters each (identical structure to P0-P3, a carry chain on !RCO->!ENT)
+# so the 16-bit ops can PINC them, loaded from D0-7 on -LDLp/-LDHp and driven
+# onto the pointer bus PB via two 74244 select buffers gated by -SELp. Counter
+# numbering: PT=U41-44, PT2=U45-48; select buffers PT=U49/50, PT2=U51/52.
+for p in (4,5):
+    base=41+(p-4)*4
+    for s in range(4):
+        u="U%d"%(base+s)
+        N(n,"CLK",(u,"CLK")); N(n,"UDB",(u,"UD")); N(n,"-CNT%d"%p,(u,"!ENP"))
+        for bit in range(4):
+            N(n,"D%d"%((s%2)*4+bit),(u,"ABCD"[bit]))
+        N(n,"-LDL%d"%p if s<2 else "-LDH%d"%p,(u,"!LOAD"))
+        if s==0: N(n,"GND",(u,"!ENT"))   # stage-0 !ENT tied low (standard 74169 cascade); -CNTp gates counting via !ENP, so it needn't jumper to pin 10 too
+        else: N(n,"RC%d_%d"%(p,s-1),(u,"!ENT"))
+        if s<3: N(n,"RC%d_%d"%(p,s),(u,"!RCO"))
+        for bit,q in enumerate(("QA","QB","QC","QD")):
+            N(n,"PQ%d_%d"%(p,s*4+bit),(u,q))
+    for half in range(2):
+        u="U%d"%(49+(p-4)*2+half)
+        N(n,"-SEL%d"%p,(u,"!G1"),(u,"!G2"))
+        for b in range(8):
+            N(n,"PQ%d_%d"%(p,half*8+b),(u,"A%d"%(b+1)))
+            N(n,"PB%d"%(half*8+b),(u,"Y%d"%(b+1)))
 n={k:v for k,v in n.items() if v}
-card("regbank-card","P8X REGISTER BANK CARD REV B (P0=PC P3=SP, PT scratch)",ic,sm,n,
+card("regbank-card","P8X REGISTER BANK CARD REV D (P0=PC P3=SP, PT+PT2 scratch counters)",ic,sm,n,
  {"D%d"%i for i in range(8)}|{"A%d"%i for i in range(16)}|
  {"DLD%d"%i for i in range(4)}|{"DOE%d"%i for i in range(4)}|
  {"PSEL0","PSEL1","PSEL2","PINC","PDEC","CLK","-RES"})

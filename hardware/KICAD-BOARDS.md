@@ -25,7 +25,7 @@ DRC items are silkscreen warnings.
 | alu-card | ✅ | 0 | |
 | io-card | ✅ | 0 | **rev B: 2x ACIA/DB9** — ACIA1 `$FF04/5` + ACIA2 `$FF08`, two DB9 sockets with RX/TX-swap jumpers (one MAX232 for both), switches, LED bars, bus monitor; bespoke `gen_io.py` (DB9s+switch bottom, LED bars top). RTC/coin cell is DNP |
 | ps2-card | ✅ | 0 | keyboard + mouse, **ATmega1284P** latch-bridge at `$FF58-5F`; custom mini-DIN-6 sockets (bottom edge), 4 status LEDs (right edge), ICSP; no level-shift (5V-native); bespoke `gen_ps2.py` |
-| regbank-card | ✅ | 0 | 95 parts — routed (5m45s auto + ~13min optimizer) |
+| regbank-card | ✅ | 0 | **rev D: 53 ICs** — PT and PT2 are four 74169 counters each (was PT = 74377 latches), 74138 3-bit count decoder, U53 PT2 load-strobe OR; routed 0 unconnected. Stage-0 `!ENT` tied low (standard 74169 cascade) so `-CNTp` need not jumper to pin 10 — that is what let the dense board route |
 | bustest-card | ✅ | 0 | Pico (RP2040) + 5× MCP23S17 + 16 LEDs; routed with right-edge LED bank |
 | backplane | ✅ | 0 | **8-slot** DIN41612 motherboard, 262×128mm (28mm slot pitch, slots left-justified, power/pull-up parts on the right; power entry = Phoenix MSTBA 2,5/2-G-5,08, Digikey 1729128). Routes clean at **0.13mm clearance** (netclass in the `.kicad_pro`) with **nylon-screw** 2mm keepouts. |
 

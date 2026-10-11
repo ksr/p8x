@@ -140,9 +140,9 @@ FPGA (needs `iverilog`; the board flow needs oss-cad-suite):
 ## Near-term roadmap (see BACKLOG.md)
 (The original three items — assembler sharing the opcode table, CF-IDE emulation,
 the decoupling-cap generator pass — are all long done; see BACKLOG-DONE.md.)
-1. TTL build: the register bank rev D (PT2 for MOVW, a counting PT for
-   PHW/PLW/LPW — the routed rev B cannot run today's microcode), then footprint
-   confirmation and ordering (the backplane first); the KiCad DRC is already clean.
+1. TTL build: the register bank rev D is done (2026-10-11 — PT and PT2 are 74169
+   counters now, so PHW/PLW/LPW and MOVW's PT2 run on TTL); next is footprint
+   confirmation and ordering (the backplane first). The KiCad DRC is already clean.
 2. FPGA build: first the RAM write window — the RTL writes RAM only from $2000,
    but since the 6K ROM (2026-09-14) RAM starts at $1800 and the monitor/OS keep
    scratch in $1800-$1FFF; move both boundaries to RAMBASE and bring the co-sim

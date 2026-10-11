@@ -2,6 +2,27 @@
 
 <!-- migrated from BACKLOG.md 2026-09-14 (category review: [x] done items belong here) -->
 
+- [x] **Register bank rev D — PT counts, PT2 added (2026-10-11).** The TTL
+      build-blocker (found 2026-10-02): the routed KiCad regbank was still the rev B
+      netlist with PT as two 74377 load-only latches, so `PHW`/`PLW`/`LPW` (which
+      `PINC` PT) and `MOVW` (which needs a second cursor) could not run on TTL. Rev D
+      changes the regbank netlist in `gen_eagle.py` (`CARDS["regbank-card"]`): PT is
+      now four 74169 counters (`U41–U44`); PT2 (PSEL = 5) is another four
+      (`U45–U48`) with its own 74244 select buffers (`U51/U52`) gated by `-SEL5`; the
+      count decoder `U39` is a 3-bit 74138 (`-CNT0..5`, so PT/PT2 count too) in place
+      of the rev-B 74139; and `U53` (74HCT32) ORs the PT2 load strobes `-LDL5/-LDH5`
+      the way `U40` makes PT's. ~10 chips added, 53 ICs total, no backplane/control
+      change. ERC clean; board routes **0 unconnected**.
+      **Routing finding:** the dense board (53 ICs) would not route while every
+      `-CNTp` had to reach both pin 7 (`!ENP`) and pin 10 (`!ENT`) of its slice-0
+      counter — a jumper across the chip body that Freerouting left open in net after
+      net. Tying stage-0 `!ENT` low (GND) instead, the standard 74169 synchronous
+      cascade (counting is gated by `!ENP`, which keeps `-CNTp`), is functionally
+      identical and removed that connection; the generic placement then routed clean.
+      A bespoke `gen_regbank.py` placement was tried first and routed *worse* than the
+      generic auto-placer, so it was dropped. PT2 is hardware-provisioned for `MOVW`,
+      which stays a microcode/emulator/assembler item (software already models it).
+
 <!-- 2026-10-02: hardware items closed by the KiCad flow, and the 2026-09-16 overnight batch -->
 
 - [x] **Publish the project website (2026-10-02).** `website/` builds the site

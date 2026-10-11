@@ -1402,7 +1402,7 @@ Nothing below has been built or measured.
       only needed to keep the host `cc` build warning-clean.)
 
 - [~] **`MOVW dst,src` — 16-bit memory→memory move — SOFTWARE DONE (2026-06-27);
-      register-bank hardware regen PENDING.** Opcode `$78`, shape `a,a` (5 bytes:
+      register-bank hardware DONE rev D (2026-10-11).** Opcode `$78`, shape `a,a` (5 bytes:
       opcode + dst16 + src16), 12 microcode steps. Landed: microcode (`genucode.py`
       `MOVW` + `PT2=5`), emulator (`P[6]`, PT2 init), assembler (`MOVW dst,src`
       two-operand encoder), and **`p8cc.py`** (a `mov16` helper at the two hot
@@ -1434,18 +1434,12 @@ Nothing below has been built or measured.
            every /BIN command) gets the win; p8cc.c adoption is a follow-up.
       Original analysis below.
 
-- [ ] **`MOVW` register-bank hardware regen (rev D).** See the MOVW item above and
-      the regbank theory rev-D note: turn `PT` into 74169 counters, add `PT2`
-      (PSEL=5) counters + `-SEL5` buffers, extend `U39`/`U40` count/load decode.
-      Change the regbank netlist in `gen_eagle.py` (`CARDS["regbank-card"]`), then
-      rebuild the KiCad board (`generators/build.sh regbank-card`: ERC + gate-sim +
-      DRC) and `gen_bom.py`; check one-hot pointer-bus drive. No backplane/control-
-      card change. **TTL build-blocker (2026-10-02):** the routed KiCad regbank is
-      still the rev B netlist, and compiled code uses `PHW`/`PLW` (C argument
-      pushes and pops), which `PINC` PT.
-      Also teach the on-target assembler (`apps/p8xasm.asm` + `gen_p8xopc.py`) the
-      two-operand shape if MOVW is ever to be assembled on the target (host-only
-      today; the opcode table and cover-test currently skip two-operand shapes).
+- [ ] **On-target assembler MOVW two-operand shape (optional).** `MOVW dst,src`
+      assembles host-side only; teach `apps/p8xasm.asm` + `gen_p8xopc.py` (and the
+      native cover-test, which skips two-operand shapes) the `a,a` shape if MOVW is
+      ever to be assembled on the target. The register-bank rev-D **hardware** this
+      once blocked on is DONE (2026-10-11) — PT and PT2 are 74169 counters, the
+      board routes clean; see BACKLOG-DONE.md.
 
 - [ ] **(orig)** `MOVW dst,src` — 16-bit memory→memory move (needs a 2nd scratch pointer
       = HARDWARE) (2026-06-26). The single largest idiom from the histogram:

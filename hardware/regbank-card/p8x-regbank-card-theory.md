@@ -41,20 +41,20 @@ back onto the data bus.
 ## 2. Block diagram
 
 ```
-  PSEL0-2 ─► ┌────────────┐ -SEL0..4 (one-hot)
+  PSEL0-2 ─► ┌────────────┐ -SEL0..5 (one-hot)
              │U33 74138   ├───────────────┬─────────────┬───────────────┐
              │ SEL decode │                │             │               │
              └────────────┘                ▼             ▼               ▼
                                     ┌──────────┐  ┌──────────┐    ┌──────────────┐
-  D0-7 ─load─► ┌──────────────┐     │P0: U1-4  │  │P1: U5-8  │ …  │PT: U41/42    │
-              │load/cnt decode│     │4× 74169  │  │4× 74169  │    │2× 74377      │
-  DLD0-3 ─►   │U30 U32 U40    │────►│16-bit    │  │16-bit    │    │16-bit scratch│
+  D0-7 ─load─► ┌──────────────┐     │P0: U1-4  │  │P1: U5-8  │ …  │PT:  U41-44   │
+              │load/cnt decode│     │4× 74169  │  │4× 74169  │    │PT2: U45-48   │
+  DLD0-3 ─►   │U30 U32 U40 U53│────►│16-bit    │  │16-bit    │    │4× 74169 each │
   PINC/PDEC ─►│U34 U35 U39    │cnt  │ up/down  │  │ up/down  │    └──────┬───────┘
               └──────────────┘ /load└────┬─────┘  └────┬─────┘           │
-                                         │PQ           │PQ               │PTQ
+                                         │PQ           │PQ               │PQ
                                   ┌──────▼─────────────▼─────────────────▼──────┐
                                   │ pointer-select buffers (74244, gated -SELp) │  selected
-                                  │ U17-U24 (P0-P3) + U43/U44 (PT)              │  pointer →
+                                  │ U17-U24 (P0-P3) + U49/50 (PT) + U51/52 (PT2)│  pointer →
                                   └──────────────────────┬───────────────────────┘  PB0-15
                                                          │PB0-15 (internal pointer bus)
                           ┌──────────────────────────────┼───────────────────────┐
@@ -78,43 +78,44 @@ back onto the data bus.
 ### 3.1 Each pointer is four 74169s in a carry chain
 A 16-bit pointer is built from four 74169 synchronous up/down counters (4 bits
 each): `L0,L1` for the low byte, `H0,H1` for the high byte. They count as one
-16-bit unit because the carry chain is cascaded: slice 0's count-enable is the
-pointer's `-CNTp`, and each later slice takes its `!ENT` from the previous slice's
-`!RCO` (ripple-carry-out). Only when a slice is at terminal count does it enable
-the next — that is the textbook fully-synchronous cascade, so all 16 bits change on
-the same clock edge with no ripple delay in the *outputs*.
+16-bit unit because the carry chain is cascaded: every slice's `!ENP` is the
+pointer's `-CNTp` (the master count-enable), slice 0's `!ENT` is tied low, and each
+later slice takes its `!ENT` from the previous slice's `!RCO` (ripple-carry-out).
+Only when a slice is at terminal count does it enable the next — that is the textbook
+fully-synchronous cascade, so all 16 bits change on the same clock edge with no
+ripple delay in the *outputs*.
 
 `UDB` (derived from `PDEC`) sets the count **direction** for all slices: PINC →
 count up, PDEC → count down. Loading a pointer half drives `D0–7` into the slice
 `A/B/C/D` inputs and pulses `!LOAD`.
 
-PT (PSEL = 4) is different hardware **in rev B/C** — two 74377 octal latches
-(`U41/U42`) instead of counters, because there the scratch pointer only ever
-needs to be *loaded*, never counted. (Rev D changes this — see the note below.)
+PT (PSEL = 4) was different hardware **in rev A–C** — two 74377 octal latches
+instead of counters, because there the scratch pointer was only ever *loaded*,
+never counted. **Rev D makes PT four 74169 counters like P0–P3 and adds a second
+scratch pointer PT2 (PSEL = 5)** — see the note below.
 
-> **Rev D — PT must become a counter, and a second scratch pointer PT2 is added
-> (PENDING; not yet in the generated schematic).** The rev-D 16-bit ops change
-> this picture. `PHW`/`PLW`/`LPW1`/`LPW2` (and the new `MOVW`) *increment* PT
-> (`PINC` at PSEL = 4) to walk from a word's low byte to its high byte — so the
-> load-only 74377 latches above are **no longer sufficient**: PT must be four
-> 74169 up-counters like P0–P3. (Those ops currently run only in the emulator,
-> which counts any pointer; on real 74377 latches they would re-read the low byte.
-> This is a latent gap the "pure-microcode" ops introduced.) `MOVW dst,src` also
+> **Rev D — PT counts, and PT2 is added (built 2026-10-11).** The 16-bit ops
+> `PHW`/`PLW`/`LPW1`/`LPW2` *increment* PT (`PINC` at PSEL = 4) to walk from a
+> word's low byte to its high byte, so the load-only 74377 latches were no longer
+> sufficient: PT is now four 74169 up/down counters (`U41–U44`). `MOVW dst,src`
 > needs a **second** scratch pointer **PT2 (PSEL = 5)** as its write cursor, since
-> a memory→memory move holds two addresses live at once — another four 74169s
-> plus a 74244 buffer pair (like `U43/U44`) gated by `-SEL5`. Decode work: the
-> count decoder must produce `-CNT4`/`-CNT5` (extend `U39`), and the load decoder
-> `-LDL5`/`-LDH5` for PT2. **No backplane change** — `PSEL` is already 3 bits and
-> `U33` already decodes select 5 (this also defines the previously-floating
-> PSEL = 5 case flagged in the backplane VERIFY notes). ~10 chips, all on this
-> card. Tracked in BACKLOG (MOVW/PT2); the microcode, emulator, assembler, and
-> `p8cc.py` already emit and model it.
+> a memory→memory move holds two addresses live at once — PT2 is another four
+> 74169s (`U45–U48`) with its own 74244 buffer pair (`U51/U52`) gated by `-SEL5`.
+> The count decoder `U39` widened from a 74139 (PSEL0/1 → `-CNT0..3`) to a 74138
+> that decodes the full 3-bit PSEL (`-CNT0..5`), so PT and PT2 count too; `U53`
+> (74HCT32) ORs the PT2 load strobes `-LDL5`/`-LDH5` the way `U40` makes PT's. The
+> select buffers are `U49/U50` (PT) and `U51/U52` (PT2). **No backplane change** —
+> `PSEL` is already 3 bits and `U33` already decodes select 5 (this also defines
+> the previously-floating PSEL = 5 case noted in the backplane VERIFY notes), ~10
+> chips added on this card (53 ICs total). The microcode, emulator, assembler and
+> `p8cc.py` already emit and model the counting PT; PT2 is provisioned for `MOVW`,
+> which remains a microcode/emulator item on the BACKLOG.
 
 ### 3.2 Pointer selection → the internal pointer bus (PB0–15)
-`PSEL0–2` drive `U33` (74138), producing the one-hot select `-SEL0..-SEL4`. The
+`PSEL0–2` drive `U33` (74138), producing the one-hot select `-SEL0..-SEL5`. The
 selected pointer's counter outputs (`PQ`) are gated onto the internal **pointer
-bus PB0–15** by that pointer's pair of 74244 buffers (`U17–U24` for P0–P3, or
-`U43/U44` for PT). Exactly one pointer drives PB at a time.
+bus PB0–15** by that pointer's pair of 74244 buffers (`U17–U24` for P0–P3,
+`U49/U50` for PT, `U51/U52` for PT2). Exactly one pointer drives PB at a time.
 
 ### 3.3 Address drivers (U25/U26) — always on
 Two 74244s (`U25/U26`) copy PB0–15 straight to the backplane address bus `A0–A15`,
@@ -128,18 +129,19 @@ byte). These are then routed to the correct pointer:
 - For P0–P3, `U32` (74139) decodes `PSEL0/1` into per-pointer load strobes
   `-LDL0..3 / -LDH0..3`, gated by `PSEL2` via `U40` so they only fire for the
   P0–P3 group.
-- For PT, `U40` ANDs the load with `-SEL4` to make `-LDL4 / -LDH4`, which strobe
-  the PT 74377 latches.
+- For PT, `U40` combines (active-low OR) the load with `-SEL4` to make
+  `-LDL4 / -LDH4`; for PT2, `U53` does the same with `-SEL5` to make
+  `-LDL5 / -LDH5`. These drive the `!LOAD` of the PT / PT2 counters.
 
 So "load P2 high byte" = DLD decodes to load-high, PSEL=2 routes it to P2's `H0/H1`
 `!LOAD` lines, and those slices capture `D0–7`.
 
 ### 3.5 Increment / decrement
 `PINC`/`PDEC` go to `U34` (NOR) to produce the global count-enable `CNTN`, and
-`U35` derives the direction `UDB`. `U39` (74139, enabled by `CNTN`) decodes
-`PSEL0/1` to `-CNT0..3` so only the selected P0–P3 pointer's slices count. (In
-rev B/C, PT does not count; **rev D extends this so PT and PT2 count too** — see
-the rev-D note in §3.1 — because the 16-bit ops `PINC` them.) This is how the PC
+`U35` derives the direction `UDB`. `U39` (74138, enabled by `CNTN`) decodes the
+full 3-bit `PSEL` to `-CNT0..5`, so the selected pointer among P0–P3, PT and PT2
+counts (rev A–C used a 74139 that decoded only `PSEL0/1` to `-CNT0..3`, because PT
+did not count then — see the rev-D note in §3.1). This is how the PC
 self-increments during fetch and how the SP adjusts on push/pop.
 
 ### 3.6 Reading a pointer back onto the data bus

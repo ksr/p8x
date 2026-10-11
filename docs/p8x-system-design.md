@@ -336,11 +336,11 @@ loads dominate:
 addition**: a second hidden scratch pointer `PT2` (PSEL = 5) as the write cursor,
 since a mem→mem move holds two addresses live at once. `PT2` is another 74169
 counter set on the register-bank card — **no backplane change** (PSEL is already
-3 bits: `PSEL0–2` on C20/C21/C27, and U33 already decodes select 5). Making it
-work on real hardware also requires upgrading `PT` from load-only 74377 latches to
-74169 counters, because `PHW`/`PLW`/`LPW` (and `MOVW`) increment `PT` — a
-requirement the earlier "pure-microcode" ops introduced but the regbank card has
-not yet been revised for. See the register-bank card theory (rev D).
+3 bits: `PSEL0–2` on C20/C21/C27, and U33 already decodes select 5). Running on
+real hardware also requires `PT` to count, because `PHW`/`PLW`/`LPW` (and `MOVW`)
+increment it. Both changes are in the register-bank card **rev D** (2026-10-11):
+`PT` and `PT2` are four 74169 counters each (`PT` was load-only 74377 latches), the
+count decoder widened to a 3-bit 74138. See the register-bank card theory (§3.1).
 
 **Tier A — the C-compiler ISA (2026-09, pure microcode, 39 opcodes).** The next
 step after rev D, from the measured cost breakdown of compiled programs (see
