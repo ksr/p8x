@@ -135,7 +135,7 @@ already solved it.
 
 | Ref | Part |
 |---|---|
-| J1–J10 | DIN 41612 96-pin female, vertical/press-fit or solder |
+| J1–J8 | DIN 41612 Type C 96-pin **female, straight (vertical), THT solder** — see the connector note below |
 | J11 | 4-pos screw terminal, 5.08 mm |
 | C11, C12 | 470 µF 10 V electrolytic |
 | C1–C10 | 100 nF ceramic disc |
@@ -144,7 +144,27 @@ already solved it.
 | C13, C14 | 150 pF ceramic (DNP initially) |
 | R1, LED1 | 1 kΩ + 5 mm LED |
 
-Footprint caveat: verify the exact KiCad footprint names for your female
-DIN 41612 connectors (`Connector_DIN:DIN41612_C_3x32_Female_Vertical` is
-assigned) against the parts in your stock — press-fit vs solder tail and
-A/B/C pad naming vary by manufacturer.
+### The DIN 41612 connector pair
+
+The backplane and the plug-in cards use a matched DIN 41612 **Type C, 3×32
+(96-way), 2.54 mm pitch, THT solder** pair — one gender per side:
+
+| Side | Footprint (KiCad `Connector_DIN`) | Orientation | Representative part (Harting) |
+|---|---|---|---|
+| **Backplane** (J1–J8) | `DIN41612_C_3x32_Female_Vertical_THT` | female, straight/vertical | `09 03 296 6824` (96-pos female, 2.9 mm solder pins, THT) |
+| **Plug-in card** (J1) | `DIN41612_C_3x32_Male_Horizontal_THT` | male, right-angle | `09 03 196 6921` (96-way, Type C, 3-row, right-angle, solder) |
+
+Equivalent Type C 96-way solder parts are made by Amphenol (FCI), ERNI/TE and
+Assmann WSW, often better stocked at US distributors. Class 2 (tin tails) is
+adequate for a bench build; Class 3 adds gold plating and mating cycles.
+
+Footprint desk-check done 2026-10-11: both footprints are the KiCad-stock Type C
+3×32 pair — 2.54 mm column and row pitch, two M2.5 fixing holes (2.85 mm), 1.0 mm
+signal drill — and the pin numbering is the DIN 41612 standard on both, so a
+matched male/female pair mates a-a/b-b/c-c. Every card's J1 and every backplane
+slot assign pin X to `busnet(X)` from the one source, so a given pin carries the
+same signal on both sides. **Before ordering the full set:** confirm the exact
+manufacturer part number and live stock against its datasheet (body, fixing-hole
+pattern, THT-solder variant — not press-fit, not a contacts-not-included
+housing), and dry-fit one card male against one backplane female — which is why
+the backplane is ordered first.
