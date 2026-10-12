@@ -1740,11 +1740,25 @@ Nothing below has been built or measured.
 - I/O card SEL LED is source-driven from a gate output (deviation from the
   sink-drive standard) - noted on schematic; confirm brightness acceptable.
 
-- [ ] Final pinout confirmation against *physical* datasheets before fab. A
-      knowledge-based audit was done (see DONE) and fixed the 74260; still
-      worth eyeballing the actual datasheets for the parts you'll buy — at
-      minimum the 74260 (odd input/output split) and the wide DIPs (74181,
-      28C64, 62256, 6850) — since manufacturer/variant pinouts can differ.
+- [~] Final pinout confirmation against *physical* datasheets before fab.
+      **Knowledge-based re-audit 2026-10-11 — no errors.** Checked every DEV pin
+      map in `gen_eagle.py` against the standard datasheet pinout: the wide DIPs
+      74181, 74182, 28C64 and MEM28K8 (= 62256 SRAM and 28C256 ROM, shared JEDEC
+      28-pin), 6850, MAX232; the flagged 74260 (dual 5-in NOR — the asymmetric
+      A/B/Y split is correct); the recently-added ATmega1284P (PDIP-40); and the
+      common logic 74138/139/151/157/161/169/244/245/257/374/377, 7402 (its
+      gates 3/4 use A,B,Y order — correct), 7410/7430/7474, HEX14, GATES14. All
+      match.
+      **Still needs the PHYSICAL datasheet of the exact part bought** (variant
+      risk, not a netlist error): (1) **6850** — buy a genuine MC6850/68B50, NOT
+      a 6551/65C51 (different pinout); mostly NOS now, so check markings. (2)
+      **28C64 vs 28C256** — microcode ROMs are 28C64 (pin26 NC), the program ROM
+      is 28C256 (pin26 A13); same DIP28W socket, buy the right density. (3)
+      **62256** — confirm 32Kx8 single-CE (not a 6264 or CE2 variant). (4)
+      **74260** — uncommon part, limited stock; confirm the maker's datasheet.
+      (5) the **MiniDIN-6 / DB9** land patterns vs the exact connectors bought
+      (MiniDIN-6 footprint is from a vendor drawing). HC vs HCT share pinout —
+      buy HCT.
 
 - [ ] CF card 8-bit mode support — buy 2–3 candidates (SanDisk/industrial),
       test SET FEATURES $EF/$01 early. Fallback latch footprint provisioned DNP
