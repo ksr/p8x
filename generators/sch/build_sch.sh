@@ -14,6 +14,7 @@
 HERE=$(cd "$(dirname "$0")" && pwd)
 ROOT=$(cd "$HERE/../.." && pwd)
 CLI=/Applications/KiCad/KiCad.app/Contents/MacOS/kicad-cli
+PYK=/Applications/KiCad/KiCad.app/Contents/Frameworks/Python.framework/Versions/3.9/bin/python3
 ALL="control-card regbank-card alu-card io-card cf-card ps2-card memory-card bustest-card backplane"
 [ -d "$HERE/node_modules/elkjs" ] || { echo "run: cd generators/sch && npm install"; exit 2; }
 
@@ -29,6 +30,11 @@ one() {
   python3 "$HERE/p8x_kicad_sch.py" "$card" "$out" --proj "$proj" --check 2>&1 | grep -viE 'Fontconfig|falling back|^$' | tail -1
   "$CLI" sch export pdf -o "$out/$proj-schematic.pdf" "$out/$proj.kicad_sch" >/dev/null 2>&1 \
     && echo "  PDF -> hardware/$card/kicad/$proj-schematic.pdf"
+  # link the board footprints to the schematic symbols (the F8 "Update PCB from
+  # Schematic" linkage; metadata only -- DRC unchanged). Run after the board exists.
+  if [ -f "$out/$proj.kicad_pcb" ]; then
+    "$PYK" "$HERE/link_board.py" "$card" 2>&1 | grep -iE 'linked' || true
+  fi
 }
 
 if [ "$1" = "all" ] || [ -z "$1" ]; then

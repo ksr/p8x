@@ -23,12 +23,15 @@ project** -- schematic and PCB together, cross-probeable:
 - `p8x.kicad_sym`, `sym-lib-table` — the generated symbol library (editable in KiCad)
 - `p8x-<card>-schematic.pdf` — rendered PDF
 
-**Cross-probing:** the schematic and board are generated independently from the
-same `gen_eagle` netlist, so they share reference designators and nets but not
-UUIDs. Open the project and run **Tools -> Update PCB from Schematic (F8)** once to
-link them -- it reconciles by reference designator; the footprints are the same
-parts, so no physical change. After that, clicking a symbol highlights its
-footprint and vice versa.
+**Cross-probing works out of the box.** The schematic and board are generated
+independently from the same `gen_eagle` netlist, so they share reference
+designators and nets but not UUIDs. `build_sch.sh` runs `link_board.py` after
+generating the schematic: it stamps each board footprint with the matching
+schematic symbol's UUID path -- the headless equivalent of KiCad's "Update PCB
+from Schematic" (F8), metadata only, DRC unchanged. So clicking a symbol
+highlights its footprint and vice versa, with no manual step. (Re-run
+`build_sch.sh <card>` after rebuilding a board, since the board build does not
+know the schematic UUIDs.)
 
 ## How it works
 
