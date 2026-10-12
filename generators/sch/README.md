@@ -35,8 +35,7 @@ so a schematic that does not match the board fails the build.
 
 ## Status
 
-All eight active boards generate, and KiCad's netlist matches the canonical one
-on every board. ERC: seven are clean (0 errors); the **bustest card** reports 10
-ERC errors from its five bus-expander INT pins, which are deliberately grounded
-(unused open-drain outputs) on that bring-up fixture — benign, and the netlist is
-verified. The deprecated led-card is skipped.
+All nine boards (eight cards + the backplane) generate, KiCad's netlist matches
+the canonical one on every board, and **ERC is 0 errors on all of them**. A few
+boards carry benign ERC *warnings* (isolated single-pin labels — bus test taps or
+reset lines brought to one pin). The deprecated led-card is skipped.

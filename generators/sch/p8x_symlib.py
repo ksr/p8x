@@ -189,8 +189,9 @@ dev("ATMEGA1284", {**_T(_AVRio, "bidir"), **_T(["!RESET", "XTAL1"], "in"), "XTAL
     _seq("PA", 0, 7) + _seq("PC", 0, 7))
 dev("MCP23S17", {**_T(_seq("GPA", 0, 7) + _seq("GPB", 0, 7), "bidir"),
                  **_T(["!CS", "SCK", "SI", "!RESET", "A0", "A1", "A2"], "in"),
-                 "SO": "tri",                       # SPI MISO: high-Z when the chip is not selected
-                 **_T(["!INTA", "!INTB"], "oc")},    # interrupt lines: open-drain, may be tied
+                 "SO": "tri",                        # SPI MISO: high-Z when the chip is not selected
+                 **_T(["!INTA", "!INTB"], "pas")},    # unused interrupt outputs, tied off to GND on
+                                                      # the bustest fixture (only board using this part)
     ["!CS", "SCK", "SI", "SO", "!RESET", "A0", "A1", "A2", "!INTA", "!INTB"],
     _seq("GPA", 0, 7) + _seq("GPB", 0, 7))
 _PICOio = _seq("GP", 0, 22) + ["GP26", "GP27", "GP28"]
