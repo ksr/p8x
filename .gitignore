@@ -99,3 +99,9 @@ p8x-*-drc.rpt
 
 # transient HTML from gen_memmap_pdf.py (Chrome render input)
 generators/memmap_pdf.gen.html
+
+# ELK layout dependency for the schematic generator (restore with: cd generators/sch && npm install)
+generators/sch/node_modules/
+
+# KiCad per-user local settings (not source)
+hardware/*/kicad/sch/*.kicad_prl

@@ -1,0 +1,7 @@
+{
+  "private": true,
+  "description": "Node tools for the P8X schematic generator (sheet layout with ELK)",
+  "dependencies": {
+    "elkjs": "0.9.3"
+  }
+}

@@ -1,0 +1,73 @@
+#!/usr/bin/env python3
+"""Adapter: present a P8X card (generators/gen_eagle.py CARDS) to the schematic
+toolchain in the same shape the P32X tooling expects.
+
+gen_eagle.CARDS[name] = (title, parts{ref:(dev,val)}, nets{net:[(ref,pin)]}).
+The connectors, decoupling caps and VCC/GND rails are already in there (gen_eagle
+adds them), so this wrapper only needs to expose:
+
+  Card.name, Card.title
+  Card.parts  {ref: (device, function, value)}     (function left blank)
+  Card.nets   {net: [(ref, pin), ...]}
+  Card.nc     {(ref, pin)}   pins on no net -> drawn as no-connect
+  Card.conn   {ref}          the board-edge/bus connector(s) on this card
+
+SIGNALS is the set of backplane bus-signal names (busnet of every connector pin).
+"""
+import os, sys
+HERE = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, os.path.join(HERE, ".."))
+import gen_eagle as GE
+from p8x_symlib import SYM
+
+# backplane bus signals: the net on each DIN pin (drop spares / unused)
+SIGNALS = set()
+for _p in GE.ALLPINS:
+    try:
+        _n = GE.busnet(_p)
+    except Exception:
+        _n = None
+    if _n:
+        SIGNALS.add(_n)
+
+CONN_DEVS = {"DIN96C", "DIN96"}     # board-edge / backplane connectors
+
+class Card:
+    def __init__(self, name):
+        title, parts, nets = GE.CARDS[name]
+        self.name = name
+        self.title = title
+        self.parts = {ref: (dev, "", val) for ref, (dev, val) in parts.items()}
+        # keep only nets with at least one member; copy as lists
+        self.nets = {n: list(m) for n, m in nets.items() if m}
+        self.conn = {r for r, (d, f, v) in self.parts.items() if d in CONN_DEVS}
+        # every device pin that is on no net is a no-connect
+        placed = {rp for m in self.nets.values() for rp in m}
+        self.nc = set()
+        for ref, (dev, f, v) in self.parts.items():
+            if dev not in SYM:
+                continue
+            for p in SYM[dev]["pins"]:
+                if (ref, p) not in placed:
+                    self.nc.add((ref, p))
+
+    def check_devices(self):
+        """Every device used must be in the symbol library."""
+        missing = sorted({d for d, f, v in self.parts.values() if d not in SYM})
+        return missing
+
+def load(name):
+    return Card(name)
+
+# cards worth a schematic (active KiCad boards; skip the deprecated led-card)
+CARDS = [c for c in GE.CARDS if c != "led-card"]
+
+if __name__ == "__main__":
+    print("SIGNALS: %d bus-signal names" % len(SIGNALS))
+    for name in CARDS:
+        c = load(name)
+        miss = c.check_devices()
+        ics = sum(1 for d, f, v in c.parts.values() if False)  # placeholder
+        print("  %-16s parts=%d nets=%d nc=%d conn=%s%s"
+              % (name, len(c.parts), len(c.nets), len(c.nc), sorted(c.conn),
+                 "  MISSING DEVICES: %s" % miss if miss else ""))

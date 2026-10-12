@@ -1,0 +1,4 @@
+(sym_lib_table
+  (version 7)
+  (lib (name "p8x") (type "KiCad") (uri "${KIPRJMOD}/p8x.kicad_sym") (options "") (descr "P8X generated symbols"))
+)
