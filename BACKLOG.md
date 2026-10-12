@@ -516,8 +516,20 @@ remainder is why it is still here.
       temp files), or the splitter could iterate left-to-right. Until then,
       `CAT f | GREP x | WC` silently drops the `| WC`.
 
-- [ ] Verify DIN 41612 footprints against physical connectors in stock
-      (row A/C orientation when mated, mounting holes, press-fit vs solder)
+- [~] Verify DIN 41612 footprints against physical connectors in stock.
+      **Desk check done (2026-10-11):** cards use KiCad-stock
+      `DIN41612_C_3x32_Male_Horizontal_THT` (J1), the backplane uses
+      `DIN41612_C_3x32_Female_Vertical_THT` (all 8 slots, 0 male) — the canonical
+      Eurocard card-edge-into-backplane pair, Type C 3x32 (96-way), 2.54mm column
+      and row pitch, THT solder (not press-fit), two M2.5 fixing holes (2.85mm) each,
+      signal pins 1.0mm drill. Pin numbering is the DIN41612 standard in both, so a
+      matched male/female pair mates a-a/b-b/c-c. Electrically consistent: card J1
+      and every backplane slot assign pin X -> `busnet(X)` from the one source, so
+      aN meets the same signal on both sides. **Remaining (needs the physical part):**
+      confirm the ordered manufacturer PN matches these footprints (body, fixing-hole
+      pattern, THT solder) and DRY-FIT one card-edge male + one backplane female before
+      a full order -- which is why the backplane is ordered first. Coding/keying pins
+      are not modelled; decide if wanted.
 
 - [ ] Order backplane PCB first as the cheap validation article
 
