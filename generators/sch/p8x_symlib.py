@@ -45,6 +45,8 @@ FP_PKG = {
     "CP_RADIAL": "Capacitor_THT:CP_Radial_D8.0mm_P3.50mm",
     "SW2P": "Button_Switch_THT:SW_PUSH_6mm",
     "PICO40": "Connector_PinHeader_2.54mm:PinHeader_2x20_P2.54mm_Vertical",
+    "FABC96S": "Connector_DIN:DIN41612_C_3x32_Female_Vertical_THT",   # backplane slot (female)
+    "TB4": "Connector_Phoenix_MSTB:PhoenixContact_MSTBA_2,5_4-G-5,08_1x04_P5.08mm_Horizontal",
 }
 FP_DEV = {
     "DIP8SW": "Button_Switch_THT:SW_DIP_SPSTx08_Slide_9.78x22.5mm_W7.62mm_P2.54mm",
@@ -217,14 +219,17 @@ _passive("JMP2X3", ["1", "3", "5"] + ["2", "4", "6"], ["1", "3", "5"], ["2", "4"
 _passive("MINIDIN6", ["1", "2", "3", "4", "5", "6", "SH"])
 _passive("SW2", ["1", "2"], ["1"], ["2"])
 _passive("DIP8SW", _seq("A", 1, 8) + _seq("B", 1, 8), _seq("A", 1, 8), ["B%d" % i for i in range(8, 0, -1)])
-# DIN96C handled specially in p8x_kicad_sch (64 pins left, 32 right)
-_passive("DIN96C", ["%s%d" % (r, n) for r in "ABC" for n in range(1, 33)],
-         ["A%d" % n for n in range(1, 33)] + ["B%d" % n for n in range(1, 33)],
-         ["C%d" % n for n in range(1, 33)])
+# DIN96C (card male) and DIN96 (backplane female): 64 pins left, 32 right
+for _din in ("DIN96C", "DIN96"):
+    _passive(_din, ["%s%d" % (r, n) for r in "ABC" for n in range(1, 33)],
+             ["A%d" % n for n in range(1, 33)] + ["B%d" % n for n in range(1, 33)],
+             ["C%d" % n for n in range(1, 33)])
+_passive("TB4", ["1", "2", "3", "4"], ["1", "2"], ["3", "4"])   # 4-pos power terminal block
 
 # ---- passives ---------------------------------------------------------------
 _passive("CAP", ["1", "2"], ["1"], ["2"])
 _passive("CAP1", ["1", "2"], ["1"], ["2"])
+_passive("CAPP", ["+", "-"], ["+"], ["-"])   # polarized bulk electrolytic
 _passive("RES", ["1", "2"], ["1"], ["2"])
 _passive("XTAL32", ["1", "2"], ["1"], ["2"])
 _passive("COIN", ["+", "-"], ["+"], ["-"])

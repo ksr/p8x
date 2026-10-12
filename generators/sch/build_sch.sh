@@ -14,7 +14,7 @@
 HERE=$(cd "$(dirname "$0")" && pwd)
 ROOT=$(cd "$HERE/../.." && pwd)
 CLI=/Applications/KiCad/KiCad.app/Contents/MacOS/kicad-cli
-ALL="control-card regbank-card alu-card io-card cf-card ps2-card memory-card bustest-card"
+ALL="control-card regbank-card alu-card io-card cf-card ps2-card memory-card bustest-card backplane"
 [ -d "$HERE/node_modules/elkjs" ] || { echo "run: cd generators/sch && npm install"; exit 2; }
 
 one() {

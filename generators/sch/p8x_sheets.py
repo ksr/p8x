@@ -12,9 +12,9 @@ by adding its name to SHEETS below.
 """
 import re
 
-PASSIVE = {"CAP", "CAP1", "RES", "LED", "SIP9", "RNISO8", "RNISO8D", "LEDARR8",
+PASSIVE = {"CAP", "CAP1", "CAPP", "RES", "LED", "SIP9", "RNISO8", "RNISO8D", "LEDARR8",
            "XTAL32", "COIN", "SW2", "DIP8SW"}
-CONN = {"DIN96C", "DIN96", "DSUB9F", "IDE40", "HDR3", "HDR4", "HDR10", "JMP2X3", "MINIDIN6"}
+CONN = {"DIN96C", "DIN96", "DSUB9F", "IDE40", "HDR3", "HDR4", "HDR10", "JMP2X3", "MINIDIN6", "TB4"}
 
 def _nat(ref):
     m = re.match(r"([A-Za-z]+)(\d+)", ref)
@@ -51,8 +51,20 @@ def auto_sheets(card):
         sheets.append(("Decoupling, resistors, LEDs", _chunk(passive, 12)))
     return sheets, wired
 
-# per-card explicit overrides: name -> function(card) -> (sheets, wired)
-SHEETS = {}
+def backplane_sheets(card):
+    """The backplane is the 8 slot connectors wired in parallel to the bus, plus
+    the pull-up array, power entry and decoupling -- all label style (the slots
+    connect by shared bus-signal labels, as a backplane schematic is drawn)."""
+    slots = sorted([r for r, (d, f, v) in card.parts.items() if d == "DIN96"], key=_nat)
+    rest = sorted([r for r in card.parts if r not in slots], key=_nat)
+    sheets = []
+    for grp in _chunk(slots, 2):               # 2 slot connectors per sheet
+        sheets.append(("DIN 41612 bus slots %s" % ", ".join(grp), [grp]))
+    sheets.append(("Bus pull-ups, power entry, decoupling", _chunk(rest, 8)))
+    return sheets, set()                        # no ELK wiring
+
+# per-board explicit overrides: name -> function(card) -> (sheets, wired)
+SHEETS = {"backplane": backplane_sheets}
 
 def sheets_for(card):
     if card.name in SHEETS:

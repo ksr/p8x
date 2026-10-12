@@ -33,15 +33,14 @@ for _p in GE.ALLPINS:
 CONN_DEVS = {"DIN96C", "DIN96"}     # board-edge / backplane connectors
 
 class Card:
-    def __init__(self, name):
-        title, parts, nets = GE.CARDS[name]
+    def __init__(self, name, title, parts_raw, nets):
+        # parts_raw values are (dev, val) on the cards and (dev, val, x, y) on the
+        # backplane -- take the first two either way.
         self.name = name
         self.title = title
-        self.parts = {ref: (dev, "", val) for ref, (dev, val) in parts.items()}
-        # keep only nets with at least one member; copy as lists
+        self.parts = {ref: (v[0], "", v[1]) for ref, v in parts_raw.items()}
         self.nets = {n: list(m) for n, m in nets.items() if m}
         self.conn = {r for r, (d, f, v) in self.parts.items() if d in CONN_DEVS}
-        # every device pin that is on no net is a no-connect
         placed = {rp for m in self.nets.values() for rp in m}
         self.nc = set()
         for ref, (dev, f, v) in self.parts.items():
@@ -52,15 +51,16 @@ class Card:
                     self.nc.add((ref, p))
 
     def check_devices(self):
-        """Every device used must be in the symbol library."""
-        missing = sorted({d for d, f, v in self.parts.values() if d not in SYM})
-        return missing
+        return sorted({d for d, f, v in self.parts.values() if d not in SYM})
 
 def load(name):
-    return Card(name)
+    if name == "backplane":
+        return Card("backplane", "P8X %d-SLOT BACKPLANE REV C" % GE.NSLOT, GE.bps, GE.bpn)
+    title, parts, nets = GE.CARDS[name]
+    return Card(name, title, parts, nets)
 
-# cards worth a schematic (active KiCad boards; skip the deprecated led-card)
-CARDS = [c for c in GE.CARDS if c != "led-card"]
+# boards worth a schematic (active KiCad boards; skip the deprecated led-card)
+CARDS = [c for c in GE.CARDS if c != "led-card"] + ["backplane"]
 
 if __name__ == "__main__":
     print("SIGNALS: %d bus-signal names" % len(SIGNALS))
