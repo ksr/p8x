@@ -105,3 +105,4 @@ generators/sch/node_modules/
 
 # KiCad per-user local settings (not source)
 hardware/*/kicad/sch/*.kicad_prl
+hardware/*/kicad/*.kicad_prl

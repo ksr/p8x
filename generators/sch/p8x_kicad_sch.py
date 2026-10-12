@@ -129,13 +129,14 @@ def label_len(s):
     return len(s) * 1.27 * 0.8 + 4
 
 class SheetWriter:
-    def __init__(self, card, root_uuid, block_uuid, title, rows, page, net, power_nets=("VCC", "GND")):
+    def __init__(self, card, root_uuid, block_uuid, title, rows, page, net, power_nets=("VCC", "GND"), proj=None):
         self.card, self.title, self.rows, self.page, self.net = card, title, rows, page, net
         self.root, self.block = root_uuid, block_uuid
         self.items, self.libs, self.labels = [], {}, 0
         self.wired_pins = set()
         self.wired = False
         self.power_nets = list(power_nets)
+        self.proj = proj or card.name        # KiCad project name (matches the .kicad_pro basename)
 
     def place(self, ref, X, Y):
         dev, func, value = self.card.parts[ref]
@@ -152,7 +153,7 @@ class SheetWriter:
              "    (property \"Datasheet\" \"\" (at %.2f %.2f 0) %s)" % (X, Y, font(True))]
         for p, (num, t) in SYM[dev]["pins"].items():
             L.append("    (pin %s (uuid %s))" % (q(num), q(U(self.card.name, "pin", ref, p))))
-        L += ["    (instances (project %s (path %s (reference %s) (unit 1))))" % (q(self.card.name), q(path), q(ref)),
+        L += ["    (instances (project %s (path %s (reference %s) (unit 1))))" % (q(self.proj), q(path), q(ref)),
               "  )"]
         self.items.append("\n".join(L))
         for p, (px, py, a) in sym.pins.items():
@@ -195,7 +196,7 @@ class SheetWriter:
                       "  (global_label %s (shape passive) (at %.2f %.2f 270) (fields_autoplaced yes) %s (uuid %s)\n"
                       "    (property \"Intersheetrefs\" \"${INTERSHEET_REFS}\" (at %.2f %.2f 0) %s))"
                       % (x, y, q(U(self.card.name, "flag", n)), k + 1, x, y - 2, font(True), x, y - 4, font(),
-                         x, y, font(True), x, y, font(True), q(U(self.card.name, "flagpin", n)), q(self.card.name),
+                         x, y, font(True), x, y, font(True), q(U(self.card.name, "flagpin", n)), q(self.proj),
                          q("/%s/%s" % (self.root, self.block)), k + 1, q(n), x, y, font(justify="right"),
                          q(U(self.card.name, "flaglbl", n)), x, y, font(True)))
         return "\n".join(fl)
@@ -264,7 +265,8 @@ class SheetWriter:
         with open(path, "w") as fh:
             fh.write("\n".join(s for s in out if s) + "\n")
 
-def write_project(card, sheets, outdir, wired=()):
+def write_project(card, sheets, outdir, wired=(), proj=None):
+    proj = proj or card.name                  # .kicad_sch / .kicad_pro basename
     os.makedirs(outdir, exist_ok=True)
     net = {}
     for n, pins in card.nets.items():
@@ -282,9 +284,9 @@ def write_project(card, sheets, outdir, wired=()):
     root = U(card.name, "root")
     blocks = []
     for i, (title, rows) in enumerate(sheets, 1):
-        fname = "%s-%d.kicad_sch" % (card.name, i)
+        fname = "%s-%d.kicad_sch" % (proj, i)
         bu = U(card.name, "block", str(i))
-        sw = SheetWriter(card, root, bu, title, rows, i + 1, net, power_nets=power_nets)
+        sw = SheetWriter(card, root, bu, title, rows, i + 1, net, power_nets=power_nets, proj=proj)
         sw.wired = i in wired
         sw.write(os.path.join(outdir, fname), flags=(i == len(sheets)))
         blocks.append((title, fname, bu, i + 1))
@@ -300,10 +302,10 @@ def write_project(card, sheets, outdir, wired=()):
               "    (uuid %s)" % q(bu),
               "    (property \"Sheetname\" %s (at %.2f %.2f 0) %s)" % (q(title[:60]), x, y - 0.7, font(justify="left bottom")),
               "    (property \"Sheetfile\" %s (at %.2f %.2f 0) %s)" % (q(fname), x, y + 20.9, font(justify="left top")),
-              "    (instances (project %s (path %s (page %s))))" % (q(card.name), q("/" + root), q(str(page))),
+              "    (instances (project %s (path %s (page %s))))" % (q(proj), q("/" + root), q(str(page))),
               "  )"]
     L += ["  (sheet_instances (path \"/\" (page \"1\")))", ")"]
-    with open(os.path.join(outdir, card.name + ".kicad_sch"), "w") as fh:
+    with open(os.path.join(outdir, proj + ".kicad_sch"), "w") as fh:
         fh.write("\n".join(L) + "\n")
     libs = {}
     for ref, (dev, f, v) in card.parts.items():
@@ -315,7 +317,7 @@ def write_project(card, sheets, outdir, wired=()):
     with open(os.path.join(outdir, "sym-lib-table"), "w") as fh:
         fh.write('(sym_lib_table\n  (version 7)\n  (lib (name "p8x") (type "KiCad") (uri "${KIPRJMOD}/p8x.kicad_sym")'
                  ' (options "") (descr "P8X generated symbols"))\n)\n')
-    pro = os.path.join(outdir, card.name + ".kicad_pro")
+    pro = os.path.join(outdir, proj + ".kicad_pro")
     if not os.path.exists(pro):
         with open(pro, "w") as fh:
             json.dump({"meta": {"filename": card.name + ".kicad_pro", "version": 1}}, fh, indent=2)
@@ -350,12 +352,12 @@ def verify(card, netfile):
 
 KICAD_CLI = "/Applications/KiCad/KiCad.app/Contents/MacOS/kicad-cli"
 
-def kicad_check(card, outdir):
+def kicad_check(card, outdir, proj=None):
     import subprocess, shutil
     cli = shutil.which("kicad-cli") or (KICAD_CLI if os.path.exists(KICAD_CLI) else None)
     if not cli:
         return True, "KiCad not installed: ERC and netlist comparison skipped"
-    root = os.path.join(outdir, card.name + ".kicad_sch")
+    root = os.path.join(outdir, (proj or card.name) + ".kicad_sch")
     rpt, net = os.path.join(outdir, "erc.rpt"), os.path.join(outdir, "kicad.net")
     subprocess.run([cli, "sch", "erc", "-o", rpt, root], capture_output=True)
     subprocess.run([cli, "sch", "export", "netlist", "--format", "kicadsexpr", "-o", net, root],
@@ -384,13 +386,14 @@ def main():
     ap.add_argument("card")
     ap.add_argument("outdir")
     ap.add_argument("--check", action="store_true")
+    ap.add_argument("--proj", default=None, help="project basename (default: card name); use to unify with the board")
     args = ap.parse_args()
     card = p8x_card.load(args.card)
     sheets, wired = p8x_sheets.sheets_for(card)
-    write_project(card, sheets, args.outdir, wired=wired)
+    write_project(card, sheets, args.outdir, wired=wired, proj=args.proj)
     msg = "%s: KiCad schematic written to %s (%d sheets, wired %s)" % (args.card, args.outdir, len(sheets), sorted(wired))
     if args.check:
-        ok, m = kicad_check(card, args.outdir)
+        ok, m = kicad_check(card, args.outdir, proj=args.proj)
         print(msg + "; " + m)
         sys.exit(0 if ok else 1)
     print(msg)

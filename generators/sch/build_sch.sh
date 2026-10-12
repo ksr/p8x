@@ -17,13 +17,18 @@ CLI=/Applications/KiCad/KiCad.app/Contents/MacOS/kicad-cli
 ALL="control-card regbank-card alu-card io-card cf-card ps2-card memory-card bustest-card backplane"
 [ -d "$HERE/node_modules/elkjs" ] || { echo "run: cd generators/sch && npm install"; exit 2; }
 
+# The schematic is generated alongside the board (same directory + basename
+# p8x-<card>, sharing <card>'s .kicad_pro) so KiCad opens one unified project --
+# schematic and PCB together, cross-probeable. The board's .kicad_pro is left
+# intact (write_project only creates one if absent).
 one() {
   card=$1
-  out="$ROOT/hardware/$card/kicad/sch"
+  out="$ROOT/hardware/$card/kicad"
+  proj="p8x-$card"
   echo "===== $card ====="
-  python3 "$HERE/p8x_kicad_sch.py" "$card" "$out" --check 2>&1 | grep -viE 'Fontconfig|falling back|^$' | tail -1
-  "$CLI" sch export pdf -o "$out/$card-schematic.pdf" "$out/$card.kicad_sch" >/dev/null 2>&1 \
-    && echo "  PDF -> hardware/$card/kicad/sch/$card-schematic.pdf"
+  python3 "$HERE/p8x_kicad_sch.py" "$card" "$out" --proj "$proj" --check 2>&1 | grep -viE 'Fontconfig|falling back|^$' | tail -1
+  "$CLI" sch export pdf -o "$out/$proj-schematic.pdf" "$out/$proj.kicad_sch" >/dev/null 2>&1 \
+    && echo "  PDF -> hardware/$card/kicad/$proj-schematic.pdf"
 }
 
 if [ "$1" = "all" ] || [ -z "$1" ]; then

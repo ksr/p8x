@@ -13,11 +13,22 @@ cd generators/sch && npm install      # once: fetches elkjs (ELK layout engine)
 sh generators/sch/build_sch.sh all    # every board  (or: build_sch.sh cf-card)
 ```
 
-Each board lands in `hardware/<card>/kicad/sch/`:
-- `<card>.kicad_sch` — hierarchical root, one sheet per functional block
-- `<card>-<n>.kicad_sch` — the sub-sheets (ELK-wired logic + label sheets)
+The schematic is generated **alongside the board** in `hardware/<card>/kicad/`,
+sharing the board's basename and `.kicad_pro`, so KiCad opens **one unified
+project** -- schematic and PCB together, cross-probeable:
+- `p8x-<card>.kicad_pro` — the project (the board's; left intact)
+- `p8x-<card>.kicad_sch` — hierarchical root, one sheet per functional block
+- `p8x-<card>-<n>.kicad_sch` — the sub-sheets (ELK-wired logic + label sheets)
+- `p8x-<card>.kicad_pcb` — the board (generated separately; see generators/build.sh)
 - `p8x.kicad_sym`, `sym-lib-table` — the generated symbol library (editable in KiCad)
-- `<card>-schematic.pdf` — rendered PDF
+- `p8x-<card>-schematic.pdf` — rendered PDF
+
+**Cross-probing:** the schematic and board are generated independently from the
+same `gen_eagle` netlist, so they share reference designators and nets but not
+UUIDs. Open the project and run **Tools -> Update PCB from Schematic (F8)** once to
+link them -- it reconciles by reference designator; the footprints are the same
+parts, so no physical change. After that, clicking a symbol highlights its
+footprint and vice versa.
 
 ## How it works
 
