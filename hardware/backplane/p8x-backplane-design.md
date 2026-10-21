@@ -4,9 +4,9 @@
 
 > **Built version:** the go-forward board is the KiCad build in
 > [`kicad/`](kicad/README.md) — **8 slots, 28 mm pitch, 262 × 128 mm**, routed at
-> **0.13 mm clearance**, nylon-screw mounting. The layout figures below are the
-> older Eagle rev-C notes (25.4 mm pitch, 10 slots); the bus pinout/theory still
-> applies, only the slot count and physical layout changed.
+> **0.13 mm clearance**, nylon-screw mounting. The board figures in §2–§4 were
+> brought up to the 8-slot KiCad build on 2026-10-21 (they were the Eagle rev-C
+> notes: 25.4 mm pitch, 10 slots); the bus pinout and theory are unchanged.
 
 ## 1. Bus Pinout
 
@@ -68,37 +68,112 @@ a shared-return-inductance problem, and a plane under every trace mostly
 dissolves it.
 
 Layout rules:
-- **Slot pitch 25.4 mm (1.0")**, 10 slots → board ≈ 275 × 110 mm
-- Bus traces run straight connector-to-connector, **0.3–0.4 mm width,
-  ≥ 0.4 mm gaps**; with the plane underneath, adjacent-trace coupling over
-  these lengths is negligible at this technology's edge rates
+- **Slot pitch 28 mm**, 8 slots → board 262 × 128 mm (≈ 20 cm of bus between
+  the end slots)
+- Bus traces run straight connector-to-connector on the outer layers. The
+  generated board uses **0.2 mm tracks, 0.13 mm minimum clearance** (one net
+  class, Freerouting). Most parallel runs sit at the 2.54 mm pin pitch, where
+  coupling is negligible; some pairs close to 0.33–0.5 mm centre-to-centre
+  for 10–17 cm (measured 2026-10-21, §2.1)
 - **Do not route signals between the planes or split the planes.** Spares
-  route like signals
+  route like signals (the generated board keeps every track on L1/L4)
 - **CLK and CLKB get the royal treatment**: route them with a ground trace
   on each side (guard traces) or with one empty channel between them and
-  neighbors; keep them on one layer end to end
-- **Decoupling**: one 100 nF within 10 mm of each slot's power pins (C1–C10
+  neighbors; keep them on one layer end to end. *Not yet implemented by the
+  generator* — see BACKLOG "Backplane clock spacing before ordering"
+- **Decoupling**: one 100 nF within 10 mm of each slot's power pins (C1–C8
   in the schematic), 2 × 470 µF bulk near the power entry (C11/C12)
 - Power entry (J11, 4-pos screw terminal: 2 × +5V, 2 × GND) at one end;
   via-stitch generously into the planes (≥ 8 vias per terminal)
-- Stitch the row-B ground pins straight down into L2 at every slot — 280
-  ground vias distributed along the bus is a beautifully low-inductance grid
+- Tie every ground pin straight into L2 at every slot — 18 per slot (the 12
+  odd row-B guards plus rows 31–32), 144 along the bus, a low-inductance grid
 - Power LED (R1 + LED1) so a dead PSU is diagnosed from across the room
 
 If you must do 2-layer: top = signals + 10 mm power rails along each edge,
 bottom = ground pour flooded around a minimal number of crossing traces.
 It will work at 2 MHz. The 4-layer board will work at 8 MHz. Choose accordingly.
 
+### 2.1 Dielectric — order a thin outer prepreg
+
+The generator does not set a stackup, so the fab's default 4-layer build applies
+(commonly ≈ 0.2 mm from L1 to L2). The trace-to-plane height H is the biggest
+remaining crosstalk lever. A common rule of thumb (Johnson) puts the near-end
+coupling coefficient near 1 / (1 + (D/H)²), with D the centre-to-centre spacing.
+It is an upper bound, reached when the coupled run is long compared with the
+edge; the 10–17 cm runs here, slowed by card loading (§3), come close to it.
+
+| Spacing on the routed board | H = 0.2 mm (typical default) | H = 0.1 mm |
+|---|---|---|
+| 2.54 mm (pin pitch, most runs) | ≈ 0.6 % | ≈ 0.2 % |
+| 0.45 mm (tightest pairs) | ≈ 16 % | ≈ 5 % |
+
+So the thin dielectric cuts the worst pairs about 3×, at no layer cost. **When
+ordering, choose a 4-layer stackup with ≈ 0.1 mm outer prepreg** (most fabs list
+one, often with 3313 glass). The 0.2 mm tracks then drop from ≈ 66 Ω to ≈ 41 Ω
+(microstrip, εr 4.3), which is harmless: the loaded bus sits lower than either (§3).
+Spacing the edge-sensitive lines out (BACKLOG) and a thin prepreg compound.
+
+### 2.2 The connector pin field
+
+At HCT edge rates the connector, not the PCB, is usually the dominant crosstalk
+path on a backplane. Adding layers cannot change it; only the pinout can.
+
+- **Row B gives every row-A and row-C pin a nearby ground return**, but neighbours
+  *within* row A or row C are still signal beside signal. That coupling lives in
+  the pin field.
+- **Keep the plane webs intact.** Every DIN 41612 pin is a through-hole barrel
+  that cuts an antipad in every plane. At 2.54 mm pitch, keep antipads ≤ ≈ 1.6 mm
+  for the 1.0 mm drill, so that copper stays connected between pins. Return
+  current concentrates in the connector field.
+- **Reserve the spares next to the clocks for slow signals.** SPARE22 (B24) sits
+  directly between CLK (A24) and CIN (C24); SPARE23 (B26) is diagonal to CLKB
+  (A25). Assign only sampled, non-edge signals to those two if they are ever used.
+
+### 2.3 Reference — the stackup with no layer budget
+
+For the record, the low-crosstalk ideal if layer count were free (8 layers, every
+signal layer against a solid ground):
+
+| Layer | Role | Contents |
+|---|---|---|
+| L1 | GND | Solid pour and shield; only connector pins pass through |
+| L2 | Signal (stripline) | CLK, CLKB, -RES, IRQ, strobes: the edge-sensitive lines, widely spaced |
+| L3 | GND | Solid |
+| L4 | Signal (stripline) | A0–A15 |
+| L5 | GND | Solid |
+| L6 | Signal | D0–D7, ALU/flag/control fields |
+| L7 | +5V | ≤ 0.1 mm to L8: the pair acts as built-in decoupling |
+| L8 | GND | Solid |
+
+Stripline (a trace between two planes) is shielded on both sides. Its far-end
+crosstalk is near zero, whereas on an outer layer it keeps growing with
+parallel length. No two signal layers are adjacent.
+
+**For this machine it buys little.** At 74HCT edge rates the 4-layer board with a
+thin outer prepreg (§2.1) captures most of the benefit, and the connector field
+(§2.2) is unaffected either way. For a prototype run an 8-layer board of this
+size costs several times the 4-layer price (JLCPCB estimate, 2026-10-21).
+
 ## 3. Termination — analysis and recommendation
 
-**The physics:** the bus is ~23 cm. Unloaded propagation ≈ 1.5 ns end-to-end,
-but ten connector/card capacitive loads roughly double the effective delay
-and drop the loaded impedance to ~30–50 Ω. Round trip ≈ 5–7 ns. 74HCT edges
-are 3–5 ns — comparable to the round trip, which puts the bus at the *edge*
-of the transmission-line regime: you'll see some ringing on a scope, but at
-2–4 MHz there are hundreds of nanoseconds for it to settle before anything
-is clocked. **Termination is not required for functional correctness at the
-design speed.** The ranked list of what actually prevents trouble:
+**The physics:** the bus is ≈ 20 cm between the end slots (8 slots at 28 mm).
+Unloaded propagation is ≈ 1.2 ns end to end (≈ 6 ps/mm on an outer layer). Each
+filled slot hangs ≈ 10–15 pF on every line (connector, stub, transceiver pin);
+spread along the bus that gives a loaded impedance Z₀ / √(1 + C_load / C_line)
+of roughly **20–35 Ω** (lower as more slots fill) and stretches the delay by
+1.4–2.3×. Round trip ≈ 4–6 ns. 74HCT edges are 3–5 ns — comparable to the
+round trip, which puts the bus at the *edge* of the transmission-line regime:
+you'll see some ringing on a scope, but at 2–4 MHz there are hundreds of
+nanoseconds for it to settle before anything is clocked. **Termination is not
+required for functional correctness at the design speed.** Which signals care:
+
+- **Edge-sensitive** — anything used *as* an edge: CLK, CLKB, -RES, latch
+  strobes. One glitch across threshold is a false clock.
+- **Sampled** — data, address, the encoded DOE/DLD/PSEL fields: read at a clock
+  edge, so they only need to have settled by then. Crosstalk on them is
+  mostly harmless.
+
+The ranked list of what actually prevents trouble:
 
 1. Ground plane + row-B guard grounds (overwhelmingly the biggest factor)
 2. Pull-ups on the data bus — RN1 (8 × 10 k) in the schematic. Not a
@@ -118,7 +193,31 @@ HCT bus.
 **Active termination** (a regulated ~2.7 V rail feeding ~120 Ω per line —
 the SCSI approach) fixes Thevenin's power waste but keeps the mid-threshold
 bias problem for CMOS and adds a regulator. Justifiable on a long, fast,
-heavily-loaded bus; overkill by an order of magnitude here.
+heavily-loaded bus; overkill by an order of magnitude here. Done properly it is
+a whole signalling system rather than a part: low-swing open-drain transceivers
+(GTL/GTLP, BTL) with reference-voltage receivers. Bolted onto HCT it fixes
+nothing, and those transceivers are SMD-only, against the through-hole build.
+
+**Damped, not matched.** Termination has to suit the driver's strength. An HCT
+bus driver (output resistance roughly 30–50 Ω) driving the 20–35 Ω loaded bus
+launches only about a third to a half of the swing; the reflection off the
+unterminated far end completes the edge. A *matched* far-end termination removes
+that reflection and turns a clean edge into a slow RC climb. So the provisioned
+networks are deliberately above the line impedance (100 Ω): they damp ringing
+without demanding matched-line current. The corollary: **do not swap the bus
+drivers for a stronger, faster family (ACT, ABT) without revisiting this
+section** — faster edges move the bus fully into the transmission-line regime,
+where it would then need real termination.
+
+By signal class:
+
+| Class | Lines | Treatment |
+|---|---|---|
+| Clocks | CLK, CLKB | Spacing/guard on the board (§2); optional 22–33 Ω series at the driver (control card); 100 Ω + 150 pF at the far end (R2/C13, R3/C14), fitted only if the scope shows ringing |
+| Async / strobes | -RES, latch strobes | Same as the clocks if a scope shows ringing |
+| Open-drain, wired-OR | IRQ | The pull-up R4 (10 kΩ) *is* its termination. With all slots filled (≈ 100 pF) it rises in ≈ 1 µs; if release must be seen within a few cycles, drop R4 to 2.2 kΩ (≈ 0.2 µs, ≈ 2.3 mA per asserting driver) |
+| Bidirectional data | D0–D7 | RN1 10 kΩ pull-ups (idle level, not termination). If ever needed, RC at *both* ends — any slot can drive |
+| Address / fields | A0–A15, DOE, DLD, PSEL | None — sampled after settling |
 
 **What the board provisions instead — AC (RC) termination** on the two lines
 that merit it: CLK and CLKB each get 100 Ω + 150 pF to ground at the far end
@@ -138,8 +237,9 @@ already solved it.
 | J1–J8 | DIN 41612 Type C 96-pin **female, straight (vertical), THT solder** — see the connector note below |
 | J11 | 4-pos screw terminal, 5.08 mm |
 | C11, C12 | 470 µF 10 V electrolytic |
-| C1–C10 | 100 nF ceramic disc |
+| C1–C8 | 100 nF ceramic disc |
 | RN1 | 10 kΩ × 8 bussed SIP-9 |
+| R4 | 10 kΩ ¼ W — IRQ pull-up (wired-OR, open-drain line) |
 | R2, R3 | 100 Ω ¼ W (DNP initially) |
 | C13, C14 | 150 pF ceramic (DNP initially) |
 | R1, LED1 | 1 kΩ + 5 mm LED |

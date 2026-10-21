@@ -531,7 +531,22 @@ remainder is why it is still here.
       a full order -- which is why the backplane is ordered first. Coding/keying pins
       are not modelled; decide if wanted.
 
-- [ ] Order backplane PCB first as the cheap validation article
+- [ ] **Backplane clock spacing before ordering (2026-10-21).** The design doc
+      (`hardware/backplane/p8x-backplane-design.md` §2) calls for guard traces or an
+      empty channel beside CLK/CLKB, but `gen_backplane.py` routes every net in one
+      net class (0.2 mm tracks, 0.13 mm clearance), so the routed board runs CLKB
+      75 mm beside CIN at 0.44 mm centre-to-centre, CLK 54 mm beside CLKB at 0.50 mm,
+      and ALUM 21 mm beside CLK at 0.53 mm. CLKB is the pipeline latch clock (the
+      74374s on the control card), so it is the bus's most edge-sensitive line.
+      Rule-of-thumb upper bound ≈ 0.8 V coupled onto a low CLKB from a CIN edge —
+      under the ≈ 1.4 V HCT threshold, so probably works, but the margin the guard
+      rule was meant to keep is gone. Fix in the generator: a CLK/CLKB net class
+      with ≈ 0.8 mm clearance (≥ 1 mm centre-to-centre with 0.2 mm tracks), or a
+      routed ground guard each side; re-route, re-run check_card. Decide before
+      the order below.
+
+- [ ] Order backplane PCB first as the cheap validation article. When ordering,
+      choose a 4-layer stackup with ≈ 0.1 mm outer prepreg (design doc §2.1).
 
 - [ ] **`SYS_OPEN` — open-by-name as a syscall (2026-07-16).** Commands each repeat
       the same four steps: `SYS_GETCWD` -> build an absolute path in their OWN
