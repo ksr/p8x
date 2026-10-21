@@ -653,6 +653,38 @@ Nothing below has been built or measured.
 
 ## IDEAS
 
+- [ ] **Graphics carrier card — the Tang Nano on a backplane slot (2026-10-21).**
+      Step 3 of `fpga/tang-nano-20k/CARD-EDGE-DESIGN.md`: the real TTL machine
+      drives the SAME graphics card through the SAME window. Step 1 (the emulator
+      over the serial bridge, `p8xemu -B`) reached first light 2026-08-28; step 2
+      (a second FPGA as CPU) is not built; this card is step 3 and has no netlist
+      (`hardware/KICAD-BOARDS.md` "Not built"). A plug-in Eurocard: DIN 41612
+      male, a socket for the Tang Nano 20K, the bus window `$FF50-$FF57`
+      (GLDATA/GLSTAT/GLRB/GLERR/GLID, plus BRIDGEV `$FF55` / BRIDGID `$FF56`).
+      - **Bus front end:** copy the ps2-card's — a 7430 page detector, a 74688
+        window compare for `$FF5x`, 74138s on DOE/DLD (DOE=7 read, DLD=7 write),
+        A0–A2 to the register select. gen_eagle netlist like every card.
+      - **Levels:** FPGA 3.3 V outputs drive HCT inputs directly (VIH 2.0 V), so
+        the read path is a 74HCT541/245 at 5 V, enabled by the read decode. Only
+        the 5 V lines INTO the FPGA need shifting. Through-hole candidate: CD74HC4050
+        (DIP-16 hex buffer run at 3.3 V; inputs tolerate above VCC) — 74LVC parts
+        are SMD-only, against the through-hole rule.
+      - **No wait state needed:** the GL port is a FIFO polled through GLSTAT, so
+        the card never stalls the bus.
+      - **Open questions:** (1) clock domain — capture writes in a 74HCT574 on the
+        DLD strobe and let the FPGA read it at leisure (the ps2-card latch-bridge
+        pattern), or synchronise the bus directly; reads must answer within one
+        microcycle. (2) Tang Nano free-GPIO budget: ≈ 8 data + 3 address + read +
+        write + reset, beside the 4 PS/2 lines already planned
+        (`fpga/tang-nano-20k/PS2-INTERFACE.md`); count against the real pinout.
+        (3) FPGA side: a bus personality of `p8x_gcard_top.v` (parallel register
+        interface in place of the UART bridge), same GL engine. (4) Power: the
+        Nano from the bus +5 V; check its draw against the slot's pins.
+      - **Slot budget:** the 6 CPU cards + the PS/2 card + the planned IRQ
+        controller card fill all 8 slots, so this is a ninth card. Options: fold
+        the IRQ controller onto the control card (U20/U21 footprints already sit
+        there DNP), or accept that one card sits out.
+
 - [ ] **Off-screen content: scrolling / scroll bars (2026-09-17).** How to
       handle content that doesn't fit one 480x272 screen -- the immediate case is
       a DIRECTORY in finder with more entries than the icon grid holds, but the
