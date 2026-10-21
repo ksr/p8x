@@ -71,16 +71,21 @@ Layout rules:
 - **Slot pitch 28 mm**, 8 slots → board 262 × 128 mm (≈ 20 cm of bus between
   the end slots)
 - Bus traces run straight connector-to-connector on the outer layers. The
-  generated board uses **0.2 mm tracks, 0.13 mm minimum clearance** (one net
-  class, Freerouting). Most parallel runs sit at the 2.54 mm pin pitch, where
-  coupling is negligible; some pairs close to 0.33–0.5 mm centre-to-centre
-  for 10–17 cm (measured 2026-10-21, §2.1)
+  generated board uses **0.2 mm tracks, 0.13 mm minimum clearance** (Freerouting),
+  plus a 0.35 mm `CLOCK` net class for CLK/CLKB (below). Most parallel runs sit at
+  the 2.54 mm pin pitch, where coupling is negligible; some sampled-signal pairs
+  close to 0.33–0.5 mm centre-to-centre for 10–17 cm (measured 2026-10-21, §2.1)
 - **Do not route signals between the planes or split the planes.** Spares
   route like signals (the generated board keeps every track on L1/L4)
 - **CLK and CLKB get the royal treatment**: route them with a ground trace
   on each side (guard traces) or with one empty channel between them and
-  neighbors; keep them on one layer end to end. *Not yet implemented by the
-  generator* — see BACKLOG "Backplane clock spacing before ordering"
+  neighbors; keep them on one layer end to end. **As built (2026-10-21):** a
+  `CLOCK` net class at 0.35 mm clearance (`gen_backplane.py`) keeps every
+  neighbour ≥ 1.23 mm centre-to-centre (it was CIN at 0.44 mm, 75 mm alongside
+  CLKB), with both clocks still the ≈ 230 mm daisy chain. Wider is not possible:
+  the DIN pin field leaves 0.395 mm per side for a track threading two pins, and
+  above that the clocks detour round the connector ends. A routed ground guard
+  is beyond the autorouter; the spacing does its job
 - **Decoupling**: one 100 nF within 10 mm of each slot's power pins (C1–C8
   in the schematic), 2 × 470 µF bulk near the power entry (C11/C12)
 - Power entry (J11, 4-pos screw terminal: 2 × +5V, 2 × GND) at one end;
@@ -111,7 +116,15 @@ So the thin dielectric cuts the worst pairs about 3×, at no layer cost. **When
 ordering, choose a 4-layer stackup with ≈ 0.1 mm outer prepreg** (most fabs list
 one, often with 3313 glass). The 0.2 mm tracks then drop from ≈ 66 Ω to ≈ 41 Ω
 (microstrip, εr 4.3), which is harmless: the loaded bus sits lower than either (§3).
-Spacing the edge-sensitive lines out (BACKLOG) and a thin prepreg compound.
+The two levers compound on the clocks: at their 1.23 mm spacing (§2) the estimate
+is ≈ 2.6 % at 0.2 mm prepreg and ≈ 0.7 % at 0.1 mm. The tight pairs left are
+sampled signals (crosstalk only has to settle before the clock edge) plus two
+active-low lines that idle high: `-RES` (104 mm beside D7 at 0.49 mm) and `IRQ`
+(beside FZ/FV/LDZN at ≈ 0.5 mm). Both are safe for the same reason: HCT inputs
+switch at ≈ 1.4 V, so a line sitting high needs a 72 % dip (5 V → 1.4 V) to see a
+false edge, against ≈ 14 % (≈ 0.7 V) worst-case coupling. The vulnerable state is
+a line sitting LOW (a 28 % rise reaches threshold), which is the clock case the
+`CLOCK` class protects.
 
 ### 2.2 The connector pin field
 

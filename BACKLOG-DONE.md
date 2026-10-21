@@ -2,6 +2,27 @@
 
 <!-- migrated from BACKLOG.md 2026-09-14 (category review: [x] done items belong here) -->
 
+- [x] **Backplane clock spacing before ordering (2026-10-21).** The design doc
+      called for guard traces or an empty channel beside CLK/CLKB, but
+      `gen_backplane.py` routed every net in one 0.13 mm class, so CLKB (the
+      pipeline latch clock) ran 75 mm beside CIN at 0.44 mm centre-to-centre
+      (≈ 17 % rule-of-thumb coupling). Fix: CLK/CLKB in their own `CLOCK` net class
+      at **0.35 mm** clearance (persisted to the `.kicad_pro`, exported as its own
+      DSN class). Result: every clock neighbour ≥ 1.23 mm (≈ 2.6 %, ≈ 0.7 % on a
+      0.1 mm prepreg), both clocks still the ≈ 230 mm daisy chain (CLK 239, CLKB
+      228 mm), DRC 0 unconnected, PASS. Why 0.35: the DIN pin field (1.55 mm pads,
+      2.54 mm pitch) leaves 0.395 mm per side for a track threading two pins; at
+      0.5 mm the clocks detoured round the connector ends (≈ 430–450 mm) and left
+      2 unrouted, 0.8 mm left 6, 0.38 mm left 3; a Specctra `wire_wire`-typed
+      clearance was not honoured reliably by Freerouting. Because a clock track
+      takes a whole pin-row gap and Freerouting's result depends on the DSN's
+      element order (fresh every placement run), `hardware/backplane/kicad/build.sh`
+      now retries placement → route (`ROUTE_TRIES` 6) until 0 unconnected AND the
+      longest clock ≤ `CLOCK_MAX_MM` (300); re-routing the same DSN, or a completion
+      pass from the existing wiring, reproduced each miss exactly. The remaining
+      tight pairs are sampled signals plus `-RES`/`IRQ`, which idle high (a 72 % dip
+      to reach the HCT threshold). Design doc §2, `kicad/README.md`.
+
 - [x] **Register bank rev D — PT counts, PT2 added (2026-10-11).** The TTL
       build-blocker (found 2026-10-02): the routed KiCad regbank was still the rev B
       netlist with PT as two 74377 load-only latches, so `PHW`/`PLW`/`LPW` (which

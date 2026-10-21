@@ -24,6 +24,19 @@ Two design choices made the dense parallel bus routable (see the git history and
   stays 0.2 mm; only the spacing tightens. **The rule ships in
   `p8x-backplane.kicad_pro`, which must stay committed beside the board** so DRC
   and the fab see 0.13 mm.
+- **CLK and CLKB in their own `CLOCK` net class, 0.35 mm clearance** (2026-10-21),
+  so no bus net runs close beside the clocks: the worst clock neighbour went from
+  CIN at 0.44 mm centre-to-centre (75 mm alongside CLKB, the pipeline latch clock)
+  to 1.23 mm. The ceiling is the DIN pin field: 1.55 mm pads on 2.54 mm pitch leave
+  0.99 mm, so a 0.2 mm track threading two pins has 0.395 mm per side. Above that
+  the clocks cannot pass between pins and detour round the connector ends (at
+  0.5 mm both nearly doubled in length). Also in the `.kicad_pro`.
+- **The route retries.** A clock track takes a whole pin-row gap to itself, so the
+  route got tighter, and Freerouting's result depends on the order KiCad writes the
+  DSN, which changes on every placement run. `build.sh` re-runs placement → DSN →
+  route (up to `ROUTE_TRIES`, default 6) until the board has 0 unconnected AND
+  neither clock exceeds `CLOCK_MAX_MM` (300 mm, against the ≈ 230 mm daisy chain).
+  Re-routing the same DSN does not help — it reproduces the same miss.
 
 Mounting holes use **nylon screws** (or none): the DIN mounting-hole copper keepout
 is 2.0 mm here (just clears the 2.85 mm hole), not the 4.0 mm metal-screw ring the
@@ -35,7 +48,7 @@ GENERATORS ARE CANON — edit `gen_backplane.py` / `gen_eagle.py` and re-run
 | File | What |
 |------|------|
 | `p8x-backplane.kicad_pcb` | the board |
-| `p8x-backplane.kicad_pro` | project + design rules (0.13 mm clearance) — keep committed |
+| `p8x-backplane.kicad_pro` | project + design rules (0.13 mm clearance; `CLOCK` class 0.35 mm) — keep committed |
 | `p8x-backplane.ses` | the Freerouting routing |
 | `p8x-backplane-gerbers.zip` | orderable gerbers |
 | `p8x-backplane-placement.pdf` | parts placement |

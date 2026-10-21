@@ -61,9 +61,35 @@ try:
     board.GetDesignSettings().m_NetSettings.GetDefaultNetclass().SetClearance(mm(0.13))
 except Exception as _e:
     print("  WARN: could not set 0.13mm clearance:", _e)
+# The clocks get their own net class with a wider clearance, so no other net
+# runs close beside them (2026-10-21). CLKB is the pipeline latch clock (the 74374s on the
+# control card) -- the most edge-sensitive line on the bus -- and the shared
+# 0.13mm class let Freerouting run CLKB 75mm beside CIN at 0.44mm centres
+# (~16% near-end coupling at 0.2mm prepreg). The ceiling is the DIN pin field:
+# 1.55mm pads on 2.54mm pitch leave 0.99mm of copper gap, so a 0.2mm track
+# threading two pins has 0.395mm to each pad. Above that the clocks cannot pass
+# BETWEEN pins and detour around the connector ends -- at 0.5mm they nearly
+# doubled (CLK 238 -> 426mm, CLKB 226 -> 450mm) and left 2 connections
+# unrouted; 0.8mm left 6; 0.38mm (too near the limit) left 3. 0.35mm threads
+# the pins, keeps both clocks at their baseline length, routes the whole bus,
+# and moves every neighbour to >= 0.83mm centre-to-centre (worst CLKB/SH0,
+# ~5.5%, ~1.4% on a 0.1mm prepreg); CIN no longer runs beside CLKB. A Specctra
+# wire_wire-typed clearance (spacing the runs, not the pads) was also tried and
+# not honoured reliably by Freerouting. Measured 2026-10-21. Persisted to the
+# .kicad_pro (DRC) and exported as its own DSN class (Freerouting).
+CLOCK_NETS, CLOCK_CLEARANCE = ("CLK", "CLKB"), 0.35
+try:
+    ns = board.GetDesignSettings().m_NetSettings
+    nc = pcbnew.NETCLASS("CLOCK")
+    nc.SetClearance(mm(CLOCK_CLEARANCE)); nc.SetTrackWidth(mm(0.2))
+    ns.SetNetclass("CLOCK", nc)
+    for n in CLOCK_NETS: ns.SetNetclassPatternAssignment(n, "CLOCK")
+except Exception as _e:
+    print("  WARN: could not set the CLOCK net class:", _e)
 netobj = {}
 for n in bpn:
     ni = pcbnew.NETINFO_ITEM(board, n); board.Add(ni); netobj[n] = ni
+board.SynchronizeNetsAndNetClasses(True)
 
 # Board size + placement: single row of DIN slots pushed to the LEFT, with
 # ALL the peripheral parts gathered on the RIGHT where there is open room (the

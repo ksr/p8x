@@ -148,7 +148,9 @@ all slots. A useful mental model of one bus cycle:
   and decide whether to populate `RT/CT`.
 - **Clearance:** the Eagle-era layout ran the clock verticals close (~0.6 mm) to
   the slot-10 pad columns. The routed KiCad board (8 slots, [`kicad/`](kicad/README.md))
-  passes DRC at 0.13 mm clearance with 0 unconnected.
+  passes DRC at 0.13 mm clearance with 0 unconnected, and since 2026-10-21 holds
+  CLK/CLKB in a 0.35 mm `CLOCK` net class (worst clock neighbour 1.23 mm
+  centre-to-centre; see the design doc §2).
 - **Before fab:** check the DIN 41612 footprints against the physical connectors
   (mated row orientation, mounting holes); order the backplane first as the cheap
   validation article.
