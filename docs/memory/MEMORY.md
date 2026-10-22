@@ -3,7 +3,7 @@
 - [P8X Project](project_p8x.md) — Hand-built 8-bit TTL homebrew CPU at ~/Developer/p8x; architecture, conventions, current backlog
 - [P8X KiCad CAD](project_p8x_kicad_cad.md) — KiCad is the go-forward PCB flow (xor-trial, memory-card rev F); Eagle frozen at rev E, likely dropped once KiCad boards proven; do NOT rev-F gen_eagle
 - [P8X KiCad schematics](project_p8x_kicad_schematics.md) — all 9 boards' KiCad schematics generated from the netlists (generators/sch/, ported from p32, ELK-wired, netlist-verified); `build_sch.sh all`
-- [P8X KiCad pipeline](reference_p8x_kicad_pipeline.md) — build.sh/check_card.sh flow, kicad_tools heal steps (plane-orphan via, edge pullback, bus gaps), Freerouting quirks (NPE hang + watchdog, -mt 1, DSN edge inset)
+- [P8X KiCad pipeline](reference_p8x_kicad_pipeline.md) — build.sh/check_card.sh flow, kicad_tools heal steps (plane-orphan via, edge pullback, bus gaps), Freerouting quirks (NPE hang + watchdog, -mt 1, DSN edge inset); Freerouting is DSN-ORDER-sensitive (reroll placement, not route; backplane build retries); DIN pin-field 0.395mm net-class clearance ceiling; KiCad 10 netclass python API
 - [P8X backplane keepout](reference_p8x_backplane_keepout.md) — backplane = NYLON screws, 2mm DIN keepout (dense bus); plug-in cards keep 4mm metal-screw keepout
 - [P8X card topology](project_p8x_card_topology.md) — io+cf+ps2 combination REVERTED to 3 separate cards (2026-09-19); peripheral PARKED (PARK_PERIPHERAL flag, hardware/parked/), ps2-card built standalone (ATmega latch-bridge $FF58-5F)
 - [Deprecated dir is frozen](feedback_p8x_deprecated_dir.md) — never edit/regen/place/design inside hardware/deprecated/; deprecate a board by git mv + make generators skip emitting it (not redirect into it)

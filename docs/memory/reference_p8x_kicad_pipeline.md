@@ -5,7 +5,7 @@ metadata:
   node_type: memory
   type: reference
   originSessionId: 6ffcfef7-73ca-445b-bcdb-f57735fdc98f
-  modified: 2026-09-19T01:48:14.945Z
+  modified: 2026-10-21T20:02:43.662Z
 ---
 
 The KiCad card flow (GENERATORS ARE CANON). One command per card or all:
@@ -47,3 +47,28 @@ heal_bus_gaps was NOT needed in the end (Freerouting closed every net at 0.13mm)
 but is hardened: reads the board's own clearance rule, lays 0.2mm track, re-fills
 planes around new vias, and its self-check copies the .kicad_pro beside the temp so
 DRC judges against the real rule, not the 0.2mm default.
+
+**2026-10-21 — backplane CLOCK net class + order-sensitive routing (8d533b1):**
+- **Freerouting is ORDER-sensitive and KiCad's DSN order changes every placement
+  run** (fresh UUIDs → components/keepouts emitted in a different order). Same
+  board, different order → different result. Re-routing the SAME DSN (more `-mp`
+  passes, `-oit 0`, or a completion pass from a DSN that includes the existing
+  wiring) reproduces a miss EXACTLY — don't bother. Only a fresh placement run
+  rerolls. So `hardware/backplane/kicad/build.sh` now loops placement→DSN→route
+  (`ROUTE_TRIES` 6) until 0 unconnected AND longest clock ≤ `CLOCK_MAX_MM` 300.
+  A gate on "0 unconnected" alone is not enough: some complete routes detour a clock.
+- **DIN41612 pin-field threading ceiling:** 1.55mm pads on 2.54mm pitch leave
+  0.99mm; a 0.2mm track between two pins has **0.395mm per side**. A net-class
+  clearance applies at PADS too, so any class clearance > ~0.39 means that net
+  can't pass between pins and detours round the connector ends (0.5mm doubled
+  CLK/CLKB length and left unrouteds). 0.35 works; 0.38 too near the limit.
+- A Specctra `(clearance N (type wire_wire))` in a DSN class parses but is NOT
+  honoured reliably by Freerouting — can't separate wire-wire from wire-pad spacing.
+- **KiCad 10 pcbnew python netclass API:** `ns = board.GetDesignSettings().m_NetSettings`;
+  `nc = pcbnew.NETCLASS("CLOCK")`; `ns.SetNetclass(name, nc)`;
+  `ns.SetNetclassPatternAssignment("CLK", "CLOCK")`; then
+  `board.SynchronizeNetsAndNetClasses(True)`. SaveBoard persists it to .kicad_pro
+  and ExportSpecctraDSN emits `(class CLOCK CLK CLKB ... (clearance 350))`.
+  `net.GetNetClass()` and `board.GetConnectivity()` return UNWRAPPED swig objects —
+  use `ns.GetEffectiveNetClass(name)`, and `kicad-cli pcb drc --format json` for
+  unconnected counts.
