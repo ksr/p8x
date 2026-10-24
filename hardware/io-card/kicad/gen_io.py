@@ -54,6 +54,10 @@ BY = BH - 14.0
 place("DB9A", 40.0, BY, 180)
 place("DB9B", 95.0, BY, 180)
 place("SW1", 155.0, BH - 16.0, 90); place("J3", 214.0, BH - 12.0)
+# the RTC's CR2032 holder (Keystone 103, ~24x30mm courtyard) in the empty
+# bottom-right corner beside J3, clear of the interior flow (2026-10-24; the 20mm
+# holder flowed into the DB9A zone)
+place("BT1", 245.0, BH - 24.0)
 # top edge: the four LED bars (output + A0-7 / A8-15 / D0-7 monitors), pulled down
 # far enough that the bar bodies clear the top edge
 TY = 24.0
@@ -62,7 +66,7 @@ place("LA1", 40.0, TY); place("LM3", 92.0, TY); place("LM1", 144.0, TY); place("
 place("LED3", BW - 8.0, 45.0, 90); place("RP1", BW - 17.0, 45.0, 90)
 place("LED4", BW - 8.0, 65.0, 90); place("R4",  BW - 17.0, 65.0, 90)
 
-EDGE_REFS = {"J1", "DB9A", "DB9B", "SW1", "J3",
+EDGE_REFS = {"J1", "DB9A", "DB9B", "SW1", "J3", "BT1",
              "LA1", "LM1", "LM2", "LM3", "LED3", "RP1", "LED4", "R4"}
 
 # --- 2. interior: grid-flow the ICs (+ caps) then remaining passives ----------

@@ -6,7 +6,7 @@
   (symbol "p8x:COIN" (pin_names (offset 0.762)) (in_bom yes) (on_board yes)
     (property "Reference" "U" (at 0 4.04 0) (effects (font (size 1.27 1.27))))
     (property "Value" "COIN" (at 0 -4.04 0) (effects (font (size 1.27 1.27))))
-    (property "Footprint" "Battery:BatteryHolder_Keystone_3000_1x12mm" (at 0 0 0) (effects (font (size 1.27 1.27)) hide))
+    (property "Footprint" "Battery:BatteryHolder_Keystone_103_1x20mm" (at 0 0 0) (effects (font (size 1.27 1.27)) hide))
     (property "Datasheet" "" (at 0 0 0) (effects (font (size 1.27 1.27)) hide))
     (symbol "COIN_0_1"
       (rectangle (start -5.08 2.54) (end 5.08 -2.54) (stroke (width 0.254) (type default)) (fill (type background)))
@@ -97,7 +97,7 @@
     (uuid "69d5816c-d41f-50bf-9e32-266d8c2a4c3a")
     (property "Reference" "BT1" (at 236.22 51.34 0) (effects (font (size 1.27 1.27)) (justify left)))
     (property "Value" "CR2032" (at 236.22 60.42 0) (effects (font (size 1.27 1.27)) (justify left)))
-    (property "Footprint" "Battery:BatteryHolder_Keystone_3000_1x12mm" (at 241.30 55.88 0) (effects (font (size 1.27 1.27)) hide))
+    (property "Footprint" "Battery:BatteryHolder_Keystone_103_1x20mm" (at 241.30 55.88 0) (effects (font (size 1.27 1.27)) hide))
     (property "Datasheet" "" (at 241.30 55.88 0) (effects (font (size 1.27 1.27)) hide))
     (pin "1" (uuid "8180cfd0-6728-5a23-9c0d-192212e0fed6"))
     (pin "2" (uuid "073bffda-d081-5125-85f6-90bddcd676e7"))

@@ -314,13 +314,17 @@ D("MCP23S17",
      + [("GPA%d"%i,str(i+21)) for i in range(8)]),
   "DIP28N")
 
-# Raspberry Pi Pico (RP2040) as a socketed 2x20 module. Power pins verified
-# against the official pinout: VBUS 40, VSYS 39, 3V3_EN 37, 3V3(OUT) 36,
-# AGND 33, GND 3/8/13/18/23/28/38, pin 1 = GP0.
+# Raspberry Pi Pico (RP2040) as a socketed 2x20 module: two rows of 20 at 17.78 mm
+# (0.7"), pins 1-20 down one side and 21-40 back up the other. Power pins
+# verified against the official pinout: VBUS 40, VSYS 39, 3V3_EN 37, 3V3(OUT) 36,
+# AGND 33, GND 3/8/13/18/23/28/38, pin 1 = GP0. Every ground pin is named
+# (GND, GND8..GND38) so all of them reach the plane (2026-10-24; before, only 3
+# and 33 were netted).
+_PICO_GND = ["GND8","GND13","GND18","GND23","GND28","GND38"]
 D("PICO",
   ["VBUS","VSYS","!RUN","3V3EN"],
-  ["GP%d"%i for i in range(23)]+["GP26","GP27","GP28","3V3OUT","ADCVREF","AGND","GND"],
-  dict([("GP0","1"),("GP1","2"),("GND","3"),("GP2","4"),("GP3","5"),("GP4","6"),
+  ["GP%d"%i for i in range(23)]+["GP26","GP27","GP28","3V3OUT","ADCVREF","AGND","GND"]+_PICO_GND,
+  dict([(g,g[3:]) for g in _PICO_GND]+[("GP0","1"),("GP1","2"),("GND","3"),("GP2","4"),("GP3","5"),("GP4","6"),
         ("GP5","7"),("GP6","9"),("GP7","10"),("GP8","11"),("GP9","12"),
         ("GP10","14"),("GP11","15"),("GP12","16"),("GP13","17"),
         ("GP14","19"),("GP15","20"),("GP16","21"),("GP17","22"),
@@ -2133,7 +2137,7 @@ N(n,"SO5",("R7","1")); N(n,"P_MISO",("R7","2"),("R8","1")); N(n,"GND",("R8","2")
 
 # --- Pico (A1): power, SPI, 8 status LEDs, 5V sense -----------------------------
 N(n,"P5V",("A1","VSYS"))                                       # 5V via Schottky D1 (below)
-N(n,"GND",("A1","GND"),("A1","AGND"))
+N(n,"GND",("A1","GND"),("A1","AGND"),*[("A1",g) for g in _PICO_GND])
 N(n,"P_SCK",("A1","GP2")); N(n,"P_SI",("A1","GP3")); N(n,"P_MISO",("A1","GP4"))
 N(n,"P_CS",("A1","GP5")); N(n,"P_RST",("A1","GP6"))
 for i in range(8): N(n,"ST%d"%i,("A1","GP%d"%(7+i)))          # status LED drives

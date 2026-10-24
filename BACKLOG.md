@@ -1751,6 +1751,27 @@ Nothing below has been built or measured.
 
 ## VERIFY
 
+- **Footprint substitutions: geometry and pin order, not just "it routes"**
+  (2026-10-24). The board check lists every SUB footprint but still passes, and
+  two were wrong: the bus test card's Pico was a 2x20 pin header (rows 2.54 mm
+  apart, odd/even numbering; a Pico could not be fitted) and the io-card's CR2032
+  holder was a 12 mm SMD Keystone 3000 — both fixed the same day (Pico →
+  `Module:RaspberryPi_Pico_Common_THT`, all 8 Pico GND pins netted; holder →
+  `Keystone_103_1x20mm` THT). Audited the rest the same day; still open:
+    - **io-card RL1, RM1–RM3 (RNISO8, 1x16 SIP)** — contradicts the resistor
+      packaging rule in WONT-DO (isolated 8-way banks are DIP-16 RNISO8D). As
+      drawn it only fits two 8-pin isolated SIPs end to end (e.g. Bourns
+      4608X-102). Decide: switch to RNISO8D, or confirm the two-SIP part.
+    - **io-card LA1, LM1–LM3 (LEDARR8, 8-segment bargraph as DIP-16)** — common
+      bargraphs are 10-segment DIP-20; confirm an 8-segment DIP-16 part with
+      anodes 1–8 / cathodes 16–9 exists, or move to a 10-segment DIP-20.
+    - **ps2-card PS2A/PS2B (custom MiniDIN-6)** — from a vendor drawing; check
+      against the connector bought (also listed under the backplane order item).
+  Checked and matching their parts: oscillator can DIP-14 (1/7/8/14), 6 mm tact
+  switch, 8-way DIP switch (1↔16), bussed SIP-9 (pin 1 COM), 2x20 IDC for IDE
+  (odd/even is the IDE numbering), 3 mm round 32 kHz crystal, DIP-16 isolated
+  networks (A1=1, B1=16).
+
 - **Register bank: address bus floats for PSEL = 6, 7** (2026-06 review; updated
   rev D). U33 (74138) is always enabled; in rev B/C only PSEL 0-4 are populated
   (P0-P3 + PT), and the address drivers U25/U26 are always on, so unpopulated

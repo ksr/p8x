@@ -44,7 +44,7 @@ FP_PKG = {
     "SIP16": "Connector_PinHeader_2.54mm:PinHeader_1x16_P2.54mm_Vertical",
     "CP_RADIAL": "Capacitor_THT:CP_Radial_D8.0mm_P3.50mm",
     "SW2P": "Button_Switch_THT:SW_PUSH_6mm",
-    "PICO40": "Connector_PinHeader_2.54mm:PinHeader_2x20_P2.54mm_Vertical",
+    "PICO40": "Module:RaspberryPi_Pico_Common_THT",
     "FABC96S": "Connector_DIN:DIN41612_C_3x32_Female_Vertical_THT",   # backplane slot (female)
     "TB4": "Connector_Phoenix_MSTB:PhoenixContact_MSTBA_2,5_4-G-5,08_1x04_P5.08mm_Horizontal",
 }
@@ -54,7 +54,7 @@ FP_DEV = {
     "XTAL32": "Crystal:Crystal_Round_D3.0mm_Vertical",
     "LEDARR8": _D + "DIP-16_W7.62mm", "RNISO8D": _D + "DIP-16_W7.62mm",
     "RNISO8": "Connector_PinHeader_2.54mm:PinHeader_1x16_P2.54mm_Vertical",
-    "COIN": "Battery:BatteryHolder_Keystone_3000_1x12mm",
+    "COIN": "Battery:BatteryHolder_Keystone_103_1x20mm",
 }
 
 # ---------------------------------------------------------------- pin types
@@ -247,7 +247,7 @@ _passive("LEDARR8", _seq("A", 1, 8) + _seq("K", 1, 8), _seq("A", 1, 8), ["K%d" %
 
 # ---------------------------------------------------------------- build SYM
 PWR = {"VCC", "AVCC", "VCC1", "VCC2", "VDD", "VP", "VSYS", "VBUS", "3V3OUT"}
-GND = {"GND", "GND2", "VSS", "VM", "AGND"}
+GND = {"GND", "GND2", "VSS", "VM", "AGND", "GND8", "GND13", "GND18", "GND23", "GND28", "GND38"}
 
 def build():
     """Merge gen_eagle.DEV pin numbers with the TYPES/LAYOUT overlays above."""

@@ -201,7 +201,7 @@
   (symbol "COIN" (pin_names (offset 0.762)) (in_bom yes) (on_board yes)
     (property "Reference" "U" (at 0 4.04 0) (effects (font (size 1.27 1.27))))
     (property "Value" "COIN" (at 0 -4.04 0) (effects (font (size 1.27 1.27))))
-    (property "Footprint" "Battery:BatteryHolder_Keystone_3000_1x12mm" (at 0 0 0) (effects (font (size 1.27 1.27)) hide))
+    (property "Footprint" "Battery:BatteryHolder_Keystone_103_1x20mm" (at 0 0 0) (effects (font (size 1.27 1.27)) hide))
     (property "Datasheet" "" (at 0 0 0) (effects (font (size 1.27 1.27)) hide))
     (symbol "COIN_0_1"
       (rectangle (start -5.08 2.54) (end 5.08 -2.54) (stroke (width 0.254) (type default)) (fill (type background)))

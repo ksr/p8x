@@ -67,7 +67,10 @@ FPMAP = {
     "SIP16":  ("Connector_PinHeader_2.54mm", "PinHeader_1x16_P2.54mm_Vertical", "SUB 1x16 SIP (isolated R-net)"),
     "CP_RADIAL": ("Capacitor_THT", "CP_Radial_D8.0mm_P3.50mm", "SUB radial electrolytic / coin"),
     "SW2P":   ("Button_Switch_THT", "SW_PUSH_6mm", "SUB 6mm tact switch"),
-    "PICO40": ("Connector_PinHeader_2.54mm", "PinHeader_2x20_P2.54mm_Vertical", "SUB 2x20 (Raspberry Pi Pico)"),
+    # the real module footprint (2026-10-24): rows 17.78 mm apart, Pico pin order.
+    # The 2x20 header substituted before had rows 2.54 mm apart and odd/even
+    # numbering, so a Pico could not have been fitted.
+    "PICO40": ("Module", "RaspberryPi_Pico_Common_THT"),
 }
 # device-name overrides where the package alone is ambiguous
 DEV_FP = {
@@ -77,7 +80,9 @@ DEV_FP = {
     "LEDARR8":("Package_DIP", "DIP-16_W7.62mm", "SUB DIP-16 (8-LED bargraph)"),
     "RNISO8": ("Connector_PinHeader_2.54mm", "PinHeader_1x16_P2.54mm_Vertical", "SUB 1x16 SIP (isolated 8xR)"),
     "RNISO8D":("Package_DIP", "DIP-16_W7.62mm", "SUB DIP-16 isolated R-net"),
-    "COIN":   ("Battery", "BatteryHolder_Keystone_3000_1x12mm", "SUB coin-cell holder"),
+    # CR2032 (20 mm) through-hole holder (2026-10-24; the Keystone 3000 used before
+    # holds a 12 mm cell and is surface-mount)
+    "COIN":   ("Battery", "BatteryHolder_Keystone_103_1x20mm"),
 }
 SUBS = []   # collected substitutions to report
 def footprint_for(ref, dev):
