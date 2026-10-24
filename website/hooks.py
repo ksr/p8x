@@ -2,7 +2,8 @@
 """MkDocs hook: a relative link to a repository file that is not part of the site (a source, a schematic, a PDF)
 becomes a link to that file on GitHub; an image that is not part of the site is shown from GitHub's raw files.
 A link to a directory goes to that directory's README page when the site has one, otherwise to the directory on
-GitHub."""
+GitHub.
+It also adds a "KiCad board" item to each board's menu under Hardware (on_config)."""
 import os, posixpath, re
 from urllib.parse import unquote
 
@@ -22,6 +23,47 @@ def alias(resolved):
     if resolved.startswith("os/man/") and "/" not in resolved[7:] and resolved[7:] not in ("", "README.md"):
         return "commands/%s.md" % resolved[7:]
     return None
+
+
+def board_revisions():
+    """{board: "rev X"} from the status table in hardware/KICAD-BOARDS.md, for the boards whose notes name one."""
+    revs = {}
+    for line in open(os.path.join(REPO, "hardware", "KICAD-BOARDS.md"), encoding="utf-8"):
+        cols = [c.strip() for c in line.split("|")]
+        if len(cols) > 4 and re.fullmatch(r"[a-z0-9-]+", cols[1]):
+            m = re.search(r"\brev ([A-Z])\b", cols[4])
+            if m: revs[cols[1]] = "rev " + m.group(1)
+    return revs
+
+
+def on_config(config):
+    """Under Hardware, each board's menu gets a "KiCad board" item (its kicad/README.md, with the current revision
+    when KICAD-BOARDS.md names one). A board that is a single page becomes a section holding that page and the item.
+    P8X keeps one design per board (a new revision replaces the old in place), so there is no list of versions."""
+    revs = board_revisions()
+
+    def board_of(item):
+        path = next(iter(item.values())) if isinstance(item, dict) else item
+        if isinstance(path, list): path = next(iter(path[0].values())) if path and isinstance(path[0], dict) else ""
+        m = re.match(r"hardware/([a-z0-9-]+)/", path or "")
+        return m.group(1) if m else None
+
+    for top in config["nav"]:
+        if not (isinstance(top, dict) and "Hardware" in top): continue
+        items = top["Hardware"]
+        for i, item in enumerate(items):
+            if not isinstance(item, dict): continue
+            board = board_of(item)
+            page = "hardware/%s/kicad/README.md" % board
+            if not board or not os.path.exists(os.path.join(REPO, page)): continue
+            label = "KiCad board" + (" (%s)" % revs[board] if board in revs else "")
+            (title, value), = item.items()
+            if isinstance(value, list):
+                if not any(page in (v.values() if isinstance(v, dict) else [v]) for v in value):
+                    value.append({label: page})
+            else:
+                items[i] = {title: [{"Design": value}, {label: page}]}
+    return config
 
 
 def on_page_markdown(markdown, page, config, files):

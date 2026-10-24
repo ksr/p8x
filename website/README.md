@@ -9,7 +9,7 @@ a readable view of them, with navigation and search.
 | `home.md` | the visitor home page (the site's index) |
 | `p8x-collage.jpg` | the home page's lead picture: the assembled-machine renders and the memory card (until there are photos of built boards) |
 | `stage.py` | copies the documents the site uses into `stage/`, keeping their repository paths so the links between them work, and generates the extra pages |
-| `hooks.py` | MkDocs hook: a link to a repository file that is not part of the site becomes a link to that file on GitHub (branch `main`) |
+| `hooks.py` | MkDocs hook: a link to a repository file that is not part of the site becomes a link to that file on GitHub (branch `main`); each board's Hardware menu gets a "KiCad board" item (its `kicad/README.md`, with the revision `hardware/KICAD-BOARDS.md` names) |
 | `mkdocs.yml` | the site: navigation, theme, Markdown extensions |
 | `mkdocs-publish.yml` | `mkdocs.yml` + the Google Analytics tag (G-X7P96DTCNE); only the published build carries it |
 | `requirements.txt` | the Python packages, pinned |

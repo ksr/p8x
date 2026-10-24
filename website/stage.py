@@ -19,7 +19,8 @@ FILES = ["BACKLOG.md", "GLOSSARY.md", "hardware/README.md", "hardware/KICAD-BOAR
          "rom/README.md", "assembler/README.md", "compiler/README.md", "basic/README.md", "basic/p8x-basic-guide.md",
          "apps/README.md", "emulator/README.md", "tools/README.md", "tools/gatesim/README.md", "generators/README.md",
          "os/README.md", "os/commands/README.md", "os/commands-asm/README.md", "os/man/README.md"]
-GLOBS = ["docs/*.md", "fpga/**/*.md"] + ["hardware/%s/*.md" % b for b in BOARDS]
+GLOBS = ["docs/*.md", "fpga/**/*.md"] + ["hardware/%s/*.md" % b for b in BOARDS] + \
+        ["hardware/%s/kicad/README.md" % b for b in BOARDS]   # each board's KiCad page (hooks.py adds it to the menu)
 # never on the site: Claude's memory mirror, frozen / parked / deprecated trees, logs, agent notes, the review dump
 SKIP = re.compile(r"(^|/)(docs/memory|eagle-deprecated|deprecated|parked|logs)(/|$)|(^|/)(CLAUDE|CODE_REVIEW)\.md$")
 
