@@ -191,6 +191,7 @@ The word burned to the 4× 28C64 EPROMs and interpreted by the emulator. Bit map
 | **OSC4** | Full-can oscillator (4-pin DIP-style). |
 | **SW2P / SW2** | 2-pin switch footprint / device (RESET/RUN/STEP). |
 | **RNISO8** | Isolated 8-resistor network (SIP). |
+| **RNISO8D** | Isolated 8-resistor network in a DIP-16 (R*i* between pins *i* and 17−*i*); the package for every 8-way isolated bank. |
 | **R_AXIAL** | Axial-lead resistor. |
 | **C_DISC / CP_RADIAL** | Disc ceramic cap / radial polarised (electrolytic) cap. |
 | **MEM28K8** | The wide memory footprint shared by the 28C256 EEPROM and 62256 SRAM. |

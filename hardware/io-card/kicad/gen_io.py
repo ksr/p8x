@@ -62,12 +62,16 @@ place("BT1", 245.0, BH - 24.0)
 # far enough that the bar bodies clear the top edge
 TY = 24.0
 place("LA1", 40.0, TY); place("LM3", 92.0, TY); place("LM1", 144.0, TY); place("LM2", 196.0, TY)
+# each bar's DIP-16 current-limit network just left of it (2026-10-24): resistor
+# pins 16..9 (B1..B8) face bar anodes 1..8 straight across
+place("RL1", 28.0, TY); place("RM3", 80.0, TY); place("RM1", 132.0, TY); place("RM2", 184.0, TY)
 # right edge: power + I/O-select LEDs with their resistors
 place("LED3", BW - 8.0, 45.0, 90); place("RP1", BW - 17.0, 45.0, 90)
 place("LED4", BW - 8.0, 65.0, 90); place("R4",  BW - 17.0, 65.0, 90)
 
 EDGE_REFS = {"J1", "DB9A", "DB9B", "SW1", "J3", "BT1",
-             "LA1", "LM1", "LM2", "LM3", "LED3", "RP1", "LED4", "R4"}
+             "LA1", "LM1", "LM2", "LM3", "RL1", "RM1", "RM2", "RM3",
+             "LED3", "RP1", "LED4", "R4"}
 
 # --- 2. interior: grid-flow the ICs (+ caps) then remaining passives ----------
 IX0, IX1, IY0, IY1, GAP, CAPH = 17.0, BW - 22.0, 34.0, BH - 32.0, 1.8, 4.5

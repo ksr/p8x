@@ -47,6 +47,7 @@ def part(dev,val):
     if dev=="CAPP":    return "Electrolytic cap %s"%val,"Capacitor",pkg
     if dev=="SIP9":    return "Resistor network %s (bussed, 9-pin SIP)"%val,"Resistor network",pkg
     if dev=="RNISO8":  return "Resistor network %s (isolated, SIP)"%val,"Resistor network",pkg
+    if dev=="RNISO8D": return "Resistor network %s (isolated, DIP-16)"%val,"Resistor network",pkg
     if dev=="LED":
         col={"GRN":"green","YEL":"yellow","RED":"red"}.get((re.search(r"(GRN|YEL|RED)$",v) or [None,""])[0] if re.search(r"(GRN|YEL|RED)$",v) else "","")
         col=next((c for k,c in (("GRN","green"),("YEL","yellow"),("RED","red")) if v.endswith(k)),"green")

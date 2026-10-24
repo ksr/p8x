@@ -1757,11 +1757,9 @@ Nothing below has been built or measured.
   apart, odd/even numbering; a Pico could not be fitted) and the io-card's CR2032
   holder was a 12 mm SMD Keystone 3000 — both fixed the same day (Pico →
   `Module:RaspberryPi_Pico_Common_THT`, all 8 Pico GND pins netted; holder →
-  `Keystone_103_1x20mm` THT). Audited the rest the same day; still open:
-    - **io-card RL1, RM1–RM3 (RNISO8, 1x16 SIP)** — contradicts the resistor
-      packaging rule in WONT-DO (isolated 8-way banks are DIP-16 RNISO8D). As
-      drawn it only fits two 8-pin isolated SIPs end to end (e.g. Bourns
-      4608X-102). Decide: switch to RNISO8D, or confirm the two-SIP part.
+  `Keystone_103_1x20mm` THT). Audited the rest the same day; the io-card's
+  isolated banks (RL1, RM1–RM3, a 1x16 pin header standing in for a SIP no one
+  makes) moved to DIP-16 RNISO8D the same day. Still open:
     - **io-card LA1, LM1–LM3 (LEDARR8, 8-segment bargraph as DIP-16)** — common
       bargraphs are 10-segment DIP-20; confirm an 8-segment DIP-16 part with
       anodes 1–8 / cathodes 16–9 exists, or move to a 10-segment DIP-20.

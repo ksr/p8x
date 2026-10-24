@@ -1232,10 +1232,10 @@ ic={"U1":("7430","IO PAGE"),"U2":("74138","PORT DEC"),"U3":("74138","DOE DEC"),
  "U16":("DS1302","RTC DNP"),                       # rev C: real-time clock, provisioned DNP
  "U17":("6850","ACIA2"),"U18":("HEX14","74HCT14")} # rev B: 2nd serial + its E-gate inverter
 sm={"X2":("OSC","2.4576MHZ"),"SW1":("DIP8SW","INPUT"),"RNP":("SIP9","8X10K"),
- "RL1":("RNISO8","8X330R"),"LA1":("LEDARR8","8-LED BAR"),
- "RM1":("RNISO8","8X330R"),"LM1":("LEDARR8","A0-7"),
- "RM2":("RNISO8","8X330R"),"LM2":("LEDARR8","A8-15"),
- "RM3":("RNISO8","8X330R"),"LM3":("LEDARR8","D0-7"),
+ "RL1":("RNISO8D","8X330R"),"LA1":("LEDARR8","8-LED BAR"),
+ "RM1":("RNISO8D","8X330R"),"LM1":("LEDARR8","A0-7"),
+ "RM2":("RNISO8D","8X330R"),"LM2":("LEDARR8","A8-15"),
+ "RM3":("RNISO8D","8X330R"),"LM3":("LEDARR8","D0-7"),
  "DB9A":("DSUB9F","SERIAL1"),"DB9B":("DSUB9F","SERIAL2"),      # rev B: two RS-232 DB9s
  "JP1":("JMP2X3","S1 SWAP"),"JP2":("JMP2X3","S2 SWAP"),        # RX/TX straight/null-modem
  "C2":("CAP","1uF"),"C3":("CAP","1uF"),"C4":("CAP","1uF"),

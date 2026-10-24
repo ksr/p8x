@@ -55,7 +55,9 @@ class Card:
 
 # schematic-only symbol drawings per (card, ref); see p8x_symlib's variant notes
 VARIANTS = {("io-card", "JP1"): "JMP2X3SWAP", ("io-card", "JP2"): "JMP2X3SWAP",
-            ("bustest-card", "RN3"): "RNISO8DSTR"}
+            ("bustest-card", "RN3"): "RNISO8DSTR",
+            ("io-card", "RL1"): "RNISO8DSTR", ("io-card", "RM1"): "RNISO8DSTR",
+            ("io-card", "RM2"): "RNISO8DSTR", ("io-card", "RM3"): "RNISO8DSTR"}
 
 def load(name):
     if name == "backplane":

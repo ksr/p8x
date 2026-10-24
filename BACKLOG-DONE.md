@@ -15,6 +15,19 @@
       Without this the card could not assert `-IRQ` for the interrupt bring-up
       (design doc §7).
 
+- [x] **io-card isolated resistor banks are DIP-16 (2026-10-24).** RL1 and
+      RM1–RM3 (8x330R LED current limit) were `RNISO8` on a 1x16 pin-header
+      footprint: isolated SIP networks stop at 14 pins, so the bank was really two
+      8-pin SIPs end to end, and the 3D render showed a header. They are now
+      `RNISO8D` (DIP-16, R*i* between pins *i* and 17−*i*), the package the WONT-DO
+      resistor rule sets for every 8-way isolated bank and the one the bus test card
+      already uses. The schematic draws them straight (`RNISO8DSTR` variant) so the
+      LED sheets stay wired; `gen_bom.py` names the DIP-16 network (the BOM, last
+      regenerated months earlier, now also lists the bus test, ps2 and regbank rev D
+      parts). On the board each network sits just left of its bargraph, so resistor
+      pins 16–9 face the bar's anodes 1–8 straight across. Re-routed: PASS, 0
+      unconnected.
+
 - [x] **Every card schematic drawn by function (2026-10-24).** The generated
       KiCad schematics were mostly chips with a label on every pin (4–62 % of local
       nets wired). `generators/sch/p8x_sheets.py` now groups each card into
