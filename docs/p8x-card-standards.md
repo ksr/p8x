@@ -141,3 +141,70 @@ memory card as the reference ([hardware/KICAD-BOARDS.md](../hardware/KICAD-BOARD
 - [ ] Silkscreen: name, rev, pin-1 marks
 - [ ] PWR + SEL LEDs present, top-right, buffered per section 9
 - [ ] Gerber + drill reviewed in an independent viewer
+
+## 12. Rules for New Boards (Ken, 2026-10-24, all of his systems)
+
+For future work only: they do not apply to any card already built or ordered (no P8X board has been fabricated
+yet). **Always ask Ken before changing a card that might be built, ordered or in production**, for any change.
+
+- Switches, buttons, LEDs and the connectors for outside cables (video, DB9 and other D-subs, USB, network) go on
+  the front edge, the edge farthest from the bus connector.
+- Cable connectors point outwards: a right-angle part with its mating face at the board edge, so a cable plugs
+  straight in.
+- Jumper blocks and cable headers (ribbons, probes, ICSP) go near a board edge, never in the middle of the board.
+- A plug-in module (Pico, Tang Nano, ...) goes at an edge other than the bus connector's, where possible, with its
+  USB port facing that edge.
+- Every reference (U12, R3, ...) stays readable with the parts fitted: printed outside the part, never under a chip,
+  socket or module. ICs get their type (74HCT374, ...) printed beside it.
+- Every switch, button and LED is labelled with its function (RESET, STEP, RUN, ...), and each switch position with
+  what it selects.
+- Placement drawings (PDF) show the outline and the parts in one orientation, on a sheet shaped like the board.
+
+## 13. Rules Stated Elsewhere
+
+Rules the boards follow that are written in other files, not above:
+
+| Rule | Source |
+|---|---|
+| Bypass cap above each IC; LED/jumper labels and part values on the silk | [KICAD-BOARDS.md](../hardware/KICAD-BOARDS.md) |
+| Every card gets a placement PDF, top and 3D renders, and Gerbers | KICAD-BOARDS.md |
+| Boards are generated, never hand-edited: `gen_kicad.py`, or a card's own `gen_*.py` (memory, I/O, CF, PS/2) | [hardware/README.md](../hardware/README.md) |
+| `check_card.sh` gate: ERC, gate-level simulation, DRC, the mounting-hole keep-out, fab minimums 0.15 mm track / 0.25 mm drill | hardware/README.md, `generators/check_card.sh` |
+| 4.0 mm copper keep-out around the card's DIN connector mounting holes | `generators/gen_kicad.py` |
+| Plane pours: 0.2 mm clearance, 0.13 mm minimum thickness | [memory card KiCad README](../hardware/memory-card/kicad/README.md) |
+| Exotic parts get the closest standard KiCad footprint, flagged at build time | KICAD-BOARDS.md |
+| Fab: 4 layers, 1.6 mm FR-4, HASL | memory card KiCad README |
+
+## 14. Exceptions (2026-10-24)
+
+None of these is written in the card's schematic notes yet, as the preamble asks. None of the boards has been
+fabricated, so each is either a note to add or a fix to make before ordering: Ken's call.
+
+| Card | Rule | How it differs | Source |
+|---|---|---|---|
+| All cards | §2 tracks, clearance, vias; §11 DRC rules | Generated with 0.2 mm tracks, 0.2 mm clearance and 0.6/0.3 mm vias, not 0.4/0.3 and 0.8/0.4; `check_card.sh` enforces only 0.15 mm track / 0.25 mm drill | each `.kicad_pro`, `gen_kicad.py` and the card `gen_*.py`, `check_card.sh` |
+| All cards | §1 connector pin row | J1 is centred on the 140 mm edge (pins at about y = 30.6–109.4), not at y = 10.16–88.90 | `gen_kicad.py` |
+| All cards | §3 bulk cap | No 10 µF bulk cap on any card (the only electrolytics are the backplane's 470 µF) | `hardware/p8x-bom.csv` |
+| All cards | §10 sockets | The BOM lists sockets only as "recommended", not as parts | `generators/gen_bom.py` |
+| Control card | §9 SEL LED | PWR, RUN and HALT LEDs; no SEL | `generators/gen_eagle.py` |
+| Control card | — | U20 and U21 are DNP by design, but the BOM marks them fitted | `gen_eagle.py`, `p8x-bom.csv` |
+| I/O card | §9 LED drive and position | The SEL LED is driven from the gate's output to the anode (source), not sunk; PWR and SEL sit bottom-right on the front edge | `gen_eagle.py`, `gen_io.py` |
+| I/O card | — | KICAD-BOARDS.md says the RTC is DNP; the BOM marks U16 and BT1 fitted (with a "DNP option" note) | KICAD-BOARDS.md, `p8x-bom.csv` |
+| PS/2 card | §4 logic family, §9 LEDs | An ATmega1284P; its LEDs (KBD-RD, MSE-RD, KEY-AVAIL) are driven high by the ATmega's pins, none follows the bus select | KICAD-BOARDS.md, `gen_eagle.py` |
+| PS/2 card | §5 rule 5 | Bus -RES reaches the local reset through 470 Ω, with a 10k pull-up on the card side | `gen_eagle.py` |
+| Bus test card | §4, §9 | A Pico (RP2040) and 5× MCP23S17; no SEL LED; the power LED ("5V") is not top-right, which holds the Schottky D1 on an LED footprint | KICAD-BOARDS.md, `gen_eagle.py` |
+| CF-IDE card | §6 allocations | Drive 1 at `$FF18–1F` is not yet in the bus document's I/O table | [p8x-bus-definition.md](../hardware/backplane/p8x-bus-definition.md) |
+
+## 15. Where the Files Disagree (to sort out)
+
+1. **Card size in comments:** `gen_kicad.py` says "210x100mm-class" and "pads centred in 100mm", `gen_mem.py` says
+   Eurocard 100 mm; the code and every board are 280 × 140 mm.
+2. **Bus revision:** §3 says rev C/D; `p8x-bus-definition.md` is titled Rev C2 but holds C3/D content;
+   `hardware/README.md` says rev C2.
+3. **Net names (§7):** list SPARE4–23, but `busnet()` in `gen_eagle.py` now names PSEL2, FC/FZ/FN/FV, LDZN, SHCIN,
+   SETC, CLRC, BSEL and IRQ on those pins.
+4. **LED size:** the BOM says 3 mm; the footprint everywhere is 5 mm.
+5. **Bus connector:** the BOM says FABC96R with M2.5 mounting holes; the boards use the male MABC96R, and §1 says no
+   card mounting holes while the backplane README mentions the screw ring the cards use.
+6. **Stale entries:** the BOM still lists the deprecated led-card's parts; the backplane KiCad README still lists the
+   parked peripheral card in a slot.
