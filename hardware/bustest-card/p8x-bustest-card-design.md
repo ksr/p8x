@@ -410,8 +410,9 @@ the io-card precedent are still there.
 > **Superseded by the KiCad flow (2026-09-18).** Every plug-in card, this one
 > included, is now a uniform **280 × 140 mm** 4-layer board with the bus connector
 > on the left edge ([KICAD-BOARDS.md](../KICAD-BOARDS.md)); the routed board has
-> its LED bank on the right edge. The 160 × 100 mm reasoning below is the Eagle-era
-> design record.
+> its LED bank on the right edge, and (2026-10-24) the Pico upright on the bottom
+> edge with its USB end facing off the board, the probe header beside it. The
+> 160 × 100 mm reasoning below is the Eagle-era design record.
 
 **160 × 100 mm — a standard Eurocard, same as every other card.**
 

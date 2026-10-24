@@ -60,6 +60,10 @@ def export_dsn(brd):
                       "(layer %s\n      (type power)" % lyr)
     if not os.environ.get("KT_NO_EDGE_INSET"):       # backplane opts out (dense bus needs the room)
         t = _inset_dsn_boundary(t)                   # keep routed copper off the board edge
+    # Route to 0.21 mm where the rule is 0.20: Freerouting sees rounded pads (the
+    # Pico's roundrect pins) as slightly smaller polygons and passed tracks at
+    # 0.1987-0.1993 mm, which KiCad's DRC (true shapes) flags (2026-10-24).
+    t = t.replace("(clearance 200)", "(clearance 210)")
     open(dsn, "w").write(t)
     print("export_dsn ->", dsn)
 

@@ -15,6 +15,29 @@
       Without this the card could not assert `-IRQ` for the interrupt bring-up
       (design doc §7).
 
+- [x] **Front-edge layout: switches, LEDs, cable connectors, jumpers (2026-10-24).**
+      Layout rules set the same day: switches, LEDs and outside-cable connectors
+      at the front edge (opposite the bus connector), plug-in modules at a non-bus
+      edge with the USB port facing it, jumper blocks and cable headers near an
+      edge. No P8X card is built or ordered, so all of them were brought in line:
+        - **io-card** (`gen_io.py`): the DIP switch, both DB9s (facing out of the
+          right edge) and the power / I/O-select LEDs along the right edge; the four
+          LED bars with their DIP-16 networks just inboard; the RX/TX swap jumpers,
+          RTC header and CR2032 holder on the bottom edge.
+        - **control-card**: the RUN/HALT, STEP and RESET buttons on the front edge
+          under the status LEDs; the clock-select jumper JP1 on the bottom edge
+          below the oscillator.
+        - **memory-card** (`gen_mem.py`): the ROM write-protect jumper JWP on the
+          top edge above the ROM.
+        - **bustest-card**: the Pico upright on the bottom edge, USB end facing off
+          the board; the probe header J2 beside it.
+      The generic flow gained a `PINNED` table in `gen_kicad.py` for parts the
+      courtyard flow cannot place. `kicad_tools.export_dsn` now routes to 0.21 mm
+      against the 0.20 mm rule: Freerouting sees the Pico's rounded pads as slightly
+      smaller polygons and twice passed tracks at 0.1987–0.1993 mm. All four boards
+      re-routed: PASS, 0 unconnected; the CF card's IDE headers and the ps2 card's
+      ICSP header were already within 5 mm of an edge.
+
 - [x] **io-card DB9 sockets face out (2026-10-24).** `gen_io.py` placed both
       right-angle DB9s rotated 180°, so each socket's mating face pointed into the
       board (body from the pins at y ≈ 126 mm inward to 108 mm). They are now at

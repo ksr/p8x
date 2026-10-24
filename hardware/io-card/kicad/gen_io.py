@@ -4,14 +4,16 @@ switches + LEDs + bus monitor). Run with KiCad's bundled Python (needs pcbnew):
 
     PYK hardware/io-card/kicad/gen_io.py
 
-Edge treatment (matching the PS/2 card's style):
-  * the two RS-232 **DB9 sockets** + their RX/TX swap jumpers, the input **DIP
-    switch**, and the RTC 3-wire header on the BOTTOM long edge
-  * the four **LED bars** (output latch + the A0-7 / A8-15 / D0-7 bus monitors)
-    along the TOP edge for visibility; power + I/O-select LEDs on the RIGHT edge
+Edge treatment (front edge = RIGHT, opposite the bus; rules of 2026-10-24):
+  * at the right edge: the power + I/O-select LEDs, the input **DIP switch** and
+    the two RS-232 **DB9 sockets**, facing out of the edge
+  * just inboard of them, the four **LED bars** (output latch + the D0-7 / A0-7
+    / A8-15 bus monitors), each with its DIP-16 resistor network
+  * on the bottom edge: the RX/TX swap jumpers, the RTC 3-wire header and the
+    RTC's CR2032 holder
   * the DIN41612 **bus connector J1** on the LEFT edge
-  * the ICs (2x 6850, MAX232, decode, buffers, RTC) + caps + R-nets grid-flowed
-    in the interior, courtyard-spaced. Reuses gen_kicad's helpers. CANON.
+  * the ICs (2x 6850, MAX232, decode, buffers, RTC) + caps grid-flowed in the
+    interior, courtyard-spaced. Reuses gen_kicad's helpers. CANON.
 """
 import os, sys
 ROOT = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", ".."))
@@ -46,42 +48,44 @@ if "J1" in footp:
     j = footp["J1"]; j.SetOrientationDegrees(90); j.SetPosition(P(0, 0))
     x0, y0, x1, y1 = GK.pad_bbox(j)
     j.SetPosition(VECTOR2I(mm(4) - x0, mm(BH/2) - (y0 + y1)//2))
-# bottom edge: the two DB9 sockets (openings off the edge), the DIP switch, the RTC
-# header. The RX/TX swap jumpers JP1/JP2 are set-once config, so they flow in the
-# interior near the MAX232 (crowding them onto the bottom edge beside the big
-# edge-mount DB9s left the DB9 TXD/RXD pins unroutable). Pads stay inside the edge.
-# The DB9s face OUT (2026-10-24): rotation 0 puts the socket's mating face toward
-# +y, and the footprint's own board-edge offset puts pin 1 9.40 mm in from the
-# edge, so the shell overhangs the bottom edge for a cable. (They were rotated 180,
-# which pointed both sockets into the board.) Origin = pad 1; pins 1-5 run -x, so
-# pad 1 sits 5.54 mm right of the pin-row centre.
-def place_db9(ref, cx):
+# FRONT edge = the RIGHT edge, opposite the bus connector (layout rules
+# 2026-10-24: switches, LEDs and outside-cable connectors at the front edge;
+# jumper blocks and cable headers near an edge). Two columns:
+#   * at the edge, top to bottom: the input DIP switch, the two RS-232 DB9
+#     sockets facing OUT of the edge, then the power + I/O-select LEDs;
+#   * just inboard: the four LED bars (output latch, D0-7, A0-7, A8-15), each with
+#     its DIP-16 current-limit network on its left -- resistor pins 16..9
+#     (B1..B8) face the bar's anodes 1..8 straight across.
+# Below the bars, by the DB9s: the RX/TX swap jumpers on the bottom edge; the RTC
+# header and its CR2032 holder further along the bottom edge.
+EX = BW - 8.0                       # edge column centre line
+place("SW1", BW - 7.0, 38.0, 0)
+# The DB9s face OUT: rotation 90 turns the socket's mating face (+y at rotation 0)
+# toward +x. The footprint's board-edge offset puts pin 1 9.40 mm in from the
+# edge, so the shell overhangs the right edge for a cable. Origin = pad 1; pins
+# 1-5 then run +y, so pad 1 sits 5.54 mm above the pin-row centre.
+def place_db9(ref, cy):
     if ref not in footp: return
-    f = footp[ref]; f.SetOrientationDegrees(0); f.SetPosition(P(cx + 5.54, BH - 9.40))
-place_db9("DB9A", 40.0)
-place_db9("DB9B", 95.0)
-place("SW1", 155.0, BH - 16.0, 90); place("J3", 214.0, BH - 12.0)
-# the RTC's CR2032 holder (Keystone 103, ~24x30mm courtyard) in the empty
-# bottom-right corner beside J3, clear of the interior flow (2026-10-24; the 20mm
-# holder flowed into the DB9A zone)
-place("BT1", 245.0, BH - 24.0)
-# top edge: the four LED bars (output + A0-7 / A8-15 / D0-7 monitors), pulled down
-# far enough that the bar bodies clear the top edge
-TY = 24.0
-place("LA1", 40.0, TY); place("LM3", 92.0, TY); place("LM1", 144.0, TY); place("LM2", 196.0, TY)
-# each bar's DIP-16 current-limit network just left of it (2026-10-24): resistor
-# pins 16..9 (B1..B8) face bar anodes 1..8 straight across
-place("RL1", 28.0, TY); place("RM3", 80.0, TY); place("RM1", 132.0, TY); place("RM2", 184.0, TY)
-# right edge: power + I/O-select LEDs with their resistors
-place("LED3", BW - 8.0, 45.0, 90); place("RP1", BW - 17.0, 45.0, 90)
-place("LED4", BW - 8.0, 65.0, 90); place("R4",  BW - 17.0, 65.0, 90)
+    f = footp[ref]; f.SetOrientationDegrees(90); f.SetPosition(P(BW - 9.40, cy - 5.54))
+place_db9("DB9A", 72.0)
+place_db9("DB9B", 108.0)
+# power + I/O-select LEDs below the DB9s, each resistor lying flat to its left
+place("LED3", BW - 6.0, 128.0, 90); place("RP1", BW - 17.0, 128.0, 0)
+place("LED4", BW - 6.0, 135.5, 90); place("R4",  BW - 17.0, 135.5, 0)
+BX = BW - 25.0                      # bar column; resistor network 12 mm left of it
+for i, (bar, rnet) in enumerate([("LA1", "RL1"), ("LM3", "RM3"),
+                                 ("LM1", "RM1"), ("LM2", "RM2")]):
+    place(bar, BX, 15.0 + 27.0 * i); place(rnet, BX - 12.0, 15.0 + 27.0 * i)
+place("JP1", BW - 44.0, BH - 9.0, 90); place("JP2", BW - 32.0, BH - 9.0, 90)
+place("J3", BW - 95.0, BH - 6.0)
+place("BT1", BW - 72.0, BH - 17.0)
 
-EDGE_REFS = {"J1", "DB9A", "DB9B", "SW1", "J3", "BT1",
+EDGE_REFS = {"J1", "DB9A", "DB9B", "SW1", "J3", "BT1", "JP1", "JP2",
              "LA1", "LM1", "LM2", "LM3", "RL1", "RM1", "RM2", "RM3",
              "LED3", "RP1", "LED4", "R4"}
 
 # --- 2. interior: grid-flow the ICs (+ caps) then remaining passives ----------
-IX0, IX1, IY0, IY1, GAP, CAPH = 17.0, BW - 22.0, 34.0, BH - 32.0, 1.8, 4.5
+IX0, IX1, IY0, IY1, GAP, CAPH = 17.0, BW - 47.0, 8.0, BH - 32.0, 1.8, 4.5
 capfor = GK.CARDCAPS.get(CARD, {})
 caprefs = set(capfor.values())
 cx = [IX0]; cyt = [IY0]; rowh = [0.0]; overflow = [0.0]

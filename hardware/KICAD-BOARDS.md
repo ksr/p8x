@@ -23,7 +23,7 @@ DRC items are silkscreen warnings.
 | cf-card | ✅ | 0 | **rev B: two 8-bit True IDE drives** — drive 0 `$FF10-17` (J2), drive 1 `$FF18-1F` (J5), each own 74245 buffer + strobe glue + pull-ups + activity LED; headers 71mm apart for two CF-IDE adapters; bespoke `gen_cf.py`. **NOTE:** drive 1 needs the firmware/emulator port-base change (pending); drive 0 works on current firmware |
 | control-card | ✅ | 0 | 14-pin oscillator |
 | alu-card | ✅ | 0 | |
-| io-card | ✅ | 0 | **rev B: 2x ACIA/DB9** — ACIA1 `$FF04/5` + ACIA2 `$FF08`, two DB9 sockets with RX/TX-swap jumpers (one MAX232 for both), switches, LED bars, bus monitor; bespoke `gen_io.py` (DB9s+switch bottom, LED bars top). RTC/coin cell is DNP |
+| io-card | ✅ | 0 | **rev B: 2x ACIA/DB9** — ACIA1 `$FF04/5` + ACIA2 `$FF08`, two DB9 sockets with RX/TX-swap jumpers (one MAX232 for both), switches, LED bars, bus monitor; bespoke `gen_io.py` (front = right edge: DIP switch, outward-facing DB9s and LEDs, LED bars just inboard; jumpers + RTC on the bottom edge). RTC/coin cell is DNP |
 | ps2-card | ✅ | 0 | keyboard + mouse, **ATmega1284P** latch-bridge at `$FF58-5F`; custom mini-DIN-6 sockets (bottom edge), 4 status LEDs (right edge), ICSP; no level-shift (5V-native); bespoke `gen_ps2.py` |
 | regbank-card | ✅ | 0 | **rev D: 53 ICs** — PT and PT2 are four 74169 counters each (was PT = 74377 latches), 74138 3-bit count decoder, U53 PT2 load-strobe OR; routed 0 unconnected. Stage-0 `!ENT` tied low (standard 74169 cascade) so `-CNTp` need not jumper to pin 10 — that is what let the dense board route |
 | bustest-card | ✅ | 0 | Pico (RP2040) + 5× MCP23S17 + 16 LEDs; routed with right-edge LED bank |

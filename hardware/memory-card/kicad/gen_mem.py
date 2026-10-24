@@ -151,8 +151,10 @@ PLACE = {
     "U8":  (104, 82, 90),  # 74HC32
     "U9":  (132, 82, 90),  # 74HC08
     "U11": (158, 82, 90),  # 74HC32 (rev E/F decode)
-    # write-protect jumper -- clear area near the ROM, above the gate row
-    "JWP": (162, 62, 90),
+    # write-protect jumper on the top edge above the ROM's left end, clear of the
+    # A0-A14 lanes between the memories (2026-10-24; it sat mid-board, above the
+    # gates)
+    "JWP": (22, 6, 90),
 }
 # Each 100nF decoupling cap sits just ABOVE its own IC (house convention: cap at
 # the top of the chip, horizontal / parallel to the chip's top edge, right next to

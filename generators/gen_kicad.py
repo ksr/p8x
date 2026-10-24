@@ -147,6 +147,26 @@ def size_after(fp, rot):
 # ---- the build --------------------------------------------------------------
 BH = 140.0   # connector-edge dimension (the DIN41612 is ~94mm; extra room = more rows)
 STD_W = 280.0   # uniform card depth (mm); with BH=140 fits the largest card
+
+# Parts pinned to a fixed spot instead of the flow: card -> {ref: (x, y, rot)},
+# (x, y) = centre of the part's pads in mm. For modules and other parts whose
+# position the flow cannot judge.
+PINNED = {
+    # Pico on the bottom edge, upright and rotated 180 so its USB end (pins 1/40)
+    # faces off the board: pad rows 48.26 mm long, pin-1 row 4.5 mm from the edge
+    # (~1.4 mm board + ~1.3 mm USB overhang beyond it), clear of the bus edge and
+    # of the LED bank on the front edge (2026-10-24; it sat 25 mm in from the top
+    # edge beside J1).
+    # The probe header (cable to the probe leads) lies along the bottom edge left
+    # of the Pico (2026-10-24; it sat mid-board).
+    "bustest-card": {"A1": (150.5, BH - 4.5 - 48.26 / 2, 180),
+                     "J2": (105.0, BH - 9.0, 90)},
+    # Push buttons on the front edge (opposite the bus) under the status LEDs, and
+    # the clock-select jumper on the bottom edge below the oscillator X1 (2026-10-24;
+    # all four sat mid-board).
+    "control-card": {"SWR": (268.0, 52.0, 0), "SWS": (268.0, 68.0, 0),
+                     "SWT": (268.0, 84.0, 0), "JP1": (66.0, BH - 10.0, 90)},
+}
 SCREW_KEEPOUT_R = 4.0   # radius (mm) of the copper keepout around each DIN mounting hole
 
 def add_mounting_keepouts(board, footp, r=SCREW_KEEPOUT_R, layers=None):
@@ -223,11 +243,15 @@ def build_card(name):
     ncol = max(1, math.ceil(len(leds) / per_col)) if leds else 0
     BANKW = ncol * 26.0 + 8.0 if leds else 6.0
     # everything else flows in the left area, courtyard-spaced (never overlaps)
+    pinned = PINNED.get(name, {})
+    for r, (px_, py_, prot) in pinned.items():
+        if r in footp: place_centered(footp[r], px_, py_, prot); placed.add(r)
     grid = ([r for r in parts if cls[r] == "ic"]
             + [r for r in parts if cls[r] == "bigconn"]
             + [r for r in parts if cls[r] == "misc"]
             + [r for r in parts if cls[r] == "res" and r not in bank_res]
             + [r for r in parts if cls[r] == "jumper"])
+    grid = [r for r in grid if r not in pinned]
     GX0 = 32.0; GAP = 5.0; CAPH = 6.0
     def flow(width):
         x1 = width - BANKW
