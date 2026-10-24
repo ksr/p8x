@@ -15,6 +15,15 @@
       Without this the card could not assert `-IRQ` for the interrupt bring-up
       (design doc §7).
 
+- [x] **io-card DB9 sockets face out (2026-10-24).** `gen_io.py` placed both
+      right-angle DB9s rotated 180°, so each socket's mating face pointed into the
+      board (body from the pins at y ≈ 126 mm inward to 108 mm). They are now at
+      rotation 0 with pin 1 9.40 mm from the bottom edge (the footprint's edge
+      offset), so the shells overhang the edge for a cable. A check of every other
+      card found no other inward-facing connector (ps2 mini-DINs and the backplane
+      power terminal face their edges; the rest are vertical headers). Re-routed:
+      PASS, 0 unconnected.
+
 - [x] **io-card isolated resistor banks are DIP-16 (2026-10-24).** RL1 and
       RM1–RM3 (8x330R LED current limit) were `RNISO8` on a 1x16 pin-header
       footprint: isolated SIP networks stop at 14 pins, so the bank was really two

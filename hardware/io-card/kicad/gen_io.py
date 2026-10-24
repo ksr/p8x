@@ -50,9 +50,16 @@ if "J1" in footp:
 # header. The RX/TX swap jumpers JP1/JP2 are set-once config, so they flow in the
 # interior near the MAX232 (crowding them onto the bottom edge beside the big
 # edge-mount DB9s left the DB9 TXD/RXD pins unroutable). Pads stay inside the edge.
-BY = BH - 14.0
-place("DB9A", 40.0, BY, 180)
-place("DB9B", 95.0, BY, 180)
+# The DB9s face OUT (2026-10-24): rotation 0 puts the socket's mating face toward
+# +y, and the footprint's own board-edge offset puts pin 1 9.40 mm in from the
+# edge, so the shell overhangs the bottom edge for a cable. (They were rotated 180,
+# which pointed both sockets into the board.) Origin = pad 1; pins 1-5 run -x, so
+# pad 1 sits 5.54 mm right of the pin-row centre.
+def place_db9(ref, cx):
+    if ref not in footp: return
+    f = footp[ref]; f.SetOrientationDegrees(0); f.SetPosition(P(cx + 5.54, BH - 9.40))
+place_db9("DB9A", 40.0)
+place_db9("DB9B", 95.0)
 place("SW1", 155.0, BH - 16.0, 90); place("J3", 214.0, BH - 12.0)
 # the RTC's CR2032 holder (Keystone 103, ~24x30mm courtyard) in the empty
 # bottom-right corner beside J3, clear of the interior flow (2026-10-24; the 20mm
