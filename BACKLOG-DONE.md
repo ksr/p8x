@@ -15,6 +15,27 @@
       Without this the card could not assert `-IRQ` for the interrupt bring-up
       (design doc §7).
 
+- [x] **Silkscreen labels on every board (2026-10-24).** Board rules of the same
+      day: every reference readable with the parts fitted (outside every part, IC
+      type beside it), every switch, button and LED labelled with its function, and
+      each switch position with what it selects. Before, ~300 references sat inside
+      their own part's outline (under the chip once fitted) and several LED refs
+      were hidden. `generators/silk_labels.py` is now the last step of every board
+      generator: it re-places each reference clear of every courtyard, pad and
+      placed text, adds the IC type or passive value beside it, keeps each function
+      label in the same block as its reference, and prints position labels (io
+      swap jumpers DTE / NULL, the input switch's D0–D7 and ON=0, the bars' end
+      bits, control JP1's 4M / OUT / 2M / 1M, the backplane terminal's +5V / GND).
+      `check_card.sh` gained check 6, which fails any board with a hidden reference
+      or one under a part; all nine boards pass, with the cosmetic-silk DRC count
+      down from 29 to 0 on the control card. The build scripts gained
+      `REUSE_ROUTE=1` (re-import the existing routing for a silkscreen-only change).
+      Found on the way: the backplane's six mounting holes all carried the
+      reference `REF**`, so the routing import matched them ambiguously and a
+      re-import moved one onto another; they are H1–H6 now. `gen_bom.py` takes its
+      chip types from the same table (the ps2 card's 74HCT688 was "WIN CMP").
+      Logged, not fixed: control JP1 cannot select ÷4 with a shunt (BACKLOG VERIFY).
+
 - [x] **Front-edge layout: switches, LEDs, cable connectors, jumpers (2026-10-24).**
       Layout rules set the same day: switches, LEDs and outside-cable connectors
       at the front edge (opposite the bus connector), plug-in modules at a non-bus

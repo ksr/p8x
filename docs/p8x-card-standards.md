@@ -92,7 +92,9 @@ memory card as the reference ([hardware/KICAD-BOARDS.md](../hardware/KICAD-BOARD
 
 - Card name + rev, large, on the front-edge strip (readable with card installed)
 - Pin 1 markers on every IC; connector A1/C32 corners labeled
-- Designators readable after assembly (not under sockets)
+- Designators readable after assembly (not under sockets): the generators print
+  every reference outside every part's courtyard, with the IC type beside it, and
+  `check_card.sh` fails a board where one is hidden or under a part (2026-10-24)
 
 ## 9. Status LEDs (required on every card)
 

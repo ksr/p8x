@@ -36,6 +36,7 @@ Qty,Part (generic — verify on DigiKey),Package,Category,Populate,Notes,RefDes
 8,74HCT32,DIP14,Logic IC,yes,,alu:U24 control:U6 io:U5 led:U4 memory:U11 memory:U8 regbank:U40 regbank:U53
 11,74HCT374,DIP20,Logic IC,yes,,cf:U9 control:U14 control:U15 control:U16 control:U17 io:U10 led:U6 ps2:U10 ps2:U7 ps2:U8 ps2:U9
 5,74HCT377,DIP20,Logic IC,yes,,alu:U1 alu:U3 alu:U5 alu:U7 control:U7
+1,74HCT688,DIP20,Logic IC,yes,,ps2:U4
 3,74HCT74,DIP14,Logic IC,yes,,alu:U26 control:U21 control:U3
 2,74HCT86,DIP14,Logic IC,yes,,alu:U34 control:U19
 2,62256 SRAM,DIP28W,Memory IC,yes,32Kx8 SRAM (e.g. AS6C62256-55),memory:U10 memory:U2
@@ -45,20 +46,19 @@ Qty,Part (generic — verify on DigiKey),Package,Category,Populate,Notes,RefDes
 1,4MHZ full-can oscillator,OSC4,Oscillator,yes,,control:X1
 183,100nF,C_DISC1,Other,yes,,alu:C1 alu:C10 alu:C11 alu:C12 alu:C13 alu:C14 alu:C15 alu:C16 alu:C17 alu:C18 alu:C19 alu:C2 alu:C20 alu:C21 alu:C22 alu:C23 alu:C24 alu:C25 alu:C26 alu:C27 alu:C28 alu:C29 alu:C3 alu:C30 alu:C31 alu:C32 alu:C33 alu:C34 alu:C35 alu:C4 alu:C5 alu:C6 alu:C7 alu:C8 alu:C9 backplane:C1 backplane:C2 backplane:C3 backplane:C4 backplane:C5 backplane:C6 backplane:C7 backplane:C8 bustest:C1 bustest:C2 bustest:C3 bustest:C4 bustest:C5 bustest:C6 bustest:C7 cf:C1 cf:C10 cf:C11 cf:C2 cf:C3 cf:C4 cf:C5 cf:C6 cf:C7 cf:C8 cf:C9 control:C10 control:C11 control:C12 control:C13 control:C14 control:C15 control:C16 control:C17 control:C18 control:C19 control:C2 control:C20 control:C21 control:C22 control:C3 control:C4 control:C5 control:C6 control:C7 control:C8 control:C9 io:C10 io:C11 io:C12 io:C13 io:C14 io:C15 io:C16 io:C17 io:C18 io:C19 io:C20 io:C21 io:C22 io:C23 io:C6 io:C7 io:C8 io:C9 led:C1 led:C2 led:C3 led:C4 led:C5 led:C6 memory:C1 memory:C10 memory:C11 memory:C2 memory:C3 memory:C4 memory:C5 memory:C6 memory:C7 memory:C8 memory:C9 ps2:C1 ps2:C10 ps2:C11 ps2:C12 ps2:C13 ps2:C2 ps2:C3 ps2:C4 ps2:C5 ps2:C6 ps2:C7 ps2:C8 ps2:C9 regbank:C1 regbank:C10 regbank:C11 regbank:C12 regbank:C13 regbank:C14 regbank:C15 regbank:C16 regbank:C17 regbank:C18 regbank:C19 regbank:C2 regbank:C20 regbank:C21 regbank:C22 regbank:C23 regbank:C24 regbank:C25 regbank:C26 regbank:C27 regbank:C28 regbank:C29 regbank:C3 regbank:C30 regbank:C31 regbank:C32 regbank:C33 regbank:C34 regbank:C35 regbank:C36 regbank:C37 regbank:C38 regbank:C39 regbank:C4 regbank:C40 regbank:C41 regbank:C42 regbank:C43 regbank:C44 regbank:C45 regbank:C46 regbank:C47 regbank:C48 regbank:C49 regbank:C5 regbank:C50 regbank:C51 regbank:C52 regbank:C53 regbank:C6 regbank:C7 regbank:C8 regbank:C9
 1,ICSP,HDR2X3,Other,yes,,ps2:JICSP
-5,MCP23S17,DIP28N,Other,yes,,bustest:U1 bustest:U2 bustest:U3 bustest:U4 bustest:U5
 1,PROBE,HDR10,Other,yes,,bustest:J2
-1,PS/2 MCU,DIP40,Other,yes,,ps2:U13
 1,PS2-KBD,MINIDIN6,Other,yes,,ps2:PS2A
 1,PS2-MOUSE,MINIDIN6,Other,yes,,ps2:PS2B
-1,RP2040,PICO40,Other,yes,,bustest:A1
 1,S1 SWAP,HDR2X3,Other,yes,,io:JP1
 1,S2 SWAP,HDR2X3,Other,yes,,io:JP2
 1,SERIAL1,DSUB9,Other,yes,,io:DB9A
 1,SERIAL2,DSUB9,Other,yes,,io:DB9B
-1,WIN CMP,DIP20,Other,yes,,ps2:U4
+1,ATmega1284P,DIP40,Peripheral IC,yes,,ps2:U13
 1,DS1302,DIP8,Peripheral IC,yes,RTC (DNP option),io:U16
 1,MAX232,DIP16,Peripheral IC,yes,RS-232 level shifter (+ its 1uF caps),io:U8
 2,MC6850,DIP24W,Peripheral IC,yes,"ACIA — OBSOLETE, source NOS (eBay/specialist)",io:U14 io:U17
+5,MCP23S17,DIP28N,Peripheral IC,yes,,bustest:U1 bustest:U2 bustest:U3 bustest:U4 bustest:U5
+1,Raspberry Pi Pico,PICO40,Peripheral IC,yes,,bustest:A1
 2,Resistor 100R,R_AXIAL,Resistor,yes,,backplane:R2 backplane:R3
 7,Resistor 10K,R_AXIAL,Resistor,yes,,backplane:R4 bustest:R5 bustest:R6 control:R1 control:R2 control:R3 ps2:RRST
 27,Resistor 1K,R_AXIAL,Resistor,yes,,alu:R4 alu:R5 alu:RP1 backplane:R1 cf:R4 cf:R6 cf:RP1 control:R4 control:R5 control:RP1 io:R4 io:RP1 led:R4 led:RP1 memory:RP1 memory:RS1 memory:RS2 memory:RS3 memory:RS4 memory:RS5 ps2:RKA ps2:RKR ps2:RMR ps2:RPWR regbank:R4 regbank:R5 regbank:RP1

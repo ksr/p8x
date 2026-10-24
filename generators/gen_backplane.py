@@ -151,12 +151,17 @@ for i in range(NSLOT):
     silk("SLOT %d" % (i + 1), SLOT_X0 + SLOT_PITCH * i - 6.0, 116.0)
 
 # --- 6 mounting holes (3 top, 3 bottom), matching the template -----------------
+# Each hole gets its own reference (H1-H6, 2026-10-24): six "REF**" holes left the
+# routing import matching them by an ambiguous name, and a re-import moved one
+# hole onto another.
 MH = ("MountingHole", "MountingHole_3.2mm_M3")
+holes = {}
 for hx in (BW * 0.15, BW * 0.5, BW * 0.85):
     for hy in (6.0, 122.0):
         h = pcbnew.FootprintLoad(FP + "/" + MH[0] + ".pretty", MH[1])
         if h is None: continue
-        h.SetPosition(P(hx, hy)); board.Add(h)
+        ref = "H%d" % (len(holes) + 1); h.SetReference(ref)
+        h.SetPosition(P(hx, hy)); board.Add(h); holes[ref] = ("MH", "M3")
 
 # --- assign nets ------------------------------------------------------------
 bad = []
@@ -215,6 +220,12 @@ for fp in footp.values():
         board.Add(z); nk += 1
 print("  %d DIN mounting-hole keepouts (r=%.1fmm)" % (nk, SCREW_KEEPOUT_R))
 pcbnew.ZONE_FILLER(board).Fill(board.Zones())
+
+# silkscreen: references outside every part, values, function + position labels
+import gen_kicad as GK
+_fails = GK.SL.label_board(board, dict({r: (s[0], s[1]) for r, s in bps.items()}, **holes),
+                           *GK.silk_spec("backplane", {}))
+if _fails: print("  SILK: no clean spot for %d: %s" % (len(_fails), _fails[:12]))
 
 outdir = os.path.join(ROOT, "hardware", "backplane", "kicad"); os.makedirs(outdir, exist_ok=True)
 out = os.path.join(outdir, "p8x-backplane.kicad_pcb")

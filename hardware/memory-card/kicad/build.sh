@@ -21,8 +21,12 @@ echo "== 1/6  placement + planes + keepouts (gen_mem.py) =="
 echo "== 2/6  export Specctra DSN =="
 "$PYK" "$HERE/export_dsn.py" 2>&1 | q | grep -iE 'patched|exists'
 echo "== 3/6  PCB trace layout (Freerouting) =="
+# REUSE_ROUTE=1: re-import the existing .ses (silkscreen-only change)
+if [ -n "$REUSE_ROUTE" ] && [ -f "$HERE/p8x-$card.ses" ]; then echo "  REUSE_ROUTE: re-importing the existing routing (placement unchanged)"
+else
 rm -f "$HERE/p8x-$card.ses"
 ( cd "$HERE" && java -jar "$FRJAR" -de "p8x-$card.dsn" -do "p8x-$card.ses" -mp 30 -oit 100 -mt 1 > fr.log 2>&1 )
+fi
 [ -f "$HERE/p8x-$card.ses" ] || { echo "  ROUTE FAILED -- see fr.log"; tail -3 "$HERE/fr.log"; exit 2; }
 echo "== 4/6  import routing + self-heal stitch (import_ses.py) =="
 "$PYK" "$HERE/import_ses.py" 2>&1 | q | grep -iE 'stitch|routed'

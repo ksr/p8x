@@ -4,8 +4,10 @@ KiCad 4-layer boards (F/B signals, In1=GND, In2=VCC planes), generated from the
 canonical gen_eagle netlists by `generators/gen_kicad.py` (per-card) /
 `gen_backplane.py`, autorouted with Freerouting via
 `generators/build_kicad_card.sh <card>`. Standard per card: bypass cap above each
-IC, LED/jumper labels + part values on silk, placement PDF + top/3D renders +
-gerbers.
+IC; on the silk, every reference clear of every part with each IC's type and each
+passive's value beside it, and a function label on every LED, switch, jumper and
+cable connector (`generators/silk_labels.py`, 2026-10-24); placement PDF + top/3D
+renders + gerbers.
 
 **Uniform card size: 280 × 140 mm** — status LEDs on the edge opposite the connector. Every plug-in card is the same dimensions
 (the connector-edge is 140 mm — the DIN41612 is only ~94 mm, so the extra room
@@ -48,11 +50,10 @@ backplane with all eight cards seated in their slots, built from these boards by
 a board's placement or parts change.
 
 ## Known follow-ups
-- **Cosmetic silk crowding** on the densest cards — part values on every part get
-  tight; readable and fab-clipped over pads, but not as clean as the memory card.
 - **Placement is auto** (courtyard-spaced flow, 0 overlaps) — a hand pass would
-  tidy grouping/silk further; the MiniDIN-6 / DB9 connectors are auto-placed, not
-  yet guaranteed on a board edge for cable access.
+  tidy grouping further. The front-edge rules (switches, LEDs and cable connectors
+  at the front edge, jumpers near an edge) are applied by pinned positions
+  (2026-10-24).
 
 ## Not built
 - **Graphics card** — Tang Nano 20K FPGA/video board; no TTL netlist.

@@ -17,11 +17,8 @@ os.chdir(_HW)                      # gen_eagle writes boards relative to CWD
 import gen_eagle as G
 
 # device -> orderable part (generic). HCT assumed throughout (5V TTL-compatible).
-LOGIC={"74377V2":"74HCT377","74244":"74HCT244","74245":"74HCT245","74181":"74HCT181",
- "74182":"74HCT182","74157":"74HCT157","74151":"74HCT151","74138":"74HCT138",
- "74139":"74HCT139","74161":"74HCT161","74169":"74HCT169","74374":"74HCT374",
- "74175":"74HCT175","74260":"74HCT260","74257":"74HCT257","7430":"74HCT30",
- "7410":"74HCT10","7402":"74HCT02","7474":"74HCT74","HEX14":"74HCT14"}
+# device -> orderable type: the same table the silkscreen prints (silk_labels.py)
+from silk_labels import LOGIC, chip_type
 NOTE={"74HCT181":"ALU slice — HCT uncommon; may need 74F181/NOS","74HCT182":"look-ahead carry — uncommon; 74F182/NOS",
  "74HCT260":"dual 5-in NOR — uncommon; verify HCT avail or NOS",
  "MC6850":"ACIA — OBSOLETE, source NOS (eBay/specialist)","AT28C256":"parallel EEPROM 32Kx8, 150ns",
@@ -60,6 +57,8 @@ def part(dev,val):
     if dev=="IDE40":   return "40-pin boxed header (IDC, CF/IDE)","Connector",pkg
     if dev in ("HDR3","HDR4","HDR40"): return "Pin header %s-pin 0.1in"%dev[3:],"Connector",pkg
     if dev=="TB4":     return "Terminal block, 4-pos 5mm","Connector",pkg
+    t=chip_type(dev,val)
+    if t: return t,"Peripheral IC",pkg          # 74HCT688, MCP23S17, ATmega1284P, Pico, ...
     return val or dev,"Other",pkg
 
 SOCK={"DIP8":"8","DIP14":"14","DIP16":"16","DIP20":"20","DIP24W":"24 (0.6in wide)","DIP28W":"28 (0.6in wide)"}

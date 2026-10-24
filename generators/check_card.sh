@@ -97,9 +97,21 @@ mintw = min(tws) if tws else 0; mindl = min(drs) if drs else 0
 tflag = "" if mintw >= mintr else "  <-- below %.2fmm fab min!" % mintr
 dflag = "" if mindl >= mindr else "  <-- below %.2fmm fab min!" % mindr
 print("  5. fab        : min track %.3fmm%s ; min drill %.3fmm%s" % (mintw, tflag, mindl, dflag))
-# verdict: FAIL only on blocking DRC / unconnected / keepout / sub-min features.
-# cosmetic silk is a WARNING, not a manufacturing blocker.
-bad = blocking or unconn or near or (mintw and mintw < mintr) or (mindl and mindl < mindr)
+# 6. labels: every reference printed on F.SilkS and clear of every courtyard, so it
+#    stays readable with the parts fitted (board rules, 2026-10-24; silk_labels.py)
+def _r(bb): return (bb.GetX(), bb.GetY(), bb.GetRight(), bb.GetBottom())
+def _hit(a, c): return a[0] < c[2] and c[0] < a[2] and a[1] < c[3] and c[1] < a[3]
+crts = [_r(f.GetCourtyard(pcbnew.F_Cu).BBox()) for f in b.GetFootprints()
+        if f.GetCourtyard(pcbnew.F_Cu).OutlineCount()]
+unread = [f.GetReference() for f in b.GetFootprints()
+          if not f.GetReference().startswith("REF")
+          and (not f.Reference().IsVisible() or f.Reference().GetLayer() != pcbnew.F_SilkS
+               or any(_hit(_r(f.Reference().GetBoundingBox()), c) for c in crts))]
+print("  6. labels     : " + ("PASS (every reference on the silk, clear of every part)" if not unread
+      else "FAIL (%d reference(s) hidden or under a part: %s)" % (len(unread), " ".join(sorted(unread)[:10]))))
+# verdict: FAIL only on blocking DRC / unconnected / keepout / sub-min features /
+# unreadable references. Cosmetic silk is a WARNING, not a manufacturing blocker.
+bad = blocking or unconn or near or (mintw and mintw < mintr) or (mindl and mindl < mindr) or unread
 if cosmetic and not bad:
     print("  (note: %d cosmetic silk overlap(s) -- fab trims silk; not a blocker)" % cosmetic)
 sys.exit(1 if bad else 0)

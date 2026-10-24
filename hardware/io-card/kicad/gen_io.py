@@ -137,6 +137,10 @@ GK.add_mounting_keepouts(board, footp)
 pcbnew.ZONE_FILLER(board).Fill(board.Zones())
 
 out = os.path.join(os.path.dirname(os.path.abspath(__file__)), "p8x-io-card.kicad_pcb")
+# silkscreen: references outside every part, IC types, function + position labels
+_fails = GK.SL.label_board(board, parts, *GK.silk_spec(CARD, parts))
+if _fails: print("  SILK: no clean spot for %d: %s" % (len(_fails), _fails[:12]))
+
 pcbnew.SaveBoard(out, board)
 print("wrote", out, "(%dx%dmm, %d footprints)" % (BW, BH, len(footp)))
 if overflow > IY1: print("  WARNING: interior overflow, bottom=%.0f (need < %.0f)" % (overflow, IY1))

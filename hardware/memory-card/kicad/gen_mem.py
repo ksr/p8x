@@ -316,6 +316,11 @@ for _fp in board.GetFootprints():
 print("  %d DIN mounting-hole keepouts (r=%.1fmm)" % (_nk, SCREW_KEEPOUT_R))
 pcbnew.ZONE_FILLER(board).Fill(board.Zones())
 
+# silkscreen: references outside every part and the IC types (silk_labels.py). The
+# LED function labels and the JWP position marks above are this script's own.
+import silk_labels as SL
+_fails = SL.label_board(board, PARTS, {"JWP": "ROM-WP"})
+if _fails: print("  SILK: no clean spot for %d: %s" % (len(_fails), _fails[:12]))
 pcbnew.SaveBoard(OUT, board)
 board.BuildConnectivity()
 print("wrote", OUT)

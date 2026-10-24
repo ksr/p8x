@@ -25,10 +25,11 @@ for the status of each board.
 | `gen_kicad.py <card>` | Generic board builder: turns a `CARDS` netlist into a placed KiCad board — footprints, a bypass cap above each IC, the labelled LED bank, planes, outline |
 | `hardware/<card>/kicad/gen_*.py` | Bespoke placement for the memory (`gen_mem.py`, which also applies the rev F 6 KB ROM decode), I/O (`gen_io.py`), CF (`gen_cf.py`) and PS/2 (`gen_ps2.py`) cards |
 | `gen_backplane.py` | The backplane board (8 DIN 41612 sockets, power entry, bulk + per-slot caps, wired-OR pull-ups) |
+| `silk_labels.py` | The silkscreen pass every board generator runs last: each reference outside every part's courtyard, the IC type or passive value beside it, function labels (LEDs, switches, jumpers, connectors) and position labels (what each jumper or switch position selects); also the device → chip-type table `gen_bom.py` uses |
 | `kicad_tools.py` | DSN export, routing import, the heal steps after Freerouting, Gerbers and renders |
 | `build_kicad_card.sh <card>` | The generic pipeline: generate → export DSN → Freerouting → import + stitch → Gerbers/renders → readiness check |
 | `build.sh <card>` (or `all`) | One command per board: dispatches to the bespoke `kicad/build.sh` or to `build_kicad_card.sh` |
-| `check_card.sh <card>` (or `all`) | The manufacture-readiness check: ERC, gate-level simulation (where a testbench exists), DRC, mounting-hole keepout, fab minimums → PASS/FAIL |
+| `check_card.sh <card>` (or `all`) | The manufacture-readiness check: ERC, gate-level simulation (where a testbench exists), DRC, mounting-hole keepout, fab minimums, readable references → PASS/FAIL |
 | `gen_erc.py` | The netlist electrical-rules check `check_card.sh` runs |
 | `gen_bom.py` | The bill of materials → `hardware/p8x-bom.csv` |
 | `render_assembly.py` | 3D renders of the assembled machine: each card exported as a STEP and seated in its backplane slot (transform derived from the connector pads and models) → `hardware/assembly/*.png`; driver `sh hardware/assembly/build.sh` |
@@ -37,7 +38,12 @@ for the status of each board.
 sh generators/build.sh memory-card        # one board, build + verify
 sh generators/build.sh all                # every board
 sh generators/check_card.sh all           # the readiness check alone
+REUSE_ROUTE=1 sh generators/build.sh io-card   # silkscreen-only change: keep the routing
 ```
+
+`REUSE_ROUTE=1` skips Freerouting and re-imports the board's existing `.ses`. Use it
+only when every pad stays where it was (a silkscreen change); the DRC in the check
+still reports a stale route as unconnected or shorted nets.
 
 ### `gen_eagle.py` and the frozen Eagle boards
 

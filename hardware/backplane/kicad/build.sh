@@ -41,6 +41,9 @@ echo "== 3/6  PCB trace layout (Freerouting -- ~960-pin bus, this takes a while)
 # -oit 10 (not 100): the heavy optimiser tripped a FloatPoint.rotate NPE and hung
 # on this board; a lighter optimisation pass routes it without the crash. A
 # watchdog kills any hang so it can never stall the build indefinitely.
+# REUSE_ROUTE=1: re-import the existing .ses (silkscreen-only change)
+if [ -n "$REUSE_ROUTE" ] && [ -f "$HERE/p8x-backplane.ses" ]; then echo "  REUSE_ROUTE: re-importing the existing routing (placement unchanged)"
+else
 rm -f "$HERE/p8x-backplane.ses"
 ( cd "$HERE" && java -jar "$FRJAR" -de "p8x-backplane.dsn" -do "p8x-backplane.ses" -mp 30 -oit 10 -mt 1 > fr.log 2>&1 ) &
 JPID=$!
@@ -50,6 +53,7 @@ while kill -0 "$JPID" 2>/dev/null; do
   if [ "$W" -ge "$MAX" ]; then echo "  ROUTE WATCHDOG: killing Freerouting after ${MAX}s"; kill "$JPID" 2>/dev/null; sleep 2; kill -9 "$JPID" 2>/dev/null; break; fi
 done
 wait "$JPID" 2>/dev/null
+fi
 [ -f "$HERE/p8x-backplane.ses" ] || { echo "  ROUTE FAILED -- see fr.log"; tail -5 "$HERE/fr.log"; exit 2; }
 echo "== 4/6  import routing + self-heal stitch =="
 "$PYK" "$KT" import_ses "$BRD" "$HERE/p8x-backplane.ses" 2>&1 | q | grep -iE 'stitch|import_ses'

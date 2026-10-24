@@ -17,6 +17,7 @@ footprint and flagged (printed + noted in the per-card README).
 """
 import os, sys, math, pcbnew
 from pcbnew import VECTOR2I
+import silk_labels as SL
 
 ROOT = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 GENE = os.path.join(ROOT, "generators", "gen_eagle.py")
@@ -147,6 +148,53 @@ def size_after(fp, rot):
 # ---- the build --------------------------------------------------------------
 BH = 140.0   # connector-edge dimension (the DIN41612 is ~94mm; extra room = more rows)
 STD_W = 280.0   # uniform card depth (mm); with BH=140 fits the largest card
+
+# ---- silkscreen labels (silk_labels.py does the placing) ---------------------
+# Function labels for the parts that need one (LEDs, switches, buttons, jumpers,
+# cable connectors) come from gen_eagle's per-card labels, with the additions and
+# corrections below; positions name what each jumper / switch position selects.
+LABELLED_DEVS = {"LED", "SW2", "DIP8SW", "LEDARR8", "DSUB9F", "MINIDIN6", "IDE40", "PICO"}
+COLOURS = {"GRN", "YEL", "RED"}
+# a bar's end bits, printed right of the bar on the rows of anode 1 (top) and
+# anode 8 (bottom): each row's right-hand pin is that segment's cathode
+_BITS = lambda lo: [(("1", "16"), str(lo), "right"), (("8", "9"), str(lo + 7), "right")]
+SILK = {
+    "io-card": {
+        "labels": {"SW1": "IN $FF00 ON=0", "JP1": "SER1 RX/TX", "JP2": "SER2 RX/TX",
+                   "LA1": "OUT $FF02", "LM3": "D0-7", "LM1": "A0-7", "LM2": "A8-15",
+                   "DB9A": "SERIAL 1", "DB9B": "SERIAL 2", "LED4": "I/O SEL",
+                   "J3": "RTC 3-WIRE"},
+        # JP1/JP2: centre pins 3/4 are the MAX232 side; shunts 1-3 + 2-4 = straight
+        # (DTE), 3-5 + 4-6 = crossed (null-modem). SW1 switch n drives D(n-1).
+        "positions": {"JP1": [(("1", "2"), "DTE"), (("5", "6"), "NULL")],
+                      "JP2": [(("1", "2"), "DTE"), (("5", "6"), "NULL")],
+                      "SW1": [((str(i),), "D%d" % (i - 1), "left") for i in range(1, 9)],
+                      "LA1": _BITS(0), "LM3": _BITS(0), "LM1": _BITS(0), "LM2": _BITS(8)},
+    },
+    "control-card": {
+        # JP1 pins: 1 = 4 MHz (OSCO), 2 = CLKRAW out, 3 = /2, 4 = /4
+        "positions": {"JP1": [(("1",), "4M", "below"), (("2",), "OUT", "below"),
+                              (("3",), "2M", "below"), (("4",), "1M", "below")]},
+    },
+    "bustest-card": {"labels": {"A1": "PICO (USB)"}},
+    "ps2-card": {"labels": {"JICSP": "ICSP", "PS2A": "KEYBOARD", "PS2B": "MOUSE"}},
+    "cf-card": {"labels": {"J2": "CF 0 $FF10", "J5": "CF 1 $FF18"}},
+    "backplane": {"labels": {"LED1": "PWR", "J11": "POWER IN"},
+                  "positions": {"J11": [(("1",), "+5V"), (("2",), "GND")]}},
+}
+
+def silk_spec(name, parts):
+    """-> (labels, positions) for silk_labels.label_board."""
+    spec = SILK.get(name, {}); lab = CARDLABELS.get(name, {})
+    labels = {}
+    for ref, (dev, val) in parts.items():
+        if not (dev in LABELLED_DEVS or dev.startswith(("HDR", "JMP")) or ref.startswith(("JP", "SW"))):
+            continue
+        t = lab.get(ref)
+        if t in COLOURS: t = val            # bus test card: function in the value, colour in the label
+        if t: labels[ref] = t
+    labels.update(spec.get("labels", {}))
+    return labels, spec.get("positions", {})
 
 # Parts pinned to a fixed spot instead of the flow: card -> {ref: (x, y, rot)},
 # (x, y) = centre of the part's pads in mm. For modules and other parts whose
@@ -340,36 +388,9 @@ def build_card(name):
     print("  %d DIN mounting-hole keepouts (r=%.1fmm)" % (nk, SCREW_KEEPOUT_R))
     pcbnew.ZONE_FILLER(board).Fill(board.Zones())
 
-    # --- silkscreen: values + LED/jumper labels ------------------------------
-    C_ = pcbnew.GR_TEXT_H_ALIGN_CENTER; L_ = pcbnew.GR_TEXT_H_ALIGN_LEFT
-    def txt(field, x, y, just, size=0.85):
-        field.SetVisible(True); field.SetLayer(pcbnew.F_SilkS)
-        field.SetTextSize(pcbnew.VECTOR2I(mm(size), mm(size)))
-        field.SetTextThickness(mm(0.15)); field.SetHorizJustify(just)
-        field.SetPosition(VECTOR2I(int(x), int(y)))
-    def silk(s, x, y, size=1.2):
-        t = pcbnew.PCB_TEXT(board); t.SetText(s); t.SetPosition(P(x, y))
-        t.SetLayer(pcbnew.F_SilkS); t.SetTextThickness(mm(0.2))
-        t.SetTextSize(pcbnew.VECTOR2I(mm(size), mm(size)))
-        t.SetHorizJustify(pcbnew.GR_TEXT_H_ALIGN_CENTER); board.Add(t)
-    for ref, fp in footp.items():
-        if ref == "J1": fp.Value().SetVisible(False); continue
-        x0, y0, x1, y1 = pad_bbox(fp); cx = (x0 + x1) // 2; cy = (y0 + y1) // 2
-        v = fp.Value()
-        if cls[ref] == "decap":
-            v.SetVisible(False)
-        elif cls[ref] == "led":
-            txt(v, x1 + mm(1.3), cy, L_)
-            fp.Reference().SetVisible(False)
-            lab = labels.get(ref)
-            if lab: silk(lab, pcbnew.ToMM(x0) - 6.0, pcbnew.ToMM(cy) - 1.0, 1.1)
-        elif cls[ref] == "res":
-            txt(fp.Reference(), cx, cy - mm(3.2), C_); txt(v, cx, cy + mm(3.2), C_)
-        else:
-            txt(v, cx, y1 + mm(2.8), C_, size=0.8)
-        if cls[ref] == "jumper":
-            lab = labels.get(ref)
-            if lab: silk(lab, pcbnew.ToMM(cx), pcbnew.ToMM(y1) + 2.5, 1.0)
+    # --- silkscreen: references, chip types, function + position labels -----
+    fails = SL.label_board(board, parts, *silk_spec(name, parts))
+    if fails: print("  SILK: no clean spot for %d: %s" % (len(fails), fails[:12]))
 
     outdir = os.path.join(ROOT, "hardware", name, "kicad")
     os.makedirs(outdir, exist_ok=True)

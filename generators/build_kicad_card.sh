@@ -13,10 +13,16 @@ d="$ROOT/hardware/$card/kicad"; brd="$d/p8x-$card.kicad_pcb"
 dsn="$d/p8x-$card.dsn"; ses="$d/p8x-$card.ses"
 "$PYK" "$ROOT/generators/gen_kicad.py" "$card" 2>/dev/null | grep -viE 'Debug|traits' || exit 1
 "$PYK" "$ROOT/generators/kicad_tools.py" export_dsn "$brd" 2>/dev/null | grep -v traits || exit 1
+# REUSE_ROUTE=1 skips Freerouting and re-imports the existing .ses: for a change
+# that leaves every pad where it was (silkscreen only). The DRC below still
+# catches a stale route as unconnected or shorted nets.
+if [ -n "$REUSE_ROUTE" ] && [ -f "$ses" ]; then echo "  REUSE_ROUTE: re-importing the existing routing (placement unchanged)"
+else
 rm -f "$ses"
 # run from the card's kicad/ dir so Freerouting's own logs/freerouting.log lands
 # there (not in the repo root); paths are relative to $d
 ( cd "$d" && java -jar "$FRJAR" -de "p8x-$card.dsn" -do "p8x-$card.ses" -mp 30 -oit 100 -mt 1 > fr.log 2>&1 )
+fi
 if [ ! -f "$ses" ]; then echo "  ROUTE FAILED ($card) -- see fr.log"; tail -3 "$d/fr.log"; exit 2; fi
 "$PYK" "$ROOT/generators/kicad_tools.py" import_ses "$brd" "$ses" 2>/dev/null | grep -v traits
 "$PYK" "$ROOT/generators/kicad_tools.py" finish "$brd" 2>/dev/null | grep -v traits
