@@ -27,7 +27,12 @@ one() {
   out="$ROOT/hardware/$card/kicad"
   proj="p8x-$card"
   echo "===== $card ====="
-  python3 "$HERE/p8x_kicad_sch.py" "$card" "$out" --proj "$proj" --check 2>&1 | grep -viE 'Fontconfig|falling back|^$' | tail -1
+  # the numbered sub-sheets are all generated; clear them so a regrouping with
+  # fewer sheets leaves no orphan behind
+  rm -f "$out/$proj"-[0-9]*.kicad_sch
+  # show the result line, and any sheet ELK could not wire (it falls back to labels)
+  python3 "$HERE/p8x_kicad_sch.py" "$card" "$out" --proj "$proj" --check 2>&1 | grep -viE 'Fontconfig|^$' \
+    | grep -E 'falling back|KiCad schematic written|FAIL|rror' 
   "$CLI" sch export pdf -o "$out/$proj-schematic.pdf" "$out/$proj.kicad_sch" >/dev/null 2>&1 \
     && echo "  PDF -> hardware/$card/kicad/$proj-schematic.pdf"
   # link the board footprints to the schematic symbols (the F8 "Update PCB from

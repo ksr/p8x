@@ -54,7 +54,8 @@ class Card:
         return sorted({d for d, f, v in self.parts.values() if d not in SYM})
 
 # schematic-only symbol drawings per (card, ref); see p8x_symlib's variant notes
-VARIANTS = {("io-card", "JP1"): "JMP2X3SWAP", ("io-card", "JP2"): "JMP2X3SWAP"}
+VARIANTS = {("io-card", "JP1"): "JMP2X3SWAP", ("io-card", "JP2"): "JMP2X3SWAP",
+            ("bustest-card", "RN3"): "RNISO8DSTR"}
 
 def load(name):
     if name == "backplane":

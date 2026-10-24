@@ -283,6 +283,11 @@ SYM = build()
 #   other). The ps2-card's ICSP header keeps the plain 2x3 drawing.
 SYM["JMP2X3SWAP"] = dict(SYM["JMP2X3"], value="JMP2X3SWAP",
                          layout=(["3", "4"], ["2", "5", "1", "6"]))
+#   RNISO8DSTR -- an 8x isolated resistor DIP drawn B1..B8 top to bottom (the plain
+#   RNISO8D runs B8..B1, matching a DIP's far side) for a network that feeds a
+#   pin header in order: the bustest probe series resistors into J2.
+SYM["RNISO8DSTR"] = dict(SYM["RNISO8D"], value="RNISO8DSTR",
+                         layout=(_seq("A", 1, 8), _seq("B", 1, 8)))
 
 if __name__ == "__main__":
     # self-check: every pin of every used device has a type and is placed

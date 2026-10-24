@@ -30,14 +30,18 @@ def nets_of(card):
     return m
 
 def wired_nets(card, refs):
-    """Nets drawn as wires on this sheet: every pin on it, not power, not a
-    backplane signal, not a chain between identical chips."""
+    """Nets drawn as wires on this sheet: not power, not a backplane signal, at
+    least two pins on this sheet, not a chain between identical chips. A net that
+    also reaches other sheets is wired between its pins here and carries its name
+    label (a global label) to the rest, as a hand-drawn sheet does (2026-10-24;
+    before, only nets wholly on one sheet were wired)."""
     on = set(refs)
     out = {}
     for n, pins in card.nets.items():
-        if n in ("VCC", "GND") or n in SIGNALS or len(pins) < 2:
+        if n in ("VCC", "GND") or n in SIGNALS:
             continue
-        if not all(r in on for r, p in pins):
+        pins = [(r, p) for r, p in pins if r in on]
+        if len(pins) < 2:
             continue
         # a long chain through many identical chips (e.g. a shared enable to every
         # counter) would make ELK step each chip into its own column; a short chain
@@ -52,13 +56,11 @@ def driver_first(card, pins):
     rank = {"out": 0, "tri": 1, "oc": 1, "bidir": 2}
     return sorted(pins, key=lambda rp: rank.get(SYM[card.parts[rp[0]][0]]["pins"][rp[1]][1], 3))
 
-# Cards whose wired sheets orient each wire by drawing side, not by electrical
-# direction (2026-10-24): a pin on a symbol's right edge feeds one on a left
-# edge, so ELK lays the sheet out in the drawn left-to-right flow. Electrical
-# direction loops back on a round trip such as ACIA TXD -> MAX232 -> RXD, and ELK
-# then breaks the cycle by pushing one ACIA to the far side of the sheet.
-FLOW_BY_SIDE = {"io-card"}
-
+# Each wire is oriented by drawing side, not by electrical direction (2026-10-24):
+# a pin on a symbol's right edge feeds one on a left edge, so ELK lays the sheet
+# out in the drawn left-to-right flow. Electrical direction loops back on a round
+# trip such as ACIA TXD -> MAX232 -> RXD, and ELK then breaks the cycle by pushing
+# one ACIA to the far side of the sheet.
 def side_first(card, pins):
     def east(rp):
         return SIDE[KS.Symbol(card.parts[rp[0]][0]).pins[rp[1]][2]] == "EAST"
@@ -80,7 +82,7 @@ def build_graph(card, refs, wired, label_room, edge_space):
         children.append({"id": ref, "width": w, "height": h, "ports": ports,
                          "layoutOptions": {"elk.portConstraints": "FIXED_POS"}})
     for n, pins in wired.items():
-        d, *rest = (side_first if card.name in FLOW_BY_SIDE else driver_first)(card, pins)
+        d, *rest = side_first(card, pins)
         for k, (r, p) in enumerate(rest):
             edges.append({"id": "%s#%d" % (n, k), "sources": ["%s.%s" % d], "targets": ["%s.%s" % (r, p)]})
     return {"id": "sheet", "children": children, "edges": edges,
