@@ -1526,6 +1526,12 @@ end is the original DONE section, newest first.
 
 ## Completed — from VERIFY
 
+- **Control card clock select reaches ÷4 with a shunt** (2026-10-24). `JP1` was a
+  1x4 header (1 = OSCO, 2 = CLKRAW, 3 = ÷2, 4 = ÷4); ÷4 needed pins 2 and 4 joined,
+  which only a wire could do. `JP1` is now a 2x3 header with CLKRAW on the even
+  pins 2/4/6: one shunt on 1-2 = 4 MHz, 3-4 = 2 MHz, 5-6 = 1 MHz, labelled on the
+  silk. Changed in gen_eagle.py (nets) and gen_kicad.py (silk); board re-routed.
+
 - [x] Opcodes the monitor needed: `JSR (P1)` is in the ISA (0x41) and the
       assembler exists. `JMP (P1)` turned out unnecessary — the monitor uses
       absolute JMP/JSR and never emits it (comment-only); not implemented.

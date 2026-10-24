@@ -1751,14 +1751,6 @@ Nothing below has been built or measured.
 
 ## VERIFY
 
-- **Control card: the ÷4 clock cannot be selected with a shunt** (found 2026-10-24
-  while labelling the silk). `JP1` is a 1x4 header: pin 1 = OSCO (4 MHz), 2 =
-  CLKRAW (the output), 3 = DIVQA (÷2), 4 = DIVQB (÷4). A shunt on 1-2 gives 4 MHz
-  and 2-3 gives 2 MHz, but ÷4 needs pin 2 joined to pin 4, which are not
-  adjacent — only a wire does it. Fix: reorder the pins so the output sits between
-  the choices (e.g. a 2x3 header: 1/3/5 = 4M/2M/1M, 2/4/6 = CLKRAW), or accept two
-  speeds. The silk labels the pins 4M / OUT / 2M / 1M meanwhile.
-
 - **Footprint substitutions: geometry and pin order, not just "it routes"**
   (2026-10-24). The board check lists every SUB footprint but still passes, and
   two were wrong: the bus test card's Pico was a 2x20 pin header (rows 2.54 mm

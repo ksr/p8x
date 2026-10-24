@@ -18,7 +18,7 @@ originated here.
 
 | Ref | Device | Role |
 |-----|--------|------|
-| U1 | 74161 | Clock divider (÷1/2/4/8 tap via JP1) |
+| U1 | 74161 | Clock divider (÷2 and ÷4 taps for JP1) |
 | U2 | 74HCT14 | Schmitt inverters — reset & switch debounce |
 | U3 | 7474 | Dual D flip-flop — run/step synchronizer |
 | U4 | 74HCT00 | NAND glue |
@@ -35,8 +35,9 @@ originated here.
 ## How it works
 
 ### Clock generation
-The 4 MHz oscillator (X1) feeds the 74161 divider (U1). Jumper **JP1** selects the
-raw oscillator or a ÷2/÷4/÷8 tap, so you can slow the machine down for debugging.
+The 4 MHz oscillator (X1) feeds the 74161 divider (U1). Jumper **JP1** (a 2x3
+header) selects the raw oscillator or a ÷2/÷4 tap, so you can slow the machine down
+for debugging: one shunt on pins 1-2 = 4 MHz, 3-4 = 2 MHz, 5-6 = 1 MHz.
 The selected clock is gated (U5/U6) by the run/halt logic and then split into
 **CLK** and its inverse **CLK̄** (via U2), both broadcast on the backplane. CLK
 clocks the working registers; CLK̄ clocks the pipeline latch a half-cycle earlier

@@ -841,15 +841,17 @@ ic={"U1":("74161","CLK DIV"),"U2":("HEX14","74HCT14"),"U3":("7474","74HCT74"),
  # bus, the service/enable sequencer, and the memory -RD suppression) are
  # deliberately NOT wired here — they must be designed with DRC/breadboard first.
  "U20":("74244","IRQ-FORCE DNP"),"U21":("7474","IRQ/IE FF DNP")}
-sm={"X1":("OSC","4MHZ"),"JP1":("HDR4","CLKSEL"),
+sm={"X1":("OSC","4MHZ"),"JP1":("JMP2X3","CLKSEL"),
  "SWR":("SW2","RUN/HALT"),"SWS":("SW2","STEP"),"SWT":("SW2","RESET"),
  "R1":("RES","10K"),"R2":("RES","10K"),"R3":("RES","10K"),"C1":("CAP","1uF"),
  "RP1":("RES","1K"),"LED3":("LED","PWR-GRN"),
  "R4":("RES","1K"),"LED4":("LED","RUN-GRN"),
  "R5":("RES","1K"),"LED5":("LED","HALT-RED")}
+# JP1 clock select (2x3, 2026-10-24): one shunt across a row picks the clock --
+# 1-2 = 4 MHz, 3-4 = 2 MHz, 5-6 = 1 MHz; the even pins are all CLKRAW
 N(n,"OSCO",("X1","OUT"),("JP1","1"),("U1","CLK"))
-N(n,"DIVQA",("U1","QA"),("JP1","3")); N(n,"DIVQB",("U1","QB"),("JP1","4"))
-N(n,"CLKRAW",("JP1","2"),("U3","1CLK"),("U3","2CLK"),("U5","1A"))
+N(n,"DIVQA",("U1","QA"),("JP1","3")); N(n,"DIVQB",("U1","QB"),("JP1","5"))
+N(n,"CLKRAW",("JP1","2"),("JP1","4"),("JP1","6"),("U3","1CLK"),("U3","2CLK"),("U5","1A"))
 N(n,"VCC",("U1","ENP"),("U1","ENT"),("U1","!LOAD"),("U3","!1PRE"),("U3","!2PRE"),
   ("U18","ENP"),("U18","ENT"),("R1","1"),("R2","1"),("R3","1"),("X1","VCC"),
   ("U8","G1"),("RP1","1"),("R4","1"),("R5","1"),

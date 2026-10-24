@@ -172,9 +172,10 @@ SILK = {
                       "LA1": _BITS(0), "LM3": _BITS(0), "LM1": _BITS(0), "LM2": _BITS(8)},
     },
     "control-card": {
-        # JP1 pins: 1 = 4 MHz (OSCO), 2 = CLKRAW out, 3 = /2, 4 = /4
-        "positions": {"JP1": [(("1",), "4M", "below"), (("2",), "OUT", "below"),
-                              (("3",), "2M", "below"), (("4",), "1M", "below")]},
+        # JP1 (2x3): a shunt on 1-2 = 4 MHz, 3-4 = 2 MHz, 5-6 = 1 MHz (even pins = CLKRAW)
+        "labels": {"JP1": "CLOCK"},
+        "positions": {"JP1": [(("1", "2"), "4M", "above"), (("3", "4"), "2M", "above"),
+                              (("5", "6"), "1M", "above")]},
     },
     "bustest-card": {"labels": {"A1": "PICO (USB)"}},
     "ps2-card": {"labels": {"JICSP": "ICSP", "PS2A": "KEYBOARD", "PS2B": "MOUSE"}},

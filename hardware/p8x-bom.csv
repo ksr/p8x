@@ -6,8 +6,8 @@ Qty,Part (generic — verify on DigiKey),Package,Category,Populate,Notes,RefDes
 2,"40-pin boxed header (IDC, CF/IDE)",HDR40,Connector,yes,,cf:J2 cf:J5
 8,"DIN41612 96-pin (backplane receptacle, mates FABC96R)",FABC96S,Connector,yes,,backplane:J1 backplane:J2 backplane:J3 backplane:J4 backplane:J5 backplane:J6 backplane:J7 backplane:J8
 9,"DIN41612 96-pin, FABC96R (card edge connector, +M2.5 mounting holes)",MABC96R,Connector,yes,,alu:J1 bustest:J1 cf:J1 control:J1 io:J1 led:J1 memory:J1 ps2:J1 regbank:J1
+4,Pin header 2x3 0.1in (jumper block / ICSP),HDR2X3,Connector,yes,,control:JP1 io:JP1 io:JP2 ps2:JICSP
 2,Pin header 3-pin 0.1in,HDR3,Connector,yes,,io:J3 memory:JWP
-1,Pin header 4-pin 0.1in,HDR4,Connector,yes,,control:JP1
 1,"Terminal block, 4-pos 5mm",TB4,Connector,yes,,backplane:J11
 1,32.768kHz crystal,C_DISC,Crystal,yes,,io:X3
 32,LED 3mm green,LED5,LED,yes,,alu:LED3 alu:LED4 backplane:LED1 bustest:D1 bustest:LED1 bustest:LED10 bustest:LED11 bustest:LED12 bustest:LED13 bustest:LED14 bustest:LED15 bustest:LED16 bustest:LED2 bustest:LED3 bustest:LED4 bustest:LED5 bustest:LED6 bustest:LED7 bustest:LED8 bustest:LED9 cf:LED3 cf:LED5 control:LED3 control:LED4 io:LED3 led:LED3 memory:LED3 memory:LED5 ps2:LEDKA ps2:LEDPWR regbank:LED3 regbank:LED4
@@ -45,12 +45,9 @@ Qty,Part (generic — verify on DigiKey),Package,Category,Populate,Notes,RefDes
 1,2.4576MHZ full-can oscillator,OSC4,Oscillator,yes,,io:X2
 1,4MHZ full-can oscillator,OSC4,Oscillator,yes,,control:X1
 183,100nF,C_DISC1,Other,yes,,alu:C1 alu:C10 alu:C11 alu:C12 alu:C13 alu:C14 alu:C15 alu:C16 alu:C17 alu:C18 alu:C19 alu:C2 alu:C20 alu:C21 alu:C22 alu:C23 alu:C24 alu:C25 alu:C26 alu:C27 alu:C28 alu:C29 alu:C3 alu:C30 alu:C31 alu:C32 alu:C33 alu:C34 alu:C35 alu:C4 alu:C5 alu:C6 alu:C7 alu:C8 alu:C9 backplane:C1 backplane:C2 backplane:C3 backplane:C4 backplane:C5 backplane:C6 backplane:C7 backplane:C8 bustest:C1 bustest:C2 bustest:C3 bustest:C4 bustest:C5 bustest:C6 bustest:C7 cf:C1 cf:C10 cf:C11 cf:C2 cf:C3 cf:C4 cf:C5 cf:C6 cf:C7 cf:C8 cf:C9 control:C10 control:C11 control:C12 control:C13 control:C14 control:C15 control:C16 control:C17 control:C18 control:C19 control:C2 control:C20 control:C21 control:C22 control:C3 control:C4 control:C5 control:C6 control:C7 control:C8 control:C9 io:C10 io:C11 io:C12 io:C13 io:C14 io:C15 io:C16 io:C17 io:C18 io:C19 io:C20 io:C21 io:C22 io:C23 io:C6 io:C7 io:C8 io:C9 led:C1 led:C2 led:C3 led:C4 led:C5 led:C6 memory:C1 memory:C10 memory:C11 memory:C2 memory:C3 memory:C4 memory:C5 memory:C6 memory:C7 memory:C8 memory:C9 ps2:C1 ps2:C10 ps2:C11 ps2:C12 ps2:C13 ps2:C2 ps2:C3 ps2:C4 ps2:C5 ps2:C6 ps2:C7 ps2:C8 ps2:C9 regbank:C1 regbank:C10 regbank:C11 regbank:C12 regbank:C13 regbank:C14 regbank:C15 regbank:C16 regbank:C17 regbank:C18 regbank:C19 regbank:C2 regbank:C20 regbank:C21 regbank:C22 regbank:C23 regbank:C24 regbank:C25 regbank:C26 regbank:C27 regbank:C28 regbank:C29 regbank:C3 regbank:C30 regbank:C31 regbank:C32 regbank:C33 regbank:C34 regbank:C35 regbank:C36 regbank:C37 regbank:C38 regbank:C39 regbank:C4 regbank:C40 regbank:C41 regbank:C42 regbank:C43 regbank:C44 regbank:C45 regbank:C46 regbank:C47 regbank:C48 regbank:C49 regbank:C5 regbank:C50 regbank:C51 regbank:C52 regbank:C53 regbank:C6 regbank:C7 regbank:C8 regbank:C9
-1,ICSP,HDR2X3,Other,yes,,ps2:JICSP
 1,PROBE,HDR10,Other,yes,,bustest:J2
 1,PS2-KBD,MINIDIN6,Other,yes,,ps2:PS2A
 1,PS2-MOUSE,MINIDIN6,Other,yes,,ps2:PS2B
-1,S1 SWAP,HDR2X3,Other,yes,,io:JP1
-1,S2 SWAP,HDR2X3,Other,yes,,io:JP2
 1,SERIAL1,DSUB9,Other,yes,,io:DB9A
 1,SERIAL2,DSUB9,Other,yes,,io:DB9B
 1,ATmega1284P,DIP40,Peripheral IC,yes,,ps2:U13

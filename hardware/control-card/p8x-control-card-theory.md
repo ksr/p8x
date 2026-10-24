@@ -109,7 +109,10 @@ opcodes mean — that knowledge lives entirely in the EPROM contents (built by
 The 4 MHz can oscillator `X1` feeds `OSCO`, which goes both to the divider `U1`
 (a 74161 counter wired free-running: `ENP=ENT=!LOAD=VCC`, `!CLR=-RES`) and to the
 clock-select jumper `JP1`. `U1` produces `DIVQA` (÷2) and `DIVQB` (÷4); `JP1`
-picks raw `OSCO`, `÷2`, or `÷4` and calls the result `CLKRAW`. Starting slow is a
+picks raw `OSCO`, `÷2`, or `÷4` and calls the result `CLKRAW`. `JP1` is a 2x3
+header with `CLKRAW` on all three even pins, so one shunt across a row selects:
+1-2 = 4 MHz, 3-4 = 2 MHz, 5-6 = 1 MHz (it was a 1x4 header until 2026-10-24, on
+which ÷4 could not be reached with a shunt). Starting slow is a
 classic bring-up tactic — you can single-step or run at a few hundred kHz while
 debugging before trusting full speed.
 

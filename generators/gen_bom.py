@@ -56,6 +56,7 @@ def part(dev,val):
     if dev=="DIN96":   return "DIN41612 96-pin (backplane receptacle, mates FABC96R)","Connector",pkg
     if dev=="IDE40":   return "40-pin boxed header (IDC, CF/IDE)","Connector",pkg
     if dev in ("HDR3","HDR4","HDR40"): return "Pin header %s-pin 0.1in"%dev[3:],"Connector",pkg
+    if dev=="JMP2X3":  return "Pin header 2x3 0.1in (jumper block / ICSP)","Connector",pkg
     if dev=="TB4":     return "Terminal block, 4-pos 5mm","Connector",pkg
     t=chip_type(dev,val)
     if t: return t,"Peripheral IC",pkg          # 74HCT688, MCP23S17, ATmega1284P, Pico, ...
