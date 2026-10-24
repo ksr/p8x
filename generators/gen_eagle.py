@@ -2092,10 +2092,12 @@ _map("U2","GPA",["A%d"%i for i in range(8,16)])
 _map("U2","GPB",["DOE0","DOE1","DOE2","DOE3","DLD0","DLD1","DLD2","DLD3"])
 _map("U3","GPA",["PSEL0","PSEL1","PSEL2","PINC","PDEC","CLK","CLKB","-RES"])
 _map("U3","GPB",["ALUS0","ALUS1","ALUS2","ALUS3","ALUM","CIN","SH0","SH1"])
-_map("U4","GPA",["LDF","LDZN","SETC","CLRC","BSEL","SHCIN","-IRQ",None])   # 1 spare
+# IRQ is the bus name for B29 (wired-OR, active low); "-IRQ" here left U4.GPA6
+# unjoined to J1 until 2026-10-24
+_map("U4","GPA",["LDF","LDZN","SETC","CLRC","BSEL","SHCIN","IRQ",None])    # 1 spare
 _map("U4","GPB",["FC","FZ","FN","FV",None,None,None,None])                 # flags in +4 spare
 _map("U5","GPA",["PR%d"%i for i in range(8)])                              # probes (via 1k)
-_map("U5","GPB",["SPARE1%d"%i for i in range(2,8)]+[None,None])            # SPARE12-17 +2 spare
+_map("U5","GPB",["SPARE%d"%i for i in range(12,20)])                       # SPARE12-19 (B4-B18 even)
 
 ic={"U%d"%i:("MCP23S17","MCP23S17") for i in range(1,6)}
 ic["U6"]=("74244","74HCT244")                                   # SPI 3.3->5 level shift
@@ -2215,7 +2217,7 @@ bt_place={}
 for i in range(8): bt_place["LED%d"%(1+i)]=(_LEDX[i],88.0)   # probe row
 for i in range(8): bt_place["LED%d"%(9+i)]=(_LEDX[i],76.0)   # status row
 card("bustest-card","P8X Bus Test Card V1.0",ic,sm,n,
- set(net for net,_u,_pp in alloc if not net.startswith("PR") and not net.startswith("SPARE")),
+ set(net for net,_u,_pp in alloc if not net.startswith("PR")),   # every bus line incl. SPARE12-19 joins J1
  labels=bt_labels,
  # de-clutter the silk: the LEDs are labelled by function (PROBE0, 5V-OK, ...) so
  # the "LEDn" refdes is noise; the lone power diode needs no "SCHOTTKY" value.

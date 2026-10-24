@@ -387,7 +387,7 @@
     (property "Intersheetrefs" "${INTERSHEET_REFS}" (at 160.02 165.10 0) (effects (font (size 1.27 1.27)) hide)))
   (global_label "SHCIN" (shape passive) (at 160.02 167.64 0) (fields_autoplaced yes) (effects (font (size 1.27 1.27)) (justify left)) (uuid "33640541-91f0-559b-8e0f-8dd8e14e3d0a")
     (property "Intersheetrefs" "${INTERSHEET_REFS}" (at 160.02 167.64 0) (effects (font (size 1.27 1.27)) hide)))
-  (global_label "-IRQ" (shape passive) (at 160.02 170.18 0) (fields_autoplaced yes) (effects (font (size 1.27 1.27)) (justify left)) (uuid "40bea30b-4fa2-5af7-876f-a7a68e81e563")
+  (global_label "IRQ" (shape passive) (at 160.02 170.18 0) (fields_autoplaced yes) (effects (font (size 1.27 1.27)) (justify left)) (uuid "40bea30b-4fa2-5af7-876f-a7a68e81e563")
     (property "Intersheetrefs" "${INTERSHEET_REFS}" (at 160.02 170.18 0) (effects (font (size 1.27 1.27)) hide)))
   (no_connect (at 160.02 172.72) (uuid "b467ac5a-8a91-516e-a851-5cb35b8b23f9"))
   (global_label "FC" (shape passive) (at 160.02 175.26 0) (fields_autoplaced yes) (effects (font (size 1.27 1.27)) (justify left)) (uuid "5adffc8b-1019-5b93-9131-6310ecd15035")

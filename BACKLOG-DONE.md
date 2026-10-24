@@ -2,6 +2,26 @@
 
 <!-- migrated from BACKLOG.md 2026-09-14 (category review: [x] done items belong here) -->
 
+- [x] **Bus test card: IRQ and SPARE12–19 joined to the connector (2026-10-24).**
+      Found by the schematic ERC ("label connected to only one pin"): two of the
+      card's expander allocations never reached J1, so the routed board had them
+      floating. U4.GPA6 was named `-IRQ` while the bus line on B29 is `IRQ`, so the
+      names never matched; and the card's `used_bus` set excluded every `SPARE*`
+      name, so U5's port B (then SPARE12–17 only) went nowhere. Fix in
+      `gen_eagle.py`: U4.GPA6 → `IRQ` (J1.B29), U5.GPB0–7 → `SPARE12–19`
+      (J1.B4–B18, even pins, already routed slot to slot on the backplane), as
+      design doc §5.1 specifies; `buscon.c` gains the `SPARE` field (U5 bits 8–15).
+      Board re-routed: DRC 0 unconnected, PASS; schematic ERC 0 errors, 0 warnings.
+      Without this the card could not assert `-IRQ` for the interrupt bring-up
+      (design doc §7).
+
+- [x] **Every card schematic drawn by function (2026-10-24).** The generated
+      KiCad schematics were mostly chips with a label on every pin (4–62 % of local
+      nets wired). `generators/sch/p8x_sheets.py` now groups each card into
+      functional sheets (glue, LEDs and resistors attach to the block they serve),
+      wires any net with two or more pins on a sheet, and orients wires left to
+      right by drawing side. Netlists still match every board. `generators/sch/README.md`.
+
 - [x] **Backplane clock spacing before ordering (2026-10-21).** The design doc
       called for guard traces or an empty channel beside CLK/CLKB, but
       `gen_backplane.py` routed every net in one 0.13 mm class, so CLKB (the

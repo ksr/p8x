@@ -84,6 +84,7 @@ static const field_t FIELDS[] = {
     /* U3.GPB */ {"ALUS",2,8,4}, {"ALUM",2,12,1}, {"CIN",2,13,1}, {"SH0",2,14,1}, {"SH1",2,15,1},
     /* U4.GPA */ {"LDF",3,0,1}, {"LDZN",3,1,1}, {"SETC",3,2,1}, {"CLRC",3,3,1},
                  {"BSEL",3,4,1}, {"SHCIN",3,5,1}, {"IRQ",3,6,1},  /* IRQ = -IRQ */
+    /* U5.GPB */ {"SPARE",4,8,8},                                     /* SPARE12-19 */
 };
 #define NFIELDS (int)(sizeof(FIELDS)/sizeof(FIELDS[0]))
 
