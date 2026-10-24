@@ -14,7 +14,7 @@ import re
 
 PASSIVE = {"CAP", "CAP1", "CAPP", "RES", "LED", "SIP9", "RNISO8", "RNISO8D", "LEDARR8",
            "XTAL32", "COIN", "SW2", "DIP8SW"}
-CONN = {"DIN96C", "DIN96", "DSUB9F", "IDE40", "HDR3", "HDR4", "HDR10", "JMP2X3", "MINIDIN6", "TB4"}
+CONN = {"DIN96C", "DIN96", "DSUB9F", "IDE40", "HDR3", "HDR4", "HDR10", "JMP2X3", "JMP2X3SWAP", "MINIDIN6", "TB4"}
 
 def _nat(ref):
     m = re.match(r"([A-Za-z]+)(\d+)", ref)
@@ -63,8 +63,43 @@ def backplane_sheets(card):
     sheets.append(("Bus pull-ups, power entry, decoupling", _chunk(rest, 8)))
     return sheets, set()                        # no ELK wiring
 
+def functional_sheets(blocks):
+    """A card drawn by function, as a hand-drawn schematic is: each block is one
+    ELK-wired sheet holding its ICs AND the resistors, LEDs, crystals and local
+    connectors they drive, so the nets between them are drawn as wires. Whatever
+    no block claims (the bus connector, decoupling) goes on a final label sheet.
+    blocks = [(title, [ref, ...]), ...]"""
+    def build(card):
+        claimed = [r for t, refs in blocks for r in refs]
+        missing = [r for r in claimed if r not in card.parts]
+        if missing:
+            raise SystemExit("%s sheet groups name unknown parts: %s" % (card.name, missing))
+        sheets, wired = [], set()
+        for title, refs in blocks:
+            sheets.append((title, [refs]))
+            wired.add(len(sheets))
+        rest = sorted([r for r in card.parts if r not in claimed], key=_nat)
+        if rest:
+            sheets.append(("Bus connector, decoupling", _chunk(rest, 12)))
+        return sheets, wired
+    return build
+
+# io-card by function (2026-10-24); the blocks follow hardware/io-card/README.md.
+IO_CARD = functional_sheets([
+    ("Address decode and port strobes",
+     ["U1", "U2", "U3", "U4", "U5", "U6", "U15", "U18", "R4", "LED4"]),
+    ("Switch input and LED output ports",
+     ["SW1", "RNP", "U9", "U10", "RL1", "LA1"]),
+    ("Serial: two 6850 ACIAs, baud clock, RS-232",
+     ["X2", "U7", "U14", "U17", "U8", "C2", "C3", "C4", "C5", "JP1", "JP2", "DB9A", "DB9B"]),
+    ("Bus monitor LEDs",
+     ["U11", "U12", "U13", "RM1", "RM2", "RM3", "LM1", "LM2", "LM3"]),
+    ("Real-time clock (DNP)",
+     ["U16", "X3", "BT1", "J3"]),
+])
+
 # per-board explicit overrides: name -> function(card) -> (sheets, wired)
-SHEETS = {"backplane": backplane_sheets}
+SHEETS = {"backplane": backplane_sheets, "io-card": IO_CARD}
 
 def sheets_for(card):
     if card.name in SHEETS:

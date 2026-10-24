@@ -38,7 +38,7 @@ class Card:
         # backplane -- take the first two either way.
         self.name = name
         self.title = title
-        self.parts = {ref: (v[0], "", v[1]) for ref, v in parts_raw.items()}
+        self.parts = {ref: (VARIANTS.get((name, ref), v[0]), "", v[1]) for ref, v in parts_raw.items()}
         self.nets = {n: list(m) for n, m in nets.items() if m}
         self.conn = {r for r, (d, f, v) in self.parts.items() if d in CONN_DEVS}
         placed = {rp for m in self.nets.values() for rp in m}
@@ -52,6 +52,9 @@ class Card:
 
     def check_devices(self):
         return sorted({d for d, f, v in self.parts.values() if d not in SYM})
+
+# schematic-only symbol drawings per (card, ref); see p8x_symlib's variant notes
+VARIANTS = {("io-card", "JP1"): "JMP2X3SWAP", ("io-card", "JP2"): "JMP2X3SWAP"}
 
 def load(name):
     if name == "backplane":

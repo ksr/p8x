@@ -175,12 +175,15 @@ dev("MEM28K8", {**_T(_seq("A", 0, 14) + ["!CE", "!OE", "!WE"], "in"), **_T(_seq(
 # ---- ACIA / serial ----------------------------------------------------------
 dev("6850", {**_T(["RXD", "RXCLK", "TXCLK", "!CTS", "!DCD", "CS0", "CS1", "!CS2", "RS", "RW", "E"], "in"),
              **_T(["TXD", "!RTS"], "out"), "!IRQ": "oc", **_T(_seq("D", 0, 7), "bidir")},
-    ["CS0", "CS1", "!CS2", "RS", "RW", "E", "RXD", "RXCLK", "TXCLK", "!CTS", "!DCD"],
-    _seq("D", 0, 7) + ["TXD", "!RTS", "!IRQ"])
+    # bus side left, serial side right, so a schematic reads bus -> ACIA -> line driver
+    _seq("D", 0, 7) + ["CS0", "CS1", "!CS2", "RS", "RW", "E", "!IRQ", "RXCLK", "TXCLK"],
+    ["TXD", "RXD", "!RTS", "!CTS", "!DCD"])
 dev("MAX232", {**_T(["T1IN", "T2IN", "R1IN", "R2IN"], "in"), **_T(["R1OUT", "R2OUT", "T1OUT", "T2OUT"], "out"),
                **_T(["C1P", "C1M", "C2P", "C2M", "VP", "VM"], "pas")},
-    ["T1IN", "T2IN", "R1IN", "R2IN", "C1P", "C1M", "C2P", "C2M", "VP", "VM"],
-    ["R1OUT", "R2OUT", "T1OUT", "T2OUT", None, None, None, None, None, None])
+    # TTL side left (paired per channel, as the 6850 presents TXD/RXD); RS-232 side
+    # right, the charge-pump pins below it so the pump caps sit beside the outputs
+    ["T1IN", "R1OUT", "T2IN", "R2OUT"],
+    ["T1OUT", "R1IN", "T2OUT", "R2IN", None, "C1P", "C1M", "C2P", "C2M", "VP", "VM"])
 
 # ---- MCUs / programmable ----------------------------------------------------
 _AVRio = _seq("PA", 0, 7) + _seq("PB", 0, 7) + _seq("PC", 0, 7) + _seq("PD", 0, 7)
@@ -271,6 +274,15 @@ def build():
     return sym
 
 SYM = build()
+
+# Schematic-only drawings of a device: same pins, numbers and footprint, a layout
+# that shows what the part does on one card. A card adapter maps a ref to one
+# (p8x_card.VARIANTS); the board and netlist never see the name.
+#   JMP2X3SWAP -- the io-card RX/TX swap block: driver side (3, 4) left, connector
+#   side right with each straight/crossed pair together (2+5 one DB9 pin, 1+6 the
+#   other). The ps2-card's ICSP header keeps the plain 2x3 drawing.
+SYM["JMP2X3SWAP"] = dict(SYM["JMP2X3"], value="JMP2X3SWAP",
+                         layout=(["3", "4"], ["2", "5", "1", "6"]))
 
 if __name__ == "__main__":
     # self-check: every pin of every used device has a type and is placed

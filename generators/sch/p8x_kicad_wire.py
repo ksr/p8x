@@ -52,6 +52,19 @@ def driver_first(card, pins):
     rank = {"out": 0, "tri": 1, "oc": 1, "bidir": 2}
     return sorted(pins, key=lambda rp: rank.get(SYM[card.parts[rp[0]][0]]["pins"][rp[1]][1], 3))
 
+# Cards whose wired sheets orient each wire by drawing side, not by electrical
+# direction (2026-10-24): a pin on a symbol's right edge feeds one on a left
+# edge, so ELK lays the sheet out in the drawn left-to-right flow. Electrical
+# direction loops back on a round trip such as ACIA TXD -> MAX232 -> RXD, and ELK
+# then breaks the cycle by pushing one ACIA to the far side of the sheet.
+FLOW_BY_SIDE = {"io-card"}
+
+def side_first(card, pins):
+    def east(rp):
+        return SIDE[KS.Symbol(card.parts[rp[0]][0]).pins[rp[1]][2]] == "EAST"
+    ranked = driver_first(card, pins)
+    return sorted(ranked, key=lambda rp: not east(rp))   # stable: drivers first among equals
+
 def build_graph(card, refs, wired, label_room, edge_space):
     children, edges = [], []
     for ref in refs:
@@ -67,7 +80,7 @@ def build_graph(card, refs, wired, label_room, edge_space):
         children.append({"id": ref, "width": w, "height": h, "ports": ports,
                          "layoutOptions": {"elk.portConstraints": "FIXED_POS"}})
     for n, pins in wired.items():
-        d, *rest = driver_first(card, pins)
+        d, *rest = (side_first if card.name in FLOW_BY_SIDE else driver_first)(card, pins)
         for k, (r, p) in enumerate(rest):
             edges.append({"id": "%s#%d" % (n, k), "sources": ["%s.%s" % d], "targets": ["%s.%s" % (r, p)]})
     return {"id": "sheet", "children": children, "edges": edges,

@@ -38,10 +38,10 @@ know the schematic UUIDs.)
 | File | Role |
 |------|------|
 | `p8x_symlib.py` | symbol library: pin **types** (in/out/tri/bidir/oc/pwr/gnd/pas) + left/right **layout** for every device. Pin numbers come from `gen_eagle.DEV`. |
-| `p8x_card.py` | adapter: wraps `gen_eagle.CARDS[name]` (parts, nets) into the schematic model; computes the backplane bus-signal set. |
+| `p8x_card.py` | adapter: wraps `gen_eagle.CARDS[name]` (parts, nets) into the schematic model; computes the backplane bus-signal set. `VARIANTS` maps a (card, ref) to a schematic-only drawing of its device (same pins and footprint), e.g. the io-card's RX/TX swap jumpers as `JMP2X3SWAP`. |
 | `p8x_kicad_sch.py` | writes the KiCad `.kicad_sch` project — symbols drawn from the typed pins; label-style or ELK-wired sheets; `--check` runs KiCad ERC and diffs KiCad's own netlist against the canonical one. |
-| `p8x_kicad_wire.py` + `elk_layout.js` | ELK (elkjs) places the parts and routes the local nets as orthogonal wires; power, bus and cross-sheet nets keep labels. |
-| `p8x_sheets.py` | groups each board's parts into sheets (active ICs on wired sheets, connectors and passives on label sheets). |
+| `p8x_kicad_wire.py` + `elk_layout.js` | ELK (elkjs) places the parts and routes the local nets as orthogonal wires; power, bus and cross-sheet nets keep labels. Cards in `FLOW_BY_SIDE` orient each wire by drawing side (a right-edge pin feeds a left-edge pin) rather than electrical direction, so a round trip such as ACIA TXD → MAX232 → RXD lays out left to right instead of looping. If ELK cannot route a sheet cleanly, that sheet falls back to label style. |
+| `p8x_sheets.py` | groups each board's parts into sheets. Default: active ICs on wired sheets in reference order, connectors and passives on label sheets. A card can instead be drawn **by function** (`functional_sheets`): each block is one wired sheet holding its ICs together with the resistors, LEDs, crystals and connectors they drive. The io-card is drawn this way (2026-10-24). |
 
 **Every build is verified**: KiCad's exported netlist is diffed against the
 canonical `gen_eagle` netlist (a routing/rounding short or break shows up there),
