@@ -62,6 +62,12 @@ def part(dev,val):
     if t: return t,"Peripheral IC",pkg          # 74HCT688, MCP23S17, ATmega1284P, Pico, ...
     return val or dev,"Other",pkg
 
+# Jumper shunts (2.54mm, 2-pin) are not footprints, so no board lists them:
+# (board, ref) -> shunts that header holds in use.
+SHUNTS={("control-card","JP1"):1,     # clock select: one row = 4/2/1 MHz
+ ("io-card","JP1"):2,("io-card","JP2"):2,   # RX/TX swap: 1-3+2-4 straight, 3-5+4-6 null-modem
+ ("memory-card","JWP"):1}             # ROM write protect
+
 SOCK={"DIP8":"8","DIP14":"14","DIP16":"16","DIP20":"20","DIP24W":"24 (0.6in wide)","DIP28W":"28 (0.6in wide)"}
 
 def main():
@@ -76,6 +82,9 @@ def main():
             k=(cat,p,pkg,dnp)                       # DNP in the key: never merge populate+DNP
             a=agg[k]; a["qty"]+=1; a["refs"].append("%s:%s"%(bn,ref))
             if pkg in SOCK: (socks_dnp if dnp else socks)[pkg]+=1
+    for (bname,ref),q in SHUNTS.items():
+        a=agg[("Connector","Jumper shunt 0.1in (2.54mm), 2-pin","-",False)]
+        a["qty"]+=q; a["refs"].append("%s:%s%s"%(bname.split("-")[0],ref,"x%d"%q if q>1 else ""))
     out=os.path.join(_HW,"p8x-bom.csv")
     with open(out,"w",newline="") as f:
         w=csv.writer(f); w.writerow(["Qty","Part (generic — verify on DigiKey)","Package","Category","Populate","Notes","RefDes"])

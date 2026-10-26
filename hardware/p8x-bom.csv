@@ -6,6 +6,7 @@ Qty,Part (generic — verify on DigiKey),Package,Category,Populate,Notes,RefDes
 2,"40-pin boxed header (IDC, CF/IDE)",HDR40,Connector,yes,,cf:J2 cf:J5
 8,"DIN41612 96-pin (backplane receptacle, mates FABC96R)",FABC96S,Connector,yes,,backplane:J1 backplane:J2 backplane:J3 backplane:J4 backplane:J5 backplane:J6 backplane:J7 backplane:J8
 9,"DIN41612 96-pin, FABC96R (card edge connector, +M2.5 mounting holes)",MABC96R,Connector,yes,,alu:J1 bustest:J1 cf:J1 control:J1 io:J1 led:J1 memory:J1 ps2:J1 regbank:J1
+6,"Jumper shunt 0.1in (2.54mm), 2-pin",-,Connector,yes,,control:JP1 io:JP1x2 io:JP2x2 memory:JWP
 4,Pin header 2x3 0.1in (jumper block / ICSP),HDR2X3,Connector,yes,,control:JP1 io:JP1 io:JP2 ps2:JICSP
 2,Pin header 3-pin 0.1in,HDR3,Connector,yes,,io:J3 memory:JWP
 1,"Terminal block, 4-pos 5mm",TB4,Connector,yes,,backplane:J11
