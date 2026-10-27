@@ -151,6 +151,9 @@ for b in BOARDS:
         src = os.path.join(REPO, "hardware", b, "kicad", "p8x-%s-render-%s.png" % (b, view))
         if not os.path.exists(src): continue
         im = Image.open(src)
+        # every card is shown with its bus connector at the bottom (Ken, 2026-10-27): the boards have the DIN 41612
+        # on their left edge, so the cards' renders are turned a quarter turn anticlockwise (the backplane is not a card)
+        if b != "backplane": im = im.rotate(90, expand=True)
         im.thumbnail((1000, 1000))
         dst = os.path.join(OUT, "hardware", b, "kicad", os.path.basename(src))
         os.makedirs(os.path.dirname(dst), exist_ok=True)
