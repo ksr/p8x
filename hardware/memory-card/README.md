@@ -12,8 +12,8 @@ and generates a clean write strobe.
 > (rev F, routed, not yet fabricated) implements that decode on three spare gates,
 > with no new chips: ROM `!CE` gains an `A11·A12` term and low-RAM U10 widens to
 > `$1800–$7FFF`. The chip-by-chip text below describes the **rev E** netlist in
-> `gen_eagle.py` (8 KB ROM, `$0000–$1FFF`), which `kicad/gen_mem.py` imports and
-> rewires to rev F; the frozen Eagle `.sch` in `eagle-deprecated/` is rev E too and
+> `gen_eagle.py` (8 KB ROM, `$0000–$1FFF`), which `kicad/mem_revf.py` rewires to
+> rev F for both the KiCad board and its schematic; the frozen Eagle `.sch` in `eagle-deprecated/` is rev E too and
 > must not be built.
 
 | Region | Device | Size |

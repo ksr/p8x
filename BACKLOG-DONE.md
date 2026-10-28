@@ -15,12 +15,20 @@
       Without this the card could not assert `-IRQ` for the interrupt bring-up
       (design doc §7).
 
+- [x] **Memory card schematic is rev F (2026-10-28).** The KiCad schematic was
+      drawn from gen_eagle's rev-E netlist (8 KB ROM decode, net ROM8CE) and
+      titled REV E, while the board is rev F (6 KB decode). The rev-F transform
+      moved out of gen_mem.py into `hardware/memory-card/kicad/mem_revf.py`, which
+      the board and `generators/sch/p8x_card.py` both use; the schematic is now
+      "P8X MEMORY CARD REV F (6K ROM DECODE)", ERC 0, netlist = ours. gen_eagle
+      stays rev E (the Eagle flow is frozen). Board pads and tracks unchanged.
+
 - [x] **Title block with cottageworker.com on every board (2026-10-28).** Board
       rule of 2026-10-26: `cottageworker.com` on every card, beside its name and
       revision (it replaces `onepagecomputer.com`). No board carried its name or
       revision on the silk before. `silk_labels.title_block()` prints the name +
-      revision from the card's title (memory card REV F, backplane REV A — its
-      first design) with the site beneath, trying the front (right) edge first so
+      revision from the card's title (memory card REV F, backplane REV C as its
+      schematic) with the site beneath, trying the front (right) edge first so
       it reads with the card installed (standards §8). All nine boards rebuilt with
       the routing reused (silk only): every check_card PASS.
 

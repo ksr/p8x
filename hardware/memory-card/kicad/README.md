@@ -27,7 +27,7 @@ maps `$1800–$1FFF` to the unwritable ROM chip — a build blocker once the OS
 touches its scratch there (see [`../p8x-memory-card-theory.md`](../p8x-memory-card-theory.md)
 ⚠ note). This KiCad board implements the corrected **rev F 6 KB decode**
 (`ROM = $0000–$17FF`, `$1800–$1FFF` is RAM), matching the emulator/OS. It adds
-**no new chips** — `gen_mem.py` rewires three spare gates on the imported netlist:
+**no new chips** — `mem_revf.py` rewires three spare gates on the imported netlist:
 
 | Signal | Gate | Function |
 |--------|------|----------|
@@ -38,13 +38,17 @@ touches its scratch there (see [`../p8x-memory-card-theory.md`](../p8x-memory-ca
 
 The functional netlist itself is the canonical one from
 `generators/gen_eagle.py` (`CARDS["memory-card"]`, built by the shared `card()`
-helper — connector, decaps, IC power pins, J1 bus wiring); `gen_mem.py` imports
-it and applies the rev-F transform, asserting the gate usage is consistent.
+helper — connector, decaps, IC power pins, J1 bus wiring). `mem_revf.py` applies
+the rev-F transform to a copy and asserts the gate usage is consistent; the board
+(`gen_mem.py`) and the KiCad schematic (`generators/sch/p8x_card.py`) both take
+their netlist from it, so the schematic shows rev F too (2026-10-28; before, it
+was drawn from the rev-E netlist and titled REV E).
 
 ## Files
 
 | File | What it is |
 |------|-----------|
+| `mem_revf.py` | the rev-F netlist (gen_eagle's rev E + the 6 KB decode transform), shared by the board and the schematic; plain Python |
 | `gen_mem.py` | the board generator (pcbnew): rev-F netlist, footprints, placement, GND/VCC planes, outline |
 | `export_dsn.py` | export a Specctra `.dsn` for Freerouting (marks In1/In2 as **power** planes) |
 | `p8x-memory-card.ses` | **the routing** — Freerouting's session file (the canonical routing artifact, like an Eagle `.brd`'s copper) |

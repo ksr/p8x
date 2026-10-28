@@ -24,7 +24,7 @@ emulator/OS. It adds NO new chips -- it rewires three spare gates:
     S      = OR(A13|A14, P)         on U11.3 (spare 74HCT32 gate)
     -RAM2CE= NAND(!A15, S)          on U7.3  (its B input moves from Q to S)
 so ROM answers only $0000-$17FF and U10 (low RAM) widens to $1800-$7FFF. The
-transform is applied to the imported netlist below and asserted for sanity.
+transform lives in mem_revf.py (the schematic uses it too) and is asserted there.
 
 This script builds the board (footprints, nets, placement, GND pour, outline).
 Routing is done afterwards by Freerouting via a Specctra DSN/SES round-trip
@@ -43,37 +43,11 @@ import gen_eagle as GE
 def mm(v): return pcbnew.FromMM(v)
 def P(x, y): return VECTOR2I(mm(x), mm(y))
 
-# ---- 1. pull the canonical netlist + apply the rev-F decode transform ------
-_title, PARTS, NETS = GE.CARDS["memory-card"]
-PARTS = copy.deepcopy(PARTS); NETS = copy.deepcopy(NETS)
+# ---- 1. the canonical netlist with the rev-F decode applied (mem_revf.py) --
+sys.path.insert(0, HERE)
+import mem_revf
+PARTS, NETS = mem_revf.revf(GE)
 DEV = GE.DEV
-
-def _rm(net, *items): NETS[net] = [p for p in NETS[net] if p not in items]
-def _add(net, *items): NETS.setdefault(net, []).extend(items)
-
-def apply_revF():
-    # untie the spare gates we are about to use from GND
-    _rm("GND", ("U9","4A"),("U9","4B"),
-               ("U11","2A"),("U11","2B"),("U11","3A"),("U11","3B"))
-    _add("A11", ("U9","4A")); _add("A12", ("U9","4B"))     # AND inputs
-    NETS["P"]      = [("U9","4Y"),("U11","2B"),("U11","3B")]   # A11*A12
-    _rm("Q", ("U7","3B")); _add("Q", ("U11","3A"))            # Q -> OR3 too
-    NETS["ROMOR3"] = [("U11","1Y"),("U11","2A")]              # A13|A14|A15 (was ROM8CE)
-    del NETS["ROM8CE"]
-    NETS["ROMCE"]  = [("U11","2Y"),("U1","!CE"),("U8","3A")]  # 6K ROM !CE (+ ROM LED sel)
-    NETS["S"]      = [("U11","3Y"),("U7","3B")]               # A13|A14|(A11*A12) -> RAM2 NAND
-apply_revF()
-
-# sanity: no pad assigned to two nets; only the spare U11.4Y output floats
-_owner = {}
-for _net, _mem in NETS.items():
-    for _k in _mem:
-        assert _k not in _owner, "pad %s in two nets (%s,%s)" % (_k, _owner[_k], _net)
-        _owner[_k] = _net
-for _u in ("U7","U8","U9","U11"):
-    _dev = PARTS[_u][0]
-    _un = [pn for pn in DEV[_dev]["L"]+DEV[_dev]["R"] if (_u,pn) not in _owner]
-    assert _un == (["4Y"] if _u == "U11" else []), "%s unexpected floats %s" % (_u, _un)
 
 # ---- 2. device -> KiCad footprint, and pin-name -> pad-number --------------
 FPMAP = {
@@ -319,7 +293,7 @@ pcbnew.ZONE_FILLER(board).Fill(board.Zones())
 # silkscreen: references outside every part and the IC types (silk_labels.py). The
 # LED function labels and the JWP position marks above are this script's own.
 import silk_labels as SL
-if not SL.title_block(board, "P8X MEMORY CARD REV F"): print("  SILK: no clean spot for the title block")
+if not SL.title_block(board, mem_revf.TITLE): print("  SILK: no clean spot for the title block")
 _fails = SL.label_board(board, PARTS, {"JWP": "ROM-WP"})
 if _fails: print("  SILK: no clean spot for %d: %s" % (len(_fails), _fails[:12]))
 pcbnew.SaveBoard(OUT, board)

@@ -62,6 +62,12 @@ VARIANTS = {("io-card", "JP1"): "JMP2X3SWAP", ("io-card", "JP2"): "JMP2X3SWAP",
 def load(name):
     if name == "backplane":
         return Card("backplane", "P8X %d-SLOT BACKPLANE REV C" % GE.NSLOT, GE.bps, GE.bpn)
+    if name == "memory-card":       # the rev-F board, not gen_eagle's frozen rev E
+        sys.path.insert(0, os.path.join(os.path.dirname(GE.__file__), "..", "hardware",
+                                        "memory-card", "kicad"))
+        import mem_revf
+        parts, nets = mem_revf.revf(GE)
+        return Card(name, mem_revf.TITLE + " (6K ROM DECODE)", parts, nets)
     title, parts, nets = GE.CARDS[name]
     return Card(name, title, parts, nets)
 
