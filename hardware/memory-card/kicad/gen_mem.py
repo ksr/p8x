@@ -319,6 +319,7 @@ pcbnew.ZONE_FILLER(board).Fill(board.Zones())
 # silkscreen: references outside every part and the IC types (silk_labels.py). The
 # LED function labels and the JWP position marks above are this script's own.
 import silk_labels as SL
+if not SL.title_block(board, "P8X MEMORY CARD REV F"): print("  SILK: no clean spot for the title block")
 _fails = SL.label_board(board, PARTS, {"JWP": "ROM-WP"})
 if _fails: print("  SILK: no clean spot for %d: %s" % (len(_fails), _fails[:12]))
 pcbnew.SaveBoard(OUT, board)

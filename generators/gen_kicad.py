@@ -390,6 +390,7 @@ def build_card(name):
     pcbnew.ZONE_FILLER(board).Fill(board.Zones())
 
     # --- silkscreen: references, chip types, function + position labels -----
+    if not SL.title_block(board, SL.card_title(title)): print("  SILK: no clean spot for the title block")
     fails = SL.label_board(board, parts, *silk_spec(name, parts))
     if fails: print("  SILK: no clean spot for %d: %s" % (len(fails), fails[:12]))
 

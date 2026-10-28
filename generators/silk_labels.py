@@ -14,6 +14,9 @@ treated as an obstacle. Each block is tried at candidate spots around the part
 (above, below, right, left, then further out, then stacked, then smaller) and the
 first spot clear of every courtyard, pad, placed text and the board edge wins.
 Returns the refs it could not place cleanly (the caller prints them).
+
+title_block() prints the board's name + revision and cottageworker.com (every
+card of every system, 2026-10-26); generators call it just before label_board().
 """
 try:
     import pcbnew                    # KiCad's Python; gen_bom.py imports only the type table
@@ -149,6 +152,47 @@ class Labeler:
 
     def new_text(self, s):
         t = pcbnew.PCB_TEXT(self.board); t.SetText(s); self.board.Add(t); return t
+
+# ---- title block -----------------------------------------------------------
+SITE = "cottageworker.com"          # on every card of every system (2026-10-26)
+
+def card_title(title):
+    """The printed name of a board from its long CARDS title:
+    'P8X I/O CARD REV B - 2x ACIA/...' -> 'P8X I/O CARD REV B'."""
+    import re
+    t = title.split(" - ")[0].split(" (")[0].upper()
+    m = re.match(r"^(.*?\b(?:REV [A-Z0-9.]+|V\d+(?:\.\d+)*))", t)
+    return m.group(1) if m else t
+
+def title_block(board, name, front="right"):
+    """Print the board's name + revision with cottageworker.com beneath it.
+    The front edge (the right edge on every P8X card: the DIN connector is on
+    the left) is tried first, so the block reads with the card installed
+    (standards section 8); then any edge band, scanning inward in 2mm steps.
+    Call BEFORE label_board(), which then treats the block as an obstacle."""
+    L = Labeler(board)
+    pieces = [(L.new_text(name), 1.5), (L.new_text(SITE), 1.2)]
+    x0, y0, x1, y1 = L.inside
+    def band(side, g, w, h):
+        if side == "top":    return [(x, y0 + g) for x in range(x0 + g, x1 - w - g, mm(2))]
+        if side == "bottom": return [(x, y1 - g - h) for x in range(x0 + g, x1 - w - g, mm(2))]
+        if side == "left":   return [(x0 + g, y) for y in range(y0 + g, y1 - h - g, mm(2))]
+        return [(x1 - g - w, y) for y in range(y0 + g, y1 - h - g, mm(2))]
+    passes = ([front] if front else []) + [["top", "bottom", "left", "right"]]
+    for sides in passes:
+        sides = [sides] if isinstance(sides, str) else sides
+        for shrink in (1.0, 0.8):
+            ms = [L._style(t, s * shrink) for t, s in pieces]
+            w = max(m[2] for m in ms); h = sum(m[3] for m in ms) + mm(0.3)
+            for inset in range(1, 60, 2):
+                for side in sides:
+                    for bx, by in band(side, mm(inset), w, h):
+                        if not L._fits((bx, by, bx + w, by + h)): continue
+                        cy = by
+                        for (t, _s), m in zip(pieces, ms):
+                            t.SetPosition(pcbnew.VECTOR2I(bx - m[0], cy - m[1])); cy += m[3] + mm(0.3)
+                        return True
+    return False
 
 def _order(ref, dev, ctype):
     if ctype: return 0                               # ICs first: tightest spots

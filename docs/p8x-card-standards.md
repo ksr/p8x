@@ -90,7 +90,10 @@ memory card as the reference ([hardware/KICAD-BOARDS.md](../hardware/KICAD-BOARD
 
 ## 8. Silkscreen
 
-- Card name + rev, large, on the front-edge strip (readable with card installed)
+- Card name + rev, large, on the front-edge strip (readable with card installed),
+  with `cottageworker.com` beneath it (2026-10-26; it replaces `onepagecomputer.com`).
+  `silk_labels.title_block()` prints the block on every board, trying the front
+  (right) edge first; the backplane, which has no front edge, takes any clear edge
 - Pin 1 markers on every IC; connector A1/C32 corners labeled
 - Designators readable after assembly (not under sockets): the generators print
   every reference outside every part's courtyard, with the IC type beside it, and
@@ -161,6 +164,7 @@ yet). **Always ask Ken before changing a card that might be built, ordered or in
 - Every switch, button and LED is labelled with its function (RESET, STEP, RUN, ...), and each switch position with
   what it selects.
 - Placement drawings (PDF) show the outline and the parts in one orientation, on a sheet shaped like the board.
+- `cottageworker.com` is on the silkscreen of every card, beside the board's name and revision (2026-10-26).
 
 ## 13. Rules Stated Elsewhere
 

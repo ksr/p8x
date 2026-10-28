@@ -223,6 +223,8 @@ pcbnew.ZONE_FILLER(board).Fill(board.Zones())
 
 # silkscreen: references outside every part, values, function + position labels
 import gen_kicad as GK
+# first KiCad design, never fabricated: rev A (2026-10-28)
+if not GK.SL.title_block(board, "P8X BACKPLANE REV A", front=None): print("  SILK: no clean spot for the title block")
 _fails = GK.SL.label_board(board, dict({r: (s[0], s[1]) for r, s in bps.items()}, **holes),
                            *GK.silk_spec("backplane", {}))
 if _fails: print("  SILK: no clean spot for %d: %s" % (len(_fails), _fails[:12]))

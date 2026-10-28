@@ -15,6 +15,15 @@
       Without this the card could not assert `-IRQ` for the interrupt bring-up
       (design doc §7).
 
+- [x] **Title block with cottageworker.com on every board (2026-10-28).** Board
+      rule of 2026-10-26: `cottageworker.com` on every card, beside its name and
+      revision (it replaces `onepagecomputer.com`). No board carried its name or
+      revision on the silk before. `silk_labels.title_block()` prints the name +
+      revision from the card's title (memory card REV F, backplane REV A — its
+      first design) with the site beneath, trying the front (right) edge first so
+      it reads with the card installed (standards §8). All nine boards rebuilt with
+      the routing reused (silk only): every check_card PASS.
+
 - [x] **Silkscreen labels on every board (2026-10-24).** Board rules of the same
       day: every reference readable with the parts fitted (outside every part, IC
       type beside it), every switch, button and LED labelled with its function, and

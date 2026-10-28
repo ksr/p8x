@@ -117,6 +117,7 @@ pcbnew.ZONE_FILLER(board).Fill(board.Zones())
 
 out = os.path.join(os.path.dirname(os.path.abspath(__file__)), "p8x-ps2-card.kicad_pcb")
 # silkscreen: references outside every part, IC types, function + position labels
+if not GK.SL.title_block(board, GK.SL.card_title(GK.CARDS[CARD][0])): print("  SILK: no clean spot for the title block")
 _fails = GK.SL.label_board(board, parts, *GK.silk_spec(CARD, parts))
 if _fails: print("  SILK: no clean spot for %d: %s" % (len(_fails), _fails[:12]))
 
