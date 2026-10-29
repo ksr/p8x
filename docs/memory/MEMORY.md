@@ -70,3 +70,4 @@
 - [cottageworker.com site](project_cottageworker_site.md) — repo ~/Developer/cottageworker-site has its own CLAUDE.md (read it first); snapshot job removed from this Mac 2026-10-05, second Mac install UNVERIFIED
 - [ELF repo](reference_elf_repo.md) — System-5 1802 ELF = github ksr/elf (private), cloned at ~/Developer/elf; own CLAUDE.md; old elf-1/elf-2/1802 folders are import sources
 - [P32 project](project_p32.md) — new project 2026-10-11 at ~/Developer/p32 (github ksr/p32, private); 32-bit TTL P8X successor "P32X", brief docs/HANDOFF-P32.md
+- [P8X footprint SUBs](reference_p8x_footprint_subs.md) — board PASS does NOT validate substituted footprints (Pico was a 2x20 header, CR2032 a 12mm SMD holder; fixed 2026-10-24); check SUB geometry+pin order; ERC single-pin labels found real netlist gaps

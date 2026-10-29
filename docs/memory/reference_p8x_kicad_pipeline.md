@@ -72,3 +72,12 @@ DRC judges against the real rule, not the 0.2mm default.
   `net.GetNetClass()` and `board.GetConnectivity()` return UNWRAPPED swig objects —
   use `ns.GetEffectiveNetClass(name)`, and `kicad-cli pcb drc --format json` for
   unconnected counts.
+- **2026-10-24 additions:** `REUSE_ROUTE=1 sh generators/build.sh <card>` re-imports the
+  committed .ses instead of re-routing — ONLY for silkscreen-only changes (pads unmoved);
+  DRC still catches a stale route. SES import matches footprints BY REFERENCE: duplicate
+  refs (the backplane's six `REF**` holes, now H1–H6) get shuffled on re-import — give
+  every footprint a unique ref. `silk_labels.py` runs last in every generator; check 6 in
+  check_card.sh fails hidden/under-part refs. DSN export routes at 0.21 mm (Freerouting
+  polygonises round pads; 0.199 mm misses at Pico pads). Generic flow has a `PINNED`
+  table in gen_kicad.py. Silk renders: kicad-cli svg + qlmanage crops to a square — edit
+  the SVG viewBox to the region first.
