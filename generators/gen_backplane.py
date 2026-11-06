@@ -19,9 +19,11 @@ FP = "/Applications/KiCad/KiCad.app/Contents/SharedSupport/footprints"
 def mm(v): return pcbnew.FromMM(float(v))
 def P(x, y): return VECTOR2I(mm(x), mm(y))
 
-# local copies of the netlist so the power-connector remap below doesn't mutate
-# gen_eagle's module-level structures.
-bps, bpn, DEV = dict(GE.bps), {k: list(v) for k, v in GE.bpn.items()}, GE.DEV
+# the netlist as built: J11 is the 2-terminal Phoenix block, for the board, the
+# schematic and the parts list alike (bp_parts.py)
+from bp_parts import as_built
+bps, bpn = as_built(GE.bps, GE.bpn)
+DEV = GE.DEV
 # device -> footprint (female vertical DIN for the slots; passives as usual)
 FPMAP = {
     "DIN96":  ("Connector_DIN", "DIN41612_C_3x32_Female_Vertical_THT"),
@@ -36,12 +38,6 @@ FPMAP = {
     "PWR2":   ("Connector_Phoenix_MSTB",
                "PhoenixContact_MSTBA_2,5_2-G-5,08_1x02_P5.08mm_Horizontal"),
 }
-# Swap the power connector J11 from the old 4-pin header (TB4) to the 2-terminal
-# Phoenix block: keep its placement/value, drop the doubled pins, and re-map its
-# bus membership so pad 1 = V+ (VCC) and pad 2 = GND.
-bps["J11"] = ("PWR2",) + tuple(bps["J11"][1:])
-for _net in bpn: bpn[_net] = [(r, p) for (r, p) in bpn[_net] if r != "J11"]
-bpn["VCC"].append(("J11", "1")); bpn["GND"].append(("J11", "2"))
 def pad_of(dev, pinname):
     if dev == "DIN96": return pinname.lower()
     if dev not in DEV: return str(pinname)        # local pseudo-devices (e.g. PWR2)

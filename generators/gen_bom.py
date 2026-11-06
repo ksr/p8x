@@ -15,6 +15,7 @@ _HW=os.path.join(os.path.dirname(_HERE),"hardware")
 sys.path.insert(0,_HERE)
 os.chdir(_HW)                      # gen_eagle writes boards relative to CWD
 import gen_eagle as G
+from bp_parts import as_built
 
 # device -> orderable part (generic). HCT assumed throughout (5V TTL-compatible).
 # device -> orderable type: the same table the silkscreen prints (silk_labels.py)
@@ -27,6 +28,7 @@ NOTE={"74HCT181":"ALU slice — HCT uncommon; may need 74F181/NOS","74HCT182":"l
 
 def part(dev,val):
     """-> (orderable part, category, package)."""
+    if dev=="PWR2": return "Terminal block, 2-pos 5.08mm (Phoenix MSTBA 2,5/2-G-5,08)","Connector","MSTBA-2"
     pkg=G.DEV[dev]["pkg"]; v=val.upper()
     if dev in LOGIC: return LOGIC[dev],"Logic IC",pkg
     if dev=="GATES14":
@@ -73,7 +75,7 @@ SOCK={"DIP8":"8","DIP14":"14","DIP16":"16","DIP20":"20","DIP24W":"24 (0.6in wide
 def main():
     agg=collections.defaultdict(lambda:{"qty":0,"refs":[]})
     socks=collections.Counter(); socks_dnp=collections.Counter()
-    boards=[(n,G.CARDS[n][1]) for n in G.CARDS]+[("backplane",G.bpb)]
+    boards=[(n,G.CARDS[n][1]) for n in G.CARDS]+[("backplane",as_built(G.bpb,G.bpn)[0])]
     for bname,parts in boards:
         bn=bname.split("-")[0]
         for ref,pv in parts.items():

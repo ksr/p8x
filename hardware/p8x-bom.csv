@@ -9,7 +9,7 @@ Qty,Part (generic — verify on DigiKey),Package,Category,Populate,Notes,RefDes
 6,"Jumper shunt 0.1in (2.54mm), 2-pin",-,Connector,yes,,control:JP1 io:JP1x2 io:JP2x2 memory:JWP
 4,Pin header 2x3 0.1in (jumper block / ICSP),HDR2X3,Connector,yes,,control:JP1 io:JP1 io:JP2 ps2:JICSP
 2,Pin header 3-pin 0.1in,HDR3,Connector,yes,,io:J3 memory:JWP
-1,"Terminal block, 4-pos 5mm",TB4,Connector,yes,,backplane:J11
+1,"Terminal block, 2-pos 5.08mm (Phoenix MSTBA 2,5/2-G-5,08)",MSTBA-2,Connector,yes,,backplane:J11
 1,32.768kHz crystal,C_DISC,Crystal,yes,,io:X3
 32,LED 3mm green,LED5,LED,yes,,alu:LED3 alu:LED4 backplane:LED1 bustest:D1 bustest:LED1 bustest:LED10 bustest:LED11 bustest:LED12 bustest:LED13 bustest:LED14 bustest:LED15 bustest:LED16 bustest:LED2 bustest:LED3 bustest:LED4 bustest:LED5 bustest:LED6 bustest:LED7 bustest:LED8 bustest:LED9 cf:LED3 cf:LED5 control:LED3 control:LED4 io:LED3 led:LED3 memory:LED3 memory:LED5 ps2:LEDKA ps2:LEDPWR regbank:LED3 regbank:LED4
 2,LED 3mm red,LED5,LED,yes,,control:LED5 memory:LED6

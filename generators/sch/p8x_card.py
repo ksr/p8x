@@ -18,6 +18,7 @@ import os, sys
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(HERE, ".."))
 import gen_eagle as GE
+from bp_parts import as_built
 from p8x_symlib import SYM
 
 # backplane bus signals: the net on each DIN pin (drop spares / unused)
@@ -57,11 +58,12 @@ class Card:
 VARIANTS = {("io-card", "JP1"): "JMP2X3SWAP", ("io-card", "JP2"): "JMP2X3SWAP",
             ("bustest-card", "RN3"): "RNISO8DSTR",
             ("io-card", "RL1"): "RNISO8DSTR", ("io-card", "RM1"): "RNISO8DSTR",
-            ("io-card", "RM2"): "RNISO8DSTR", ("io-card", "RM3"): "RNISO8DSTR"}
+            ("io-card", "RM2"): "RNISO8DSTR", ("io-card", "RM3"): "RNISO8DSTR",
+            ("backplane", "C11"): "CAPP10", ("backplane", "C12"): "CAPP10"}
 
 def load(name):
     if name == "backplane":
-        return Card("backplane", "P8X %d-SLOT BACKPLANE REV C" % GE.NSLOT, GE.bps, GE.bpn)
+        return Card("backplane", "P8X %d-SLOT BACKPLANE REV C" % GE.NSLOT, *as_built(GE.bps, GE.bpn))
     if name == "memory-card":       # the rev-F board, not gen_eagle's frozen rev E
         sys.path.insert(0, os.path.join(os.path.dirname(GE.__file__), "..", "hardware",
                                         "memory-card", "kicad"))

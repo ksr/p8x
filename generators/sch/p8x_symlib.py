@@ -289,6 +289,12 @@ SYM["JMP2X3SWAP"] = dict(SYM["JMP2X3"], value="JMP2X3SWAP",
 SYM["RNISO8DSTR"] = dict(SYM["RNISO8D"], value="RNISO8DSTR",
                          layout=(_seq("A", 1, 8), _seq("B", 1, 8)))
 
+# Backplane parts as built (bp_parts.py): the 2-terminal power entry, and the
+# bulk electrolytics on the board's larger footprint.
+SYM["PWR2"] = dict(pkg="PWR2", value="PWR2", layout=(["1"], ["2"]), pins={"1": ("1", "pas"), "2": ("2", "pas")},
+                   footprint="Connector_Phoenix_MSTB:PhoenixContact_MSTBA_2,5_2-G-5,08_1x02_P5.08mm_Horizontal")
+SYM["CAPP10"] = dict(SYM["CAPP"], value="CAPP10", footprint="Capacitor_THT:CP_Radial_D10.0mm_P5.00mm")
+
 if __name__ == "__main__":
     # self-check: every pin of every used device has a type and is placed
     miss = []

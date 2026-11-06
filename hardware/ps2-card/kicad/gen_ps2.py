@@ -94,7 +94,9 @@ for net, mem in nets.items():
     for (ref, pin) in mem:
         if ref not in footp: continue
         pad = GK.pad_of(ref, parts[ref][0], pin)
-        if not any(p.GetNumber() == pad and (p.SetNet(ni) or True) for p in footp[ref].Pads()):
+        hit = [p for p in footp[ref].Pads() if p.GetNumber() == pad]    # (a mini-DIN has two SH pads)
+        for p in hit: p.SetNet(ni)
+        if not hit:
             bad.append("%s.%s" % (ref, pin))
 
 # --- 4. outline + planes + keepouts ------------------------------------------
