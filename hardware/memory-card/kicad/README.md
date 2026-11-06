@@ -76,7 +76,7 @@ Re-import the committed routing and export gerbers (no re-route needed):
 CLI=/Applications/KiCad/KiCad.app/Contents/MacOS/kicad-cli
 "$CLI" pcb drc  p8x-memory-card.kicad_pcb                 # 0 violations, 0 unconnected
 "$CLI" pcb export gerbers --no-protel-ext -o gerbers/ p8x-memory-card.kicad_pcb
-"$CLI" pcb export drill --format excellon --excellon-units mm -o gerbers/ p8x-memory-card.kicad_pcb
+"$CLI" pcb export drill --format excellon --excellon-units mm --excellon-separate-th -o gerbers/ p8x-memory-card.kicad_pcb
 ( cd gerbers && zip ../p8x-memory-card-gerbers.zip *.gbr *.gbrjob *.drl )
 ```
 

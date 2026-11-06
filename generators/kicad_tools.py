@@ -501,18 +501,25 @@ def _boilerplate(d, name):
 "Exotic parts use the closest standard KiCad footprint (flagged when built).\n"
 % (card,card,card,card,card,card,card,card))
 
-def finish(brd):
+def order_files(brd):
+    """the gerbers and drill files, and the zip the fab gets. Plated and non-plated holes
+    in files of their own, as JLCPCB's KiCad guide asks"""
     d = os.path.dirname(brd); name = os.path.basename(brd)[:-len(".kicad_pcb")]
     ger = os.path.join(d, "gerbers"); zipf = os.path.join(d, name + "-gerbers.zip")
     if os.path.isdir(ger):
         for f in os.listdir(ger): os.remove(os.path.join(ger, f))
     _run(CLI, "pcb", "export", "gerbers", "--no-protel-ext", "-o", ger + "/", brd)
-    _run(CLI, "pcb", "export", "drill", "--format", "excellon", "--excellon-units", "mm", "-o", ger + "/", brd)
+    _run(CLI, "pcb", "export", "drill", "--format", "excellon", "--excellon-units", "mm",
+         "--excellon-separate-th", "-o", ger + "/", brd)
     if os.path.exists(zipf): os.remove(zipf)
     import glob, zipfile
     with zipfile.ZipFile(zipf, "w", zipfile.ZIP_DEFLATED) as z:
         for f in sorted(glob.glob(ger + "/*.gbr") + glob.glob(ger + "/*.gbrjob") + glob.glob(ger + "/*.drl")):
             z.write(f, os.path.basename(f))
+
+def finish(brd):
+    d = os.path.dirname(brd); name = os.path.basename(brd)[:-len(".kicad_pcb")]
+    order_files(brd)
     _run(CLI, "pcb", "render", "--side", "top", "--quality", "high", "--floor",
          "-w", "1800", "-h", "1000", "-o", os.path.join(d, name + "-render-top.png"), brd)
     _run(CLI, "pcb", "render", "--rotate", "-25,0,22", "--perspective", "--quality", "high", "--floor",
@@ -524,6 +531,7 @@ def finish(brd):
 if __name__ == "__main__":
     cmd = sys.argv[1]
     if cmd == "export_dsn": export_dsn(sys.argv[2])
+    elif cmd == "orderfiles": order_files(sys.argv[2])
     elif cmd == "import_ses": import_ses(sys.argv[2], sys.argv[3])
     elif cmd == "heal": heal_unconnected(sys.argv[2])
     elif cmd == "heal_bus": heal_bus_gaps(sys.argv[2])

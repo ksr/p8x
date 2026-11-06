@@ -33,7 +33,7 @@ echo "== 4/6  import routing + self-heal stitch (import_ses.py) =="
 echo "== 5/6  gerbers + drill + render =="
 rm -f "$HERE/gerbers/"*.gbr "$HERE/gerbers/"*.drl 2>/dev/null; mkdir -p "$HERE/gerbers"
 "$CLI" pcb export gerbers --no-protel-ext -o "$HERE/gerbers/" "$BRD" >/dev/null 2>&1
-"$CLI" pcb export drill --format excellon --excellon-units mm -o "$HERE/gerbers/" "$BRD" >/dev/null 2>&1
+"$CLI" pcb export drill --format excellon --excellon-units mm --excellon-separate-th -o "$HERE/gerbers/" "$BRD" >/dev/null 2>&1
 ( cd "$HERE" && rm -f "p8x-$card-gerbers.zip" && zip -q "p8x-$card-gerbers.zip" gerbers/*.gbr gerbers/*.gbrjob gerbers/*.drl )
 "$CLI" pcb render --side top --quality high --floor -w 1800 -h 1000 -o "$HERE/p8x-$card-render-top.png" "$BRD" >/dev/null 2>&1
 echo "  gerbers zipped + render updated"
