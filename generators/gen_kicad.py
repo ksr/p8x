@@ -50,7 +50,7 @@ FPMAP = {
     "DIP24N": (DIP, "DIP-24_W7.62mm"),  "DIP24W": (DIP, "DIP-24_W15.24mm"),
     "DIP28N": (DIP, "DIP-28_W7.62mm"),  "DIP28W": (DIP, "DIP-28_W15.24mm"),
     "DIP40":  (DIP, "DIP-40_W15.24mm"),
-    "C_DISC1":(("Capacitor_THT", "C_Disc_D5.0mm_W2.5mm_P5.00mm")),
+    "C_DISC1":(("Capacitor_THT", "C_Disc_D5.0mm_W2.5mm_P2.50mm")),   # bypass: 0.1-inch leads (Ken, 2026-11-07)
     "C_DISC": (("Capacitor_THT", "C_Disc_D5.0mm_W2.5mm_P5.00mm")),
     "LED5":   ("LED_THT", "LED_D5.0mm"),
     "R_AXIAL":("Resistor_THT", "R_Axial_DIN0207_L6.3mm_D2.5mm_P10.16mm_Horizontal"),

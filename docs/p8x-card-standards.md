@@ -35,7 +35,9 @@ memory card as the reference ([hardware/KICAD-BOARDS.md](../hardware/KICAD-BOARD
 
 ## 3. Power & Decoupling
 
-- 100 nF ceramic per IC, placed within 5 mm of its VCC pin, via straight to both planes
+- 100 nF ceramic per IC, placed within 5 mm of its VCC pin, via straight to both planes,
+  on 0.1-inch (2.54 mm) leads: KiCad's `C_Disc_D5.0mm_W2.5mm_P2.50mm`, never 5 mm (every
+  board, chosen 2026-11-07; `pcb-check` fails a 0.1 µF capacitor that is not)
 - One 10 µF bulk per card near the connector power pins
 - Power pins per rev C/D bus: +5V = A1, B1, C1, A2, B2, C2; GND = A31, B31, C31, A32, B32, C32, plus the **odd** row-B guard pins B3, B5, …, B25 (stitch these straight into the GND plane). **Do NOT stitch B4, B6, …, B26 — those are spare bus lines SPARE12–SPARE23 — nor B27–B30 (CLRC/BSEL/IRQ/SPARE11), which are signals.**
 - Budget: declare expected current draw on the schematic title block (rule of thumb ~20 mA per HCT IC average, more for LS or anything driving LEDs)

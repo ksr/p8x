@@ -56,7 +56,7 @@ FPMAP = {
     "74138":   ("Package_DIP", "DIP-16_W7.62mm"),
     "7430":    ("Package_DIP", "DIP-14_W7.62mm"),
     "GATES14": ("Package_DIP", "DIP-14_W7.62mm"),
-    "CAP1":    ("Capacitor_THT", "C_Disc_D5.0mm_W2.5mm_P5.00mm"),
+    "CAP1":    ("Capacitor_THT", "C_Disc_D5.0mm_W2.5mm_P2.50mm"),   # bypass: 0.1-inch leads (Ken, 2026-11-07)
     "LED":     ("LED_THT", "LED_D5.0mm"),
     "RES":     ("Resistor_THT", "R_Axial_DIN0207_L6.3mm_D2.5mm_P10.16mm_Horizontal"),
     "HDR3":    ("Connector_PinHeader_2.54mm", "PinHeader_1x03_P2.54mm_Vertical"),

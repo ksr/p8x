@@ -2,6 +2,17 @@
 
 <!-- migrated from BACKLOG.md 2026-09-14 (category review: [x] done items belong here) -->
 
+- [x] **Bypass capacitors on 0.1-inch leads, every board (2026-11-07).** Board rule
+      of the same date: 100 nF bypass capacitors take 0.1-inch (2.54 mm) leads, never
+      5 mm. gen_eagle's `C_DISC1` was already 0.1-inch, but the KiCad generators
+      (`gen_kicad.py`, `gen_backplane.py`, `gen_mem.py`) and the schematic library
+      (`sch/p8x_symlib.py`) gave it `C_Disc_D5.0mm_W2.5mm_P5.00mm`; they now give
+      `C_Disc_D5.0mm_W2.5mm_P2.50mm`. The new pads sat under the old tracks, so all
+      nine boards were routed again from scratch: DRC 0 errors and 0 unconnected on
+      each, schematic ERC 0 errors and netlist = ours, `pcb-check` no failures
+      (BYPASS CAPS: all 177 at 2.54 mm). The other capacitors keep 5 mm leads: 150 pF
+      and 470 µF on the backplane, 1 µF on the control and I/O cards.
+
 - [x] **Bus test card: IRQ and SPARE12–19 joined to the connector (2026-10-24).**
       Found by the schematic ERC ("label connected to only one pin"): two of the
       card's expander allocations never reached J1, so the routed board had them

@@ -27,7 +27,7 @@ DEV = GE.DEV
 # device -> footprint (female vertical DIN for the slots; passives as usual)
 FPMAP = {
     "DIN96":  ("Connector_DIN", "DIN41612_C_3x32_Female_Vertical_THT"),
-    "CAP1":   ("Capacitor_THT", "C_Disc_D5.0mm_W2.5mm_P5.00mm"),
+    "CAP1":   ("Capacitor_THT", "C_Disc_D5.0mm_W2.5mm_P2.50mm"),   # bypass: 0.1-inch leads (Ken, 2026-11-07)
     "CAP":    ("Capacitor_THT", "C_Disc_D5.0mm_W2.5mm_P5.00mm"),
     "CAPP":   ("Capacitor_THT", "CP_Radial_D10.0mm_P5.00mm"),
     "RES":    ("Resistor_THT", "R_Axial_DIN0207_L6.3mm_D2.5mm_P10.16mm_Horizontal"),

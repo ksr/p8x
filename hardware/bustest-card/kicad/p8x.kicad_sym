@@ -33,7 +33,7 @@
   (symbol "CAP1" (pin_names (offset 0.762)) (in_bom yes) (on_board yes)
     (property "Reference" "C" (at 0 4.04 0) (effects (font (size 1.27 1.27))))
     (property "Value" "CAP1" (at 0 -4.04 0) (effects (font (size 1.27 1.27))))
-    (property "Footprint" "Capacitor_THT:C_Disc_D5.0mm_W2.5mm_P5.00mm" (at 0 0 0) (effects (font (size 1.27 1.27)) hide))
+    (property "Footprint" "Capacitor_THT:C_Disc_D5.0mm_W2.5mm_P2.50mm" (at 0 0 0) (effects (font (size 1.27 1.27)) hide))
     (property "Datasheet" "" (at 0 0 0) (effects (font (size 1.27 1.27)) hide))
     (symbol "CAP1_0_1"
       (rectangle (start -5.08 2.54) (end 5.08 -2.54) (stroke (width 0.254) (type default)) (fill (type background)))
