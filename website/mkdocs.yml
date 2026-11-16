@@ -56,7 +56,7 @@ markdown_extensions:
 
 nav:
   - "← cottageworker.com": https://cottageworker.com
-  - Home: index.md
+  - Home P8X: index.md
   - The machine:
       - System design: docs/p8x-system-design.md
       - Instruction set (quick reference): docs/p8x-isa-card.md

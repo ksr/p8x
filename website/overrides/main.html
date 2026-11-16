@@ -4,3 +4,12 @@
 {% block announce %}
 <a href="https://cottageworker.com">&larr; cottageworker.com</a> &middot; all projects
 {% endblock %}
+{% block extrahead %}
+{{ super() }}
+<style>
+  /* the project name in the header is a link home (partials/header.html): keep the header's colour */
+  .md-header__home { color: inherit; }
+  /* the left menu does not repeat the project name, which the header already shows (desktop; the phone drawer keeps it) */
+  @media screen and (min-width: 76.25em) { .md-nav--primary > .md-nav__title { display: none; } }
+</style>
+{% endblock %}

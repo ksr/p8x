@@ -24,7 +24,6 @@ I'm Ken Rother. I designed P8X, and it runs on an FPGA. Claude, Anthropic's AI, 
 and documentation.
 
 [:material-github: Source on GitHub](https://github.com/ksr/p8x){ .md-button .md-button--primary }
-[:material-home: My other projects](https://cottageworker.com){ .md-button }
 
 ## At a glance
 
