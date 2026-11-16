@@ -15,6 +15,7 @@ not_in_nav: |
   /commands/*.md
 hooks:
   - hooks.py
+  - lastupdated.py                 # "Last updated <date>" at the foot of every page
 
 theme:
   name: material
@@ -151,3 +152,10 @@ nav:
       - Where P8X stands: docs/p8x-status.md
       - Backlog (working list): BACKLOG.md
   - Working on the code: repository.md
+
+# lastupdated.py: the source of each page stage.py generates (the others are their own repository file)
+extra:
+  last_updated_sources:
+    "commands/index.md": "os/man"               # the index of the manual pages
+    "commands/": "os/man/{name}"                # one page per manual page
+    "docs/memory-map.md": "generators/memmap.py"
