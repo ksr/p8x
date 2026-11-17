@@ -148,6 +148,13 @@ def size_after(fp, rot):
 # ---- the build --------------------------------------------------------------
 BH = 140.0   # connector-edge dimension (the DIN41612 is ~94mm; extra room = more rows)
 STD_W = 280.0   # uniform card depth (mm); with BH=140 fits the largest card
+# The plug's row a, from the connector edge (mm). A right-angle DIN 41612 plug hangs over the board's edge and
+# its shroud comes down in front of the board: KiCad's footprint marks the edge 5.30 mm from row a, and in its
+# model the shroud's end blocks begin at 5.59, below the board's top face. With more board than that in front
+# of row a the plug cannot sit down on the card. 5.08 (0.2 inch) is the figure of YACC1's cards, which are
+# built. Until 2026-11-17 every card had the plug's pads "4 mm from the edge", row a at 6.54; none was made.
+# A routed board is brought to this figure, its tracks kept, by kicad_tools.py plug_edge.
+PLUG_EDGE = 5.08
 
 # ---- silkscreen labels (silk_labels.py does the placing) ---------------------
 # Function labels for the parts that need one (LEDs, switches, buttons, jumpers,
@@ -350,11 +357,12 @@ def build_card(name):
         if r in placed or r == "J1" or r not in footp: continue
         place_centered(footp[r], px, BH - 6, 0); px += 10.0
 
-    # J1 connector: left edge, rot90, pads centred in 100mm, 4mm from the edge
+    # J1 connector: left edge, rot90, pads centred on the edge, row a PLUG_EDGE in
+    # (x0 is its mounting holes' column, 2.54 mm outside row a)
     if "J1" in footp:
         j = footp["J1"]; j.SetPosition(P(0, 0)); j.SetOrientationDegrees(90)
         x0, y0, x1, y1 = pad_bbox(j)
-        j.SetPosition(VECTOR2I(mm(4) - x0, mm(BH/2) - (y0 + y1) // 2))
+        j.SetPosition(VECTOR2I(mm(PLUG_EDGE - 2.54) - x0, mm(BH/2) - (y0 + y1) // 2))
 
     # --- assign pads to nets --------------------------------------------------
     badpad = []

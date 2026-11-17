@@ -44,11 +44,11 @@ def place(ref, x, y, rot=0):
     if ref in footp: GK.place_centered(footp[ref], x, y, rot)
 
 # --- 1. edge parts (hand-placed) ---------------------------------------------
-# J1 DIN bus: left edge, vertical, pads 4mm in, centred on the 140mm edge
+# J1 DIN bus: left edge, vertical, row a GK.PLUG_EDGE in, centred on the 140mm edge
 if "J1" in footp:
     j = footp["J1"]; j.SetOrientationDegrees(90); j.SetPosition(P(0, 0))
     x0, y0, x1, y1 = GK.pad_bbox(j)
-    j.SetPosition(VECTOR2I(mm(4) - x0, mm(BH/2) - (y0 + y1)//2))
+    j.SetPosition(VECTOR2I(mm(GK.PLUG_EDGE - 2.54) - x0, mm(BH/2) - (y0 + y1)//2))   # (x0: the mounting holes, 2.54 outside row a)
 # bottom edge: the two PS/2 sockets (rot 180 so the footprint's -Y opening faces
 # +Y = off the bottom edge), then the ICSP header + reset pull-ups beside them
 BY = BH - 9.0

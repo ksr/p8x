@@ -43,11 +43,11 @@ def place(ref, x, y, rot=0):
     if ref in footp: GK.place_centered(footp[ref], x, y, rot)
 
 # --- 1. edge parts -----------------------------------------------------------
-# J1 DIN bus: left edge, vertical, pads 4mm in, centred on the 140mm edge
+# J1 DIN bus: left edge, vertical, row a GK.PLUG_EDGE in, centred on the 140mm edge
 if "J1" in footp:
     j = footp["J1"]; j.SetOrientationDegrees(90); j.SetPosition(P(0, 0))
     x0, y0, x1, y1 = GK.pad_bbox(j)
-    j.SetPosition(VECTOR2I(mm(4) - x0, mm(BH/2) - (y0 + y1)//2))
+    j.SetPosition(VECTOR2I(mm(GK.PLUG_EDGE - 2.54) - x0, mm(BH/2) - (y0 + y1)//2))   # (x0: the mounting holes, 2.54 outside row a)
 # FRONT edge = the RIGHT edge, opposite the bus connector (layout rules
 # 2026-10-24: switches, LEDs and outside-cable connectors at the front edge;
 # jumper blocks and cable headers near an edge). Two columns:

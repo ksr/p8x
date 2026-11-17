@@ -176,14 +176,16 @@ for cap, chip in CAPFOR.items():
     ic_top = pcbnew.ToMM(min(cys))          # smallest y = top edge in layout
     place_centered(footp[cap], ic_cx, ic_top - 4.5, 0)
 
-# J1 (DIN41612) hugs the left edge: rot 90, its left pad column 4mm from the edge
-# (the connector body overhangs the edge, as a card edge connector should) and
-# its pads centred in the 100mm height.
+# J1 (DIN41612) hugs the left edge: rot 90, its row a gen_kicad.PLUG_EDGE from the
+# edge (the connector body overhangs the edge, as a card edge connector should; its
+# left pad column, the mounting holes, is 2.54 mm outside row a) and its pads centred
+# on the edge.
 _pj = footp["J1"]
 _pj.SetPosition(P(0, 0)); _pj.SetOrientationDegrees(90)
 _xs = [p.GetPosition().x for p in _pj.Pads()]
 _ys = [p.GetPosition().y for p in _pj.Pads()]
-_pj.SetPosition(VECTOR2I(mm(4) - min(_xs), mm(BH/2) - (min(_ys) + max(_ys)) // 2))
+from gen_kicad import PLUG_EDGE  # noqa: E402
+_pj.SetPosition(VECTOR2I(mm(PLUG_EDGE - 2.54) - min(_xs), mm(BH/2) - (min(_ys) + max(_ys)) // 2))
 
 # ---- 3b. put each part's VALUE on the silkscreen ---------------------------
 # There is plenty of room, so show values (the ICs' part numbers differ; the

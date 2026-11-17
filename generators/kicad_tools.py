@@ -7,6 +7,7 @@ some steps shell out to kicad-cli). Subcommands:
     import_ses  <board.kicad_pcb> <ses>    -> import routing, re-fill planes, save
     placement   <board.kicad_pcb>          -> <dir>/<...>-placement.pdf (centred, B/W)
     finish      <board.kicad_pcb>          -> gerbers zip + top/3d renders + placement
+    plug_edge   <board.kicad_pcb> <mm>     -> a routed board's plug moved out to <mm> from the edge, tracks kept
 
 These mirror the memory card's bespoke scripts, generalised to any board path.
 """
@@ -517,6 +518,101 @@ def order_files(brd):
         for f in sorted(glob.glob(ger + "/*.gbr") + glob.glob(ger + "/*.gbrjob") + glob.glob(ger + "/*.drl")):
             z.write(f, os.path.basename(f))
 
+def plug_edge(brd, edge, clear=0.25, near=0.03, edge_clear=0.5):
+    """A right-angle DIN 41612 plug's row a belongs `edge` mm from the board's edge (PLUG_EDGE: its shroud
+    comes down in front of the board). On a routed board whose plugs sit further in, move them out without
+    routing again: cut the board's copper along one line between the plugs and the first other part, move
+    everything on the plugs' side of it (the plugs, their mounting keepouts, every track and via there) toward
+    the edge, and join each track the line cut with a straight piece across the gap. Nothing else moves, so
+    two things on the same side keep their distance and two on different sides gain some; a joining piece
+    starts at the point where its track crossed the line, which was clear of everything already. The line is
+    one that no via and no track corner comes near. The planes are filled again. Returns the distance moved
+    (mm; 0: nothing to do)."""
+    mm, F, VECTOR2I = pcbnew.ToMM, pcbnew.FromMM, pcbnew.VECTOR2I
+    b = pcbnew.LoadBoard(brd)
+    xs = []
+    for d in b.GetDrawings():                           # the outline's centre line (what DRC measures to)
+        if d.GetLayer() == pcbnew.Edge_Cuts:
+            bx = d.GetBoundingBox(); xs += [bx.GetLeft() + d.GetWidth() // 2, bx.GetRight() - d.GetWidth() // 2]
+    x0 = min(xs)
+    plugs = [f for f in b.GetFootprints() if "DIN41612" in f.GetFPIDAsString() and "Male_Horizontal" in f.GetFPIDAsString()]
+    if not plugs:
+        raise SystemExit("plug_edge: %s has no right-angle DIN 41612 plug" % brd)
+    def row_a(f):
+        return next(p for p in f.Pads() if p.GetNumber() == "a1").GetPosition().x
+    ax = set(row_a(f) for f in plugs)
+    for f in plugs:                                     # on the left edge, row a nearest it
+        c1 = next(p for p in f.Pads() if p.GetNumber() == "c1").GetPosition().x
+        if not row_a(f) < c1:
+            raise SystemExit("plug_edge: %s is not on the left edge with row a outermost" % f.GetReference())
+    if len(ax) != 1:
+        raise SystemExit("plug_edge: the plugs' rows a are not in one line: %s" % sorted(mm(x) for x in ax))
+    dx = x0 + F(edge) - ax.pop()
+    if abs(dx) < F(0.001):
+        print("plug_edge: row a is %.2f mm from the edge already" % edge); return 0
+    if dx > 0:
+        raise SystemExit("plug_edge: the plugs are nearer the edge than %.2f mm: only outward moves are safe" % edge)
+    others = [f for f in b.GetFootprints() if f not in plugs]
+    lo = max(p.GetPosition().x + p.GetSize().x // 2 for f in plugs for p in f.Pads()) + F(clear)
+    hi = min([p.GetPosition().x - max(p.GetSize().x, p.GetSize().y) // 2 for f in others for p in f.Pads()]
+             + [f.GetCourtyard(pcbnew.F_CrtYd).BBox().GetLeft() for f in others if f.GetCourtyard(pcbnew.F_CrtYd).OutlineCount()]) - F(clear)
+    tracks = list(b.GetTracks())
+    if any(t.GetClass() == "PCB_ARC" for t in tracks):
+        raise SystemExit("plug_edge: the board has arcs: not handled")
+    vias = [t for t in tracks if t.GetClass() == "PCB_VIA"]; segs = [t for t in tracks if t.GetClass() == "PCB_TRACK"]
+    keep = [z for z in b.Zones() if z.GetIsRuleArea()]
+    # x ranges the cut line stays out of. A keepout must lie whole on one side. A via or a track's corner
+    # may be as near as it likes (each goes with the side its centre is on, and the argument above holds),
+    # but the line keeps a little off them, so that no piece it cuts is too short to see, and takes the
+    # widest stretch there is
+    marks = []
+    for v in vias: marks.append((v.GetPosition().x - F(near), v.GetPosition().x + F(near)))
+    for t in segs:
+        for q in (t.GetStart(), t.GetEnd()): marks.append((q.x - F(near), q.x + F(near)))
+    for z in keep:
+        bb = z.GetBoundingBox(); marks.append((bb.GetLeft() - F(clear), bb.GetRight() + F(clear)))
+    marks = sorted(m for m in marks if m[1] > lo and m[0] < hi)
+    gaps, at = [], lo                                   # the free stretches of x between lo and hi
+    for a, c in marks:
+        if a > at: gaps.append((at, a))
+        at = max(at, c)
+    if hi > at: gaps.append((at, hi))
+    if not gaps:
+        raise SystemExit("plug_edge: no line between the plugs and the parts is clear of vias and track corners")
+    ga, gc = max(gaps, key=lambda g: g[1] - g[0])
+    X = (ga + gc) // 2
+    # nothing on the plugs' side may come within the edge's clearance once moved
+    left_min = min([min(t.GetStart().x, t.GetEnd().x) - t.GetWidth() // 2 for t in segs if min(t.GetStart().x, t.GetEnd().x) < X]
+                   + [v.GetPosition().x - v.GetWidth(pcbnew.F_Cu) // 2 for v in vias if v.GetPosition().x < X] + [X])
+    if left_min + dx < x0 + F(edge_clear):
+        raise SystemExit("plug_edge: copper at %.2f mm would end %.2f mm from the edge (%.2f needed)"
+                         % (mm(left_min - x0), mm(left_min + dx - x0), edge_clear))
+    D = VECTOR2I(dx, 0); cut = 0
+    for v in vias:
+        if v.GetPosition().x < X: v.Move(D)
+    for t in segs:
+        (ax_, ay_), (cx_, cy_) = sorted(((q.x, q.y) for q in (t.GetStart(), t.GetEnd())))   # (numbers, not the
+        if cx_ < X: t.Move(D); continue                                                    #  track's own points)
+        if ax_ > X: continue
+        yc = ay_ + int(round((cy_ - ay_) * float(X - ax_) / (cx_ - ax_)))
+        t.SetStart(VECTOR2I(X, yc)); t.SetEnd(VECTOR2I(cx_, cy_))           # what stays
+        for p, q in (((ax_ + dx, ay_), (X + dx, yc)), ((X + dx, yc), (X, yc))):   # what moves; the joining piece
+            n = pcbnew.PCB_TRACK(b); n.SetStart(VECTOR2I(*p)); n.SetEnd(VECTOR2I(*q))
+            n.SetWidth(t.GetWidth()); n.SetLayer(t.GetLayer()); n.SetNet(t.GetNet()); b.Add(n)
+        cut += 1
+    for f in plugs: f.Move(D)
+    for z in keep:
+        if z.GetBoundingBox().GetRight() < X: z.Move(D)
+    for d in list(b.GetDrawings()):                     # anything drawn there but the outline (labels are made again)
+        if d.GetLayer() != pcbnew.Edge_Cuts and d.GetBoundingBox().GetRight() < X: d.Move(D)
+    for z in b.Zones():
+        if not z.GetIsRuleArea(): z.UnFill()
+    pcbnew.ZONE_FILLER(b).Fill(b.Zones())
+    pcbnew.SaveBoard(brd, b)
+    print("plug_edge: %d plugs moved %.2f mm to row a %.2f mm from the edge; cut at x = %.2f mm (a clear stretch of %.2f mm), %d tracks joined across it"
+          % (len(plugs), mm(-dx), edge, mm(X - x0), mm(gc - ga), cut))
+    return mm(-dx)
+
 def finish(brd):
     d = os.path.dirname(brd); name = os.path.basename(brd)[:-len(".kicad_pcb")]
     order_files(brd)
@@ -536,6 +632,7 @@ if __name__ == "__main__":
     elif cmd == "heal": heal_unconnected(sys.argv[2])
     elif cmd == "heal_bus": heal_bus_gaps(sys.argv[2])
     elif cmd == "heal_edge": heal_edge_clearance(sys.argv[2])
+    elif cmd == "plug_edge": plug_edge(sys.argv[2], float(sys.argv[3]))
     elif cmd == "placement": placement(sys.argv[2])
     elif cmd == "finish": finish(sys.argv[2])
     else: sys.exit("unknown cmd " + cmd)

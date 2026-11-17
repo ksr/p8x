@@ -17,7 +17,7 @@ memory card as the reference ([hardware/KICAD-BOARDS.md](../hardware/KICAD-BOARD
 |---|---|
 | Board size | 280 × 140 mm, 1.6 mm thickness — the uniform KiCad card size since 2026-09-18 (first planned as a 160 × 100 mm Eurocard); the 140 mm connector edge leaves room beyond the ~94 mm DIN 41612 |
 | Connector | DIN 41612, 3-row 96-pin male, right-angle, on the left board edge as laid out in KiCad; status LEDs on the opposite edge |
-| Connector placement | Pin row spans y = 10.16–88.90 mm; row A nearest board surface — VERIFY against mated orientation before first fab and then freeze the footprint |
+| Connector placement | Pin row spans y = 10.16–88.90 mm; row A nearest board surface — VERIFY against mated orientation before first fab and then freeze the footprint. **Row A is 5.08 mm from the connector edge** (the plug's two mounting holes 2.54 mm from it): a right-angle DIN 41612 plug hangs over the edge and its shroud comes down in front of the board, so with more board than that the plug cannot sit down. `PLUG_EDGE` in `generators/gen_kicad.py`; `pcb-check` fails a board whose row A is more than 5.35 mm in |
 | Component height | ≤ 20 mm (planned for a 1" slot pitch; the KiCad backplane's pitch is 28 mm); nothing on the back side except pin protrusion |
 | Card extraction | Leave 5 mm strip at the front edge (opposite the connector) free of components for a puller/handle; card name visible there |
 | Mounting | No card-level mounting holes required; front strip may take an ejector later — keep it clear |

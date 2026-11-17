@@ -43,7 +43,7 @@ def place(ref, x, y, rot=0):
 if "J1" in footp:
     j = footp["J1"]; j.SetOrientationDegrees(90); j.SetPosition(P(0, 0))
     x0, y0, x1, y1 = GK.pad_bbox(j)
-    j.SetPosition(VECTOR2I(mm(4) - x0, mm(BH/2) - (y0 + y1)//2))
+    j.SetPosition(VECTOR2I(mm(GK.PLUG_EDGE - 2.54) - x0, mm(BH/2) - (y0 + y1)//2))   # (x0: the mounting holes, 2.54 outside row a)
 # two IDE-40 headers on the RIGHT, ~70mm apart in Y (a CF adapter projects ~43x50mm
 # over each header; keep the right column clear so the two adapters don't collide)
 IDEX = 205.0

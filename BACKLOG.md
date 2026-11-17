@@ -530,6 +530,17 @@ remainder is why it is still here.
       pattern, THT solder) and DRY-FIT one card-edge male + one backplane female before
       a full order -- which is why the backplane is ordered first. Coding/keying pins
       are not modelled; decide if wanted.
+      **The plug's distance from the card edge was wrong (found and corrected
+      2026-11-17, before any card was made):** every card had J1's pads "4 mm from the
+      edge", which puts row a 6.54 mm in. KiCad's footprint marks the board edge
+      5.30 mm from row a, in its 3D model the plug's shroud comes down in front of
+      the board from 5.59 mm, and YACC1's cards, which are built, have 5.08 mm: at
+      6.54 the plug could not have sat down on the card. Row a is now 5.08 mm from
+      the edge on all eight cards (`PLUG_EDGE` in `generators/gen_kicad.py`; six
+      routed boards were brought to it with their tracks kept by `kicad_tools.py
+      plug_edge`, the bus-test and I/O cards were routed again), and `pcb-check` has
+      a rule for it (PLUG EDGE). The dry fit above is still the proof: with a plug on
+      a card, its plastic must drop just in front of the board's edge.
 
 - [ ] Order backplane PCB first as the cheap validation article. When ordering,
       choose a 4-layer stackup with ≈ 0.1 mm outer prepreg (design doc §2.1).

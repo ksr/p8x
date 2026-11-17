@@ -14,6 +14,13 @@ renders + gerbers.
 lets components use more rows and keeps the depth down). The backplane is the
 motherboard (262 × 128 mm).
 
+**The plug sits 5.08 mm from the connector edge** (row a; its mounting holes 2.54 mm),
+on every card since 2026-11-17: the cards were first laid out with 6.54 mm, where a
+right-angle DIN 41612 plug's shroud meets the board and the plug cannot sit down
+(`PLUG_EDGE` in `generators/gen_kicad.py`; the routed boards were moved with their
+tracks kept by `kicad_tools.py plug_edge`, except the bus-test and I/O cards, which
+were routed again).
+
 **None of these boards has been fabricated yet.** Each `kicad/` directory holds the
 orderable Gerbers (`p8x-<board>-gerbers.zip`), the DRC report, a placement PDF and
 the renders. The DRC reports list 0 unconnected pads on every board; the remaining
