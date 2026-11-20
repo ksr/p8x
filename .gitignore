@@ -87,10 +87,14 @@ __pycache__/
 /HOUSE.png
 /Mandrill-Image-on-Synthetic-Surface.ppm.png
 
-# hardware/reference/ is a deliberate, curated archive of external datasheets and
-# firmware — keep everything under it tracked despite the global *.zip / binary
-# ignore rules above.
-!hardware/reference/**
+# hardware/reference/ and docs/reference/ hold third-party manuals and firmware.
+# Since 2026-11-20 they live in ../private-resources/p8x/ (same paths), out of this
+# public repository: only the READMEs are tracked here, so a copy brought back is
+# never committed by accident.
+/hardware/reference/*
+!/hardware/reference/README.md
+/docs/reference/*
+!/docs/reference/README.md
 
 # kicad-cli scratch
 logs/
