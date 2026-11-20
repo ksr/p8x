@@ -6,7 +6,7 @@
 #
 #     CYCLES    microcycles to compare          (default 20000)
 #     ROM       alternate ROM image to boot     (default: the monitor,
-#               emulator/eeprom.bin). A path ending in .asm is assembled first,
+#               assembled from firmware/p8xmon.asm). A path ending in .asm is assembled first,
 #               so `./run.sh 60000 isa_test.asm` runs the all-opcode exerciser.
 #     RXSCRIPT  file of console input bytes fed identically to both models, so
 #               the monitor can be driven past its prompt. Both sides use the
@@ -27,27 +27,36 @@ ROM="${2:-}"
 RXS="${3:-}"
 CF="${4:-}"      # CF disk image, attached read-only to both models
 
-# The microcode images and the monitor ROM are build products of the emulator
-# tree, and u0-u3.bin are gitignored -- a fresh clone does not have them. Check
-# before use: without this the first failure is a Python traceback out of
-# mk_ucode_mem.py, which says nothing about what to run.
-for f in u0.bin u1.bin u2.bin u3.bin eeprom.bin; do
-  if [ ! -f "$EMU/$f" ]; then
-    echo "run.sh: $EMU/$f is missing." >&2
-    echo "  The emulator tree builds it. From the repo root:" >&2
-    echo "      cd emulator && make" >&2
+# Microcode: the committed images in microcode/ (genucode.py's output, the same
+# files `make rom` burns). emulator/u0-u3.bin are gitignored local copies, absent
+# from a fresh clone and free to go stale, so the co-sim does not read them.
+UC="$ROOT/microcode"
+for f in u0.bin u1.bin u2.bin u3.bin; do
+  if [ ! -f "$UC/$f" ]; then
+    echo "run.sh: $UC/$f is missing. Rebuild it: cd emulator && make ucode" >&2
     exit 2
   fi
 done
 
+# The RTL sources: the CPU, the SoC, and everything p8x_soc.v instantiates
+# (the SDRAM model and arbiter, and gfx with its gfx_mem). Keep this list in
+# step with p8x_soc.v; a missing module stops iverilog with "Unknown module type".
+RTL=("$ROOT/fpga/rtl/p8x_cpu.v" "$ROOT/fpga/rtl/p8x_soc.v" "$ROOT/fpga/rtl/gfx.v"
+     "$ROOT/fpga/rtl/sdram_model.v" "$ROOT/fpga/tang-nano-20k/sdram/sdram_arb.v"
+     "$ROOT/fpga/tang-nano-20k/sdram/gfx_mem.v" "$HERE/tb_p8x.v")
+
 W="$HERE/work"; mkdir -p "$W"; cd "$W"
 
 # microcode images (built artifacts in emulator/)
-for f in u0.bin u1.bin u2.bin u3.bin; do ln -sf "$EMU/$f" .; done
+for f in u0.bin u1.bin u2.bin u3.bin; do ln -sf "$UC/$f" .; done
 
 # ROM under test: the monitor by default, else the given .bin (or assembled .asm)
 if [ -z "$ROM" ]; then
-  ln -sf "$EMU/eeprom.bin" .
+  # The monitor, assembled from firmware/p8xmon.asm on every run, as
+  # tang-nano-20k/build.sh does: the committed emulator/eeprom.bin is refreshed
+  # only by a board build, so it can lag the source by weeks.
+  rm -f eeprom.bin
+  python3 "$ROOT/assembler/p8xasm.py" "$ROOT/firmware/p8xmon.asm" -o eeprom.bin >/dev/null
 else
   case "$ROM" in /*) src="$ROM";; *) src="$HERE/$ROM";; esac
   [ -f "$src" ] || { echo "run.sh: no such ROM: $src" >&2; exit 2; }
@@ -90,7 +99,7 @@ PY
 fi
 
 # $readmemh init files for the RTL
-python3 "$HERE/mk_ucode_mem.py" "$EMU" ucode.hex >/dev/null
+python3 "$HERE/mk_ucode_mem.py" "$UC" ucode.hex >/dev/null
 python3 - <<'PY'
 b=open("eeprom.bin","rb").read()
 open("eeprom.hex","w").write("".join("%02x\n"%x for x in b))
@@ -100,8 +109,11 @@ PY
 # -N: console RX always empty, matching p8x_soc.v's constant $FF04 = 0x02. Without
 # it the trace depends on what stdin is (a TTY reports no key; a redirected stdin
 # is at EOF, which reads as RDRF set) and the diff is only valid from a terminal.
+# -ng: no GL card fitted, matching p8x_soc.v, which has none: its $FF54 (GLID)
+# floats $FF. The monitor probes GLID at boot (since 2026-09-09); without -ng the
+# emulator answers 'G' and the two models part at the probe, about cycle 101.
 cc -O2 -o p8xemu "$EMU/p8xemu.c"
-./p8xemu -T -N "${EMU_RX[@]+"${EMU_RX[@]}"}" "${EMU_CF[@]+"${EMU_CF[@]}"}" -l "$CYCLES" eeprom.bin >emu.console.raw 2>emu.raw || true
+./p8xemu -T -N -ng "${EMU_RX[@]+"${EMU_RX[@]}"}" "${EMU_CF[@]+"${EMU_CF[@]}"}" -l "$CYCLES" eeprom.bin >emu.console.raw 2>emu.raw || true
 grep -E '^[0-9]' emu.raw > emu.trace
 # Guard: the emulator must respect -l. It used to drop the cycle cap whenever
 # stdin was a TTY, so a -T run launched from a shell streamed a trace line per
@@ -126,8 +138,7 @@ if ! command -v iverilog >/dev/null 2>&1; then
   echo "then re-run.  Emulator golden trace is ready at: $W/emu.trace"
   exit 2
 fi
-iverilog -g2012 -DP8X_TRACE -o sim.vvp \
-  "$ROOT/fpga/rtl/p8x_cpu.v" "$ROOT/fpga/rtl/p8x_soc.v" "$ROOT/fpga/rtl/gfx.v" "$HERE/tb_p8x.v"
+iverilog -g2012 -DP8X_TRACE -o sim.vvp "${RTL[@]}"
 rm -f rtl.console
 vvp sim.vvp +cycles="$CYCLES" "${RTL_RX[@]+"${RTL_RX[@]}"}" "${RTL_CF[@]+"${RTL_CF[@]}"}" +tx=rtl.console \
   | grep -E '^[0-9]' > rtl.trace
@@ -142,7 +153,7 @@ if diff -q emu.cut rtl.cut >/dev/null; then
   echo "PASS: RTL matches emulator for $N cycles"
 else
   echo "DIVERGENCE (first differing cycles):"
-  diff emu.cut rtl.cut | head -20
+  diff emu.cut rtl.cut | head -20 || true   # head closes the pipe early: no SIGPIPE exit under pipefail
   rc=1
 fi
 
@@ -155,7 +166,7 @@ if [ -n "$RXS" ]; then
     echo "PASS: console output identical ($ec bytes)"
   else
     echo "CONSOLE MISMATCH (emulator $ec bytes, RTL $rcn bytes):"
-    diff emu.console rtl.console | head -10
+    diff emu.console rtl.console | head -10 || true
     rc=1
   fi
 fi

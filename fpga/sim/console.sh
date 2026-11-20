@@ -3,7 +3,7 @@
 # Verilog simulation, before any hardware exists.
 #
 #   ./console.sh [ROM] [CFIMAGE]
-#                             ROM defaults to the monitor (emulator/eeprom.bin);
+#                             ROM defaults to the monitor (firmware/p8xmon.asm);
 #                             a .asm path is assembled first, as in run.sh.
 #                             CFIMAGE attaches a disk (a WRITABLE copy), so the
 #                             monitor B command boots the OS: try os/run-disk.img
@@ -15,29 +15,37 @@
 set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 ROOT="$(cd "$HERE/../.." && pwd)"
-EMU="$ROOT/emulator"
 ROM="${1:-}"
 CF="${2:-}"
 
-# The microcode images and the monitor ROM are build products of the emulator
-# tree, and u0-u3.bin are gitignored -- a fresh clone does not have them. Check
-# before use: without this the first failure is a Python traceback out of
-# mk_ucode_mem.py, which says nothing about what to run.
-for f in u0.bin u1.bin u2.bin u3.bin eeprom.bin; do
-  if [ ! -f "$EMU/$f" ]; then
-    echo "console.sh: $EMU/$f is missing." >&2
-    echo "  The emulator tree builds it. From the repo root:" >&2
-    echo "      cd emulator && make" >&2
+# Microcode: the committed images in microcode/ (genucode.py's output, the same
+# files `make rom` burns). emulator/u0-u3.bin are gitignored local copies, absent
+# from a fresh clone and free to go stale, so the co-sim does not read them.
+UC="$ROOT/microcode"
+for f in u0.bin u1.bin u2.bin u3.bin; do
+  if [ ! -f "$UC/$f" ]; then
+    echo "console.sh: $UC/$f is missing. Rebuild it: cd emulator && make ucode" >&2
     exit 2
   fi
 done
 
+# The RTL sources: the CPU, the SoC, and everything p8x_soc.v instantiates
+# (the SDRAM model and arbiter, and gfx with its gfx_mem). Keep this list in
+# step with p8x_soc.v; a missing module stops iverilog with "Unknown module type".
+RTL=("$ROOT/fpga/rtl/p8x_cpu.v" "$ROOT/fpga/rtl/p8x_soc.v" "$ROOT/fpga/rtl/gfx.v"
+     "$ROOT/fpga/rtl/sdram_model.v" "$ROOT/fpga/tang-nano-20k/sdram/sdram_arb.v"
+     "$ROOT/fpga/tang-nano-20k/sdram/gfx_mem.v" "$HERE/tb_p8x.v")
+
 W="$HERE/work"; mkdir -p "$W"; cd "$W"
 
-for f in u0.bin u1.bin u2.bin u3.bin; do ln -sf "$EMU/$f" .; done
+for f in u0.bin u1.bin u2.bin u3.bin; do ln -sf "$UC/$f" .; done
 
 if [ -z "$ROM" ]; then
-  ln -sf "$EMU/eeprom.bin" .
+  # The monitor, assembled from firmware/p8xmon.asm on every run, as
+  # tang-nano-20k/build.sh does: the committed emulator/eeprom.bin is refreshed
+  # only by a board build, so it can lag the source by weeks.
+  rm -f eeprom.bin
+  python3 "$ROOT/assembler/p8xasm.py" "$ROOT/firmware/p8xmon.asm" -o eeprom.bin >/dev/null
 else
   case "$ROM" in /*) src="$ROM";; *) src="$HERE/$ROM";; esac
   [ -f "$src" ] || { echo "console.sh: no such ROM: $src" >&2; exit 2; }
@@ -60,7 +68,7 @@ if [ -n "$CF" ]; then
   RTL_CF=("+cf=disk.img" "+cfrw")
 fi
 
-python3 "$HERE/mk_ucode_mem.py" "$EMU" ucode.hex >/dev/null
+python3 "$HERE/mk_ucode_mem.py" "$UC" ucode.hex >/dev/null
 python3 - <<'PY'
 b=open("eeprom.bin","rb").read()
 open("eeprom.hex","w").write("".join("%02x\n"%x for x in b))
@@ -69,8 +77,7 @@ PY
 command -v iverilog >/dev/null 2>&1 || { echo "iverilog not found (brew install icarus-verilog)"; exit 2; }
 
 # no -DP8X_TRACE: stdout belongs to the console, not the trace
-iverilog -g2012 -o console.vvp \
-  "$ROOT/fpga/rtl/p8x_cpu.v" "$ROOT/fpga/rtl/p8x_soc.v" "$ROOT/fpga/rtl/gfx.v" "$HERE/tb_p8x.v"
+iverilog -g2012 -o console.vvp "${RTL[@]}"
 
 # Char-at-a-time, no echo (the monitor echoes), Enter stays CR. Deliberately NOT
 # `stty raw`: raw also clears ISIG, which would swallow Ctrl-C and leave no way
