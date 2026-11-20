@@ -149,7 +149,7 @@ memory card as the reference ([hardware/KICAD-BOARDS.md](../hardware/KICAD-BOARD
 - [ ] PWR + SEL LEDs present, top-right, buffered per section 9
 - [ ] Gerber + drill reviewed in an independent viewer
 
-## 12. Rules for New Boards (Ken, 2026-10-24, all of his systems)
+## 12. Rules for New Boards (2026-10-24, all systems)
 
 For future work only: they do not apply to any card already built or ordered (no P8X board has been fabricated
 yet). **Always ask Ken before changing a card that might be built, ordered or in production**, for any change.
@@ -186,7 +186,7 @@ Rules the boards follow that are written in other files, not above:
 ## 14. Exceptions (2026-10-24)
 
 None of these is written in the card's schematic notes yet, as the preamble asks. None of the boards has been
-fabricated, so each is either a note to add or a fix to make before ordering: Ken's call.
+fabricated, so each is either a note to add or a fix to make before ordering; which one is still to be decided.
 
 | Card | Rule | How it differs | Source |
 |---|---|---|---|

@@ -17,7 +17,10 @@ their source in `../basic/`, `../os/`, etc.)
 | [mount-drives-design.md](mount-drives-design.md) | Design record for the Unix-style `/D1` mount of the second CF — shipped; kept for the reasoning. |
 | [p8x-two-mode-design.md](p8x-two-mode-design.md) | Two-mode operation: the same OS runs headless-serial OR as a GL graphics desktop (Finder + full-screen apps), selected by a graphics-present flag. Design + phase log (P1–P5 shipped in the emulator). |
 | [p8x-isa-c-extensions.md](p8x-isa-c-extensions.md) | **Design note (not shipped on the disk); Tier A implemented on the emulator 2026-09-11:** ISA additions to shrink `p8cc` output — Tier A pure-microcode ops (`(Pn+d8)` displacement addressing, 16-bit memory-word `LDW`/`STW`/`ADDW`/`SUBW`/`CMPW`/`INCW`/`DECW`, `LDPn #imm16`, `ADDP3`/`SUBP3`), Tier B one hardware register (frame pointer P4), Tier C a 16-bit accumulator — with opcodes, microcode step sketches, projected savings, ripple and open questions. Compiler-only wins (−15.1%) landed first; see BACKLOG. |
+| [p8x-wm-design.md](p8x-wm-design.md) | Design record for the resident window manager: windows that outlive the app, keyboard and mouse-drag input, per-window state across launches. |
 | [p8x-programmers-guide.pdf](p8x-programmers-guide.pdf) | Generated instruction-set reference (built by `../microcode/gen_progguide.py`). |
+| [p8x-isa-card.pdf](p8x-isa-card.pdf) | Printable instruction-set quick reference (GENERATED — `generators/gen_isa_card.py`). |
+| [p8x-memory-map.pdf](p8x-memory-map.pdf) | Printable memory map (GENERATED — `generators/gen_memmap_pdf.py`). |
 
 The **FPGA** track has its own documentation tree rather than living here:
 [`../fpga/README.md`](../fpga/README.md) (milestones + layout),

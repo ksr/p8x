@@ -148,4 +148,4 @@ the decoupling-cap generator pass — are all long done; see BACKLOG-DONE.md.)
    scratch in $1800-$1FFF; move both boundaries to RAMBASE and bring the co-sim
    file list up to date (BACKLOG NEXT). Then Milestone 5 — clock up (currently 9 MHz against a ~50 MHz Fmax,
    three fabric phases per microcycle) and wire IRQ through.
-3. OS: multi-stage pipes (`a | b | c`); a `path` command.
+3. OS: multi-stage pipes (`a | b | c`). (`path` is a built-in since P8X/OS v1.0.)

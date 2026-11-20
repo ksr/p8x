@@ -190,7 +190,8 @@ finishing on each, or the two clones diverge. Commit directly per the project
 workflow; branch only when a feature needs it, and never merge a branch to `main`
 without explicit confirmation.
 
-Claude Code's cross-session memory is **not** part of the repository — it lives
-under `~/.claude/` on each machine — so a fresh Claude Code on another Mac starts
-without those notes. The repository's own documentation (CLAUDE.md, the READMEs,
-BACKLOG.md) travels with the clone and carries the load-bearing facts.
+Claude Code's cross-session memory is kept in the repository, in `docs/memory/`:
+`~/.claude/projects/<flattened path>/memory/` is a symlink to that folder
+(`docs/memory/README.md`). On a new Mac, make the symlink after cloning, or a
+fresh Claude Code starts without those notes. The rest of the repository's
+documentation (CLAUDE.md, the READMEs, BACKLOG.md) carries the load-bearing facts.
