@@ -190,8 +190,9 @@ finishing on each, or the two clones diverge. Commit directly per the project
 workflow; branch only when a feature needs it, and never merge a branch to `main`
 without explicit confirmation.
 
-Claude Code's cross-session memory is kept in the repository, in `docs/memory/`:
-`~/.claude/projects/<flattened path>/memory/` is a symlink to that folder
-(`docs/memory/README.md`). On a new Mac, make the symlink after cloning, or a
-fresh Claude Code starts without those notes. The rest of the repository's
+Claude Code's cross-session memory is kept out of this public repository, in
+the private `private-resources` repository beside it (`p8x/memory/`, since
+2026-11-20): `~/.claude/projects/<flattened path>/memory/` is a symlink to that
+folder, and its README has the commands. On a new Mac, clone `private-resources`
+and make the symlink, or a fresh Claude Code starts without those notes. The rest of the repository's
 documentation (CLAUDE.md, the READMEs, BACKLOG.md) carries the load-bearing facts.

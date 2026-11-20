@@ -479,7 +479,7 @@ remainder is why it is still here.
       `$1800-$1FFF` island and brought the OS scratch down to $5700, which is
       what made the TPA bigger and the OS ceiling lower. Growing the OS now means
       moving the OS scratch band up (and TPABASE with it — a flag day, see
-      `docs/memory/reference_p8x_tpabase.md`), or moving code out to `/bin`.
+      Claude's memory note `reference_p8x_tpabase.md`), or moving code out to `/bin`.
 
 - [ ] **History persistence (optional).** The history ring is RAM-only (cleared at
       cold start). If cross-session history is wanted, add explicit `history -w
@@ -1182,7 +1182,7 @@ Nothing below has been built or measured.
       materialised then re-tested; global scalars tested in place). Measured
       with the new `tools/p8cc_sizes.sh` over ALL 45 /bin C commands:
       **627,172 → 532,728 bytes (−94,444, −15.1%)**, best `del`/`awk` −23.6%,
-      `finder` −18%. Compares stay UNSIGNED on purpose (see docs/memory).
+      `finder` −18%. Compares stay UNSIGNED on purpose (int is used as unsigned).
       **Remaining:** port both levers to the self-hosting compilers
       (`compiler/p8cc.c`, `apps/p8xcc.asm`) so on-target `cc` builds shrink too;
       the ISA sketch that follows is in `docs/p8x-isa-c-extensions.md`.

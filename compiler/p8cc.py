@@ -70,7 +70,7 @@ Codegen size levers (2026-09-11, -15.1% across the 45 /bin commands):
     a 0/1 in __ax and testing it: one JC/JNC/JZ/JNZ per relation, with the
     polarity folded (RELOPS table). Compares are UNSIGNED, as the value-
     producing __lt/__gt helpers always were (int is used as unsigned; see
-    docs/memory). A global scalar in a condition is tested in place.
+    the compiler's notes). A global scalar in a condition is tested in place.
   * Runtime helpers are only emitted if named in emit_runtime's `order` list.
   Measure with `sh tools/p8cc_sizes.sh` (per-command bytes + TOTAL).
 

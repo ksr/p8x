@@ -89,8 +89,8 @@ yet; the same microarchitecture also runs as an FPGA build (fpga/).
      line; do not add credit claims elsewhere.
    - A voice edit changes voice only: keep every fact, number, date, hash, path
      and link.
-   Exempt: this CLAUDE.md, commit messages, `docs/memory/` (a deliberate mirror
-   of Claude's memory notes), any `deprecated/`, `parked/` or `eagle-deprecated/`
+   Exempt: this CLAUDE.md, commit messages, Claude's memory notes (in
+   `../private-resources/p8x/memory/` since 2026-11-20, out of this public repo), any `deprecated/`, `parked/` or `eagle-deprecated/`
    tree, `logs/`, third-party files, and generated files (fix prose in a
    generated file by editing its generator — rule 1).
 
