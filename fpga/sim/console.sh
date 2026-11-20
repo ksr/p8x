@@ -77,7 +77,7 @@ PY
 command -v iverilog >/dev/null 2>&1 || { echo "iverilog not found (brew install icarus-verilog)"; exit 2; }
 
 # no -DP8X_TRACE: stdout belongs to the console, not the trace
-iverilog -g2012 -o console.vvp "${RTL[@]}"
+iverilog -g2012 -I "$ROOT/fpga/rtl" -o console.vvp "${RTL[@]}"
 
 # Char-at-a-time, no echo (the monitor echoes), Enter stays CR. Deliberately NOT
 # `stty raw`: raw also clears ISIG, which would swallow Ctrl-C and leave no way

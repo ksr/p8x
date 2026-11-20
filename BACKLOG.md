@@ -30,24 +30,28 @@ remainder is why it is still here.
       code, so test-validated (the `/d1` mount tests). Or decide the card goes back
       to one port.
 
-- [ ] **FPGA RTL write-protects `$0000-$1FFF`, the map says ROM ends at `$17FF`
-      (found 2026-10-02).** `fpga/tang-nano-20k/rtl/p8x_top.v` (the `cpu`/`lcd`
-      board builds) and `fpga/rtl/p8x_soc.v` (the co-sim SoC) write RAM only for
-      `mem_addr >= $2000`; since the 2026-09-14 ROM shrink the emulator (`RAMBASE`
-      `$1800`), the firmware and the OS keep scratch in `$1800-$1FFF` (`IBUF`,
-      `SBUF $1D00`, the BIOS block at `$1F00` incl. the monitor line buffer). Move
-      both boundaries to `RAMBASE` (`$1800`), then re-run the co-sims and rebuild +
-      reflash the board. Related: `fpga/sim/run.sh` does not elaborate today --
-      `p8x_soc.v` instantiates `sdram_model`/`sdram_arb`/`gfx_mem`, which are not in
-      its iverilog file list -- so the co-sim harness needs its sources brought up
-      to date first.
-      **Planned for the evening of 2026-10-03, with the Tang Nano at hand.** Steps:
-      (1) gen_memmap.py also emits `memmap.vh`; both RTL files `include` it and test
-      `RAMBASE` instead of `16'h2000`; (2) the co-sim file list; all three co-sims
-      green; (3) rebuild the `cpu` (+ `lcd`) bitstreams with the current firmware;
-      (4) load the board: the monitor takes commands, the OS boots. Unaffected
-      meanwhile: `p8x_cpu.fs` (built 2026-09-12 with the old 8K firmware, consistent)
-      and the graphics-card personality (`card`, no CPU on chip).
+- [~] **FPGA RTL write-protects `$0000-$1FFF`, the map says ROM ends at `$17FF`
+      (found 2026-10-02; RTL fixed 2026-11-20, the board still to rebuild).**
+      `fpga/tang-nano-20k/rtl/p8x_top.v` (the `cpu`/`lcd` board builds) and
+      `fpga/rtl/p8x_soc.v` (the co-sim SoC) wrote RAM only for `mem_addr >= $2000`;
+      since the 2026-09-14 ROM shrink the emulator (`RAMBASE` `$1800`), the firmware
+      and the OS keep scratch in `$1800-$1FFF` (`IBUF`, `SBUF $1D00`, the BIOS block
+      at `$1F00` incl. the monitor line buffer).
+      - **Done 2026-11-20:** (1) `gen_memmap.py` also emits `fpga/rtl/memmap.vh`
+        (`MM_<NAME>` macros); both RTL files `include` it and write RAM for
+        `MM_RAMBASE..MM_IOBASE-1`, and `p8x_soc.v` copies its ROM image only below
+        `MM_RAMBASE`; (2) the co-sim harness elaborates again (its file list has
+        `sdram_model`/`sdram_arb`/`gfx_mem`; it reads `microcode/`, assembles the
+        monitor from source and runs the emulator with `-ng`). All three co-sims
+        green: `run.sh 20000` (20000 cycles), `run.sh 60000 isa_test.asm`, and
+        `run.sh 200000 "" console_in.txt` (200000 cycles, console identical, 1385
+        bytes). The `cpu` target's sources elaborate under iverilog.
+      - **Open, with the Tang Nano at hand:** (3) rebuild the `cpu` (+ `lcd`)
+        bitstreams with the current firmware (`build.sh cpu`; needs oss-cad-suite);
+        (4) load the board: the monitor takes commands, the OS boots. Until then the
+        committed `p8x_cpu.fs` (built 2026-09-12 with the old 8K firmware) stays
+        consistent; the graphics-card personality (`card`, no CPU on chip) is
+        unaffected.
 
 - [~] **Hand-asm: from-scratch redesigns on the Tier A ISA (2026-09-12).**
       `tools/tierA_rewrite.py` only covered the idioms it could prove safe;

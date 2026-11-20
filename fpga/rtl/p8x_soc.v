@@ -12,11 +12,15 @@
 //                  address does not consume the byte twice
 //   $FF05 write -> console byte out (tx_stb/tx_byte; the testbench logs it)
 //   $FF06 write -> raise maskable IRQ
-//   writes below $2000 (ROM) ignored; $2000..$FEFF is RAM.
+//   writes below RAMBASE (ROM) ignored; RAMBASE..$FEFF is RAM. RAMBASE and
+//   IOBASE come from memmap.vh (generators/gen_memmap.py), as in the emulator:
+//   RAM starts at $1800 since the 6K ROM (2026-09-14).
+
+`include "memmap.vh"
 
 module p8x_soc #(
   parameter UCODE_HEX = "ucode.hex",
-  parameter MEM_HEX   = "eeprom.hex"     // 8K monitor image -> mem[0..8191]
+  parameter MEM_HEX   = "eeprom.hex"     // monitor image; mem[0..RAMBASE-1] (ROM)
 )(
   input  clk,
   input  rst,
@@ -145,9 +149,9 @@ module p8x_soc #(
     .mem_rd(mem_rd),
     .irq_set(irq_set), .halted(halted));
 
-  // writes: RAM only ($2000..$FEFF); ROM + I/O side effects are no-ops here
+  // writes: RAM only (RAMBASE..$FEFF); ROM + I/O side effects are no-ops here
   always @(posedge clk) begin
-    if (mem_we && mem_addr >= 16'h2000 && mem_addr < 16'hFF00)
+    if (mem_we && mem_addr >= `MM_RAMBASE && mem_addr < `MM_IOBASE)
       mem[mem_addr] <= mem_dout;
   end
 
@@ -160,6 +164,8 @@ module p8x_soc #(
     for (j = 0; j < 8192;  j = j + 1) romimg[j] = 8'h00; // short ROMs pad with 0, not x
     $readmemh(UCODE_HEX, ucode);
     $readmemh(MEM_HEX, romimg);
-    for (j = 0; j < 8192;  j = j + 1) mem[j] = romimg[j];
+    // only the ROM part: RAMBASE.. is RAM and starts zero, as the emulator's
+    // (it serves its ROM image only below RAMBASE)
+    for (j = 0; j < `MM_RAMBASE; j = j + 1) mem[j] = romimg[j];
   end
 endmodule

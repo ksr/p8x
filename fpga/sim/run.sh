@@ -138,7 +138,7 @@ if ! command -v iverilog >/dev/null 2>&1; then
   echo "then re-run.  Emulator golden trace is ready at: $W/emu.trace"
   exit 2
 fi
-iverilog -g2012 -DP8X_TRACE -o sim.vvp "${RTL[@]}"
+iverilog -g2012 -DP8X_TRACE -I "$ROOT/fpga/rtl" -o sim.vvp "${RTL[@]}"
 rm -f rtl.console
 vvp sim.vvp +cycles="$CYCLES" "${RTL_RX[@]+"${RTL_RX[@]}"}" "${RTL_CF[@]+"${RTL_CF[@]}"}" +tx=rtl.console \
   | grep -E '^[0-9]' > rtl.trace

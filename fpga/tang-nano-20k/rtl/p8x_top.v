@@ -28,6 +28,8 @@
 // Writes land in phase 2 alongside the commit, so a read earlier in the same
 // microcycle still returns the pre-write byte, exactly as in p8x_soc.v.
 
+`include "memmap.vh"   // RAMBASE / IOBASE (generators/gen_memmap.py; read with -I../rtl)
+
 module p8x_top(
   input        clk,        // 27 MHz (pin 4)
   input        uart_rx,    // from host (pin 70)
@@ -149,8 +151,9 @@ module p8x_top(
   reg [7:0] mem_q;
   always @(posedge clk) begin
     if (ph == 2'd1) mem_q <= mem[mem_a];
-    // ROM ($0000..$1FFF) write-protected, $FF00.. is I/O -- as in the emulator
-    if (cen && mem_we && mem_a >= 16'h2000 && mem_addr < 16'hFF00)
+    // ROM ($0000..RAMBASE-1) write-protected, IOBASE.. is I/O -- as in the
+    // emulator; both from memmap.vh (RAM starts at $1800 since the 6K ROM)
+    if (cen && mem_we && mem_a >= `MM_RAMBASE && mem_addr < `MM_IOBASE)
       mem[mem_a] <= mem_dout;
   end
 
