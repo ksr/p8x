@@ -141,32 +141,70 @@ idx += ["| [%s](%s.md) | %s |" % (k, k, cell(entries[k])) for k in names if k in
 write("commands/index.md", idx); n += 1
 print("manual pages: %d (%d libraries)" % (len(names), len([k for k in names if k in libraries])))
 
-# --- board renders (KiCad, hardware/BOARD/kicad/*-render-{3d,top}.png; 1768 px, transparent background), resized for
-# the web, and the 3D view shown at the top of each board's page with a link to the top view
-from PIL import Image
+# --- each board's picture: its KiCad renders (hardware/BOARD/kicad/*-render-{3d,top}.png; 1768 px, transparent
+# background), cut to the board and resized for the web. The 3D view goes at the top of the board's own page, the top
+# view at the top of its theory and KiCad pages (Ken, 2026-11-23: a photo when there is one, else a render, and the
+# caption says which). A photo of a built board, hardware/BOARD/photos/*.jpg, takes the renders' place by itself.
+from PIL import Image, ImageOps
 BOARD_PAGE = {"backplane": "p8x-backplane-design.md", "bustest-card": "p8x-bustest-card-design.md"}
-renders = 0
+# KICAD-BOARDS.md says so of them all; when that sentence goes, the captions stop saying it
+NOT_BUILT = ", not built" if "None of these boards has been fabricated yet" in open(
+    os.path.join(REPO, "hardware", "KICAD-BOARDS.md"), encoding="utf-8").read() else ""
+renders = photos = 0
+
+
+def put_picture(page, alt, src, width, caption):
+    """A picture with its caption under the page's title (the page is in stage/; src is a stage path)."""
+    path = os.path.join(OUT, page)
+    if not os.path.exists(path): return
+    md = open(path, encoding="utf-8").read().split("\n")
+    h1 = next((i for i, l in enumerate(md) if l.startswith("# ")), -1)
+    md[h1 + 1:h1 + 1] = ["", "![%s](%s){ width=\"%d\" }" % (alt, os.path.relpath(src, os.path.dirname(page)), width),
+                         "", "*%s*" % caption, ""]
+    open(path, "w", encoding="utf-8").write("\n".join(md))
+
+
 for b in BOARDS:
+    staged = {}
     for view in ("3d", "top"):
-        src = os.path.join(REPO, "hardware", b, "kicad", "p8x-%s-render-%s.png" % (b, view))
+        rel = "hardware/%s/kicad/p8x-%s-render-%s.png" % (b, b, view)
+        src = os.path.join(REPO, rel)
         if not os.path.exists(src): continue
-        im = Image.open(src)
+        im = Image.open(src).convert("RGBA")
+        solid = im.getchannel("A").point(lambda a: 255 if a > 128 else 0).getbbox()     # without the faint shadow
+        if solid: im = im.crop(solid)
         # every card is shown with its bus connector at the bottom (Ken, 2026-10-27): the boards have the DIN 41612
         # on their left edge, so the cards' renders are turned a quarter turn anticlockwise (the backplane is not a card)
         if b != "backplane": im = im.rotate(90, expand=True)
-        im.thumbnail((1000, 1000))
-        dst = os.path.join(OUT, "hardware", b, "kicad", os.path.basename(src))
+        im.thumbnail((1200, 1200))
+        dst = os.path.join(OUT, rel)
         os.makedirs(os.path.dirname(dst), exist_ok=True)
         im.quantize(256, method=Image.Quantize.FASTOCTREE).save(dst, optimize=True)
+        staged[view] = rel
         renders += 1; n += 1
-    page = os.path.join(OUT, "hardware", b, BOARD_PAGE.get(b, "README.md"))
-    if os.path.exists(page) and os.path.exists(os.path.join(OUT, "hardware", b, "kicad", "p8x-%s-render-3d.png" % b)):
-        md = open(page, encoding="utf-8").read().split("\n")
-        h1 = next((i for i, l in enumerate(md) if l.startswith("# ")), -1)
-        figure = ["", "![%s, KiCad 3D render](kicad/p8x-%s-render-3d.png)" % (md[h1][2:].strip(), b), "",
-                  "*The board as routed in KiCad (3D render; [top view](kicad/p8x-%s-render-top.png)).*" % b]
-        md[h1 + 1:h1 + 1] = figure
-        open(page, "w", encoding="utf-8").write("\n".join(md))
+    own = "hardware/%s/%s" % (b, BOARD_PAGE.get(b, "README.md"))
+    others = ["hardware/%s/p8x-%s-theory.md" % (b, b), "hardware/%s/kicad/README.md" % b]
+    others = [p for p in others if p != own]
+    name = b.replace("-", " ")
+    found = sorted(glob.glob(os.path.join(REPO, "hardware", b, "photos", "*.jpg")))
+    if found:
+        rel = os.path.relpath(found[0], REPO)
+        im = ImageOps.exif_transpose(Image.open(found[0]))
+        im.thumbnail((1400, 1400))
+        os.makedirs(os.path.dirname(os.path.join(OUT, rel)), exist_ok=True)
+        im.convert("RGB").save(os.path.join(OUT, rel), quality=85, optimize=True)
+        photos += 1; n += 1
+        for page in [own] + others: put_picture(page, "Photo: the %s" % name, rel, 420, "Photo: the built %s" % name)
+        continue
+    wide = 600 if b == "backplane" else 420
+    if "3d" in staged:
+        link = " [Top view](%s)." % os.path.relpath(staged["top"], os.path.dirname(own)) if "top" in staged else ""
+        put_picture(own, "KiCad 3D render of the %s" % name, staged["3d"], wide,
+                    "KiCad 3D render%s: the board as routed.%s" % (NOT_BUILT, link))
+    if "top" in staged:
+        for page in others:
+            put_picture(page, "KiCad render of the %s" % name, staged["top"], wide if b == "backplane" else 360,
+                        "KiCad render%s: the board as routed, from above." % NOT_BUILT)
 # the assembled-machine renders (hardware/assembly/*.png, 2400 px, from generators/render_assembly.py), resized for
 # the web; their gradient background bands at 256 colours, so they are dithered. hardware/assembly/README.md shows them
 for src in sorted(glob.glob(os.path.join(REPO, "hardware", "assembly", "*.png"))):
@@ -177,5 +215,5 @@ for src in sorted(glob.glob(os.path.join(REPO, "hardware", "assembly", "*.png"))
     pal = im.quantize(256, method=Image.Quantize.FASTOCTREE)
     im.quantize(palette=pal, dither=Image.Dither.FLOYDSTEINBERG).save(dst, optimize=True)
     renders += 1; n += 1
-print("board renders: %d" % renders)
+print("board renders: %d, photos: %d" % (renders, photos))
 print("staged %d files" % n)

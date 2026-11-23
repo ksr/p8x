@@ -4,7 +4,7 @@ becomes a link to that file on GitHub; an image that is not part of the site is 
 A link to a directory goes to that directory's README page when the site has one, otherwise to the directory on
 GitHub.
 It also adds a "KiCad board" item to each board's menu under Hardware (on_config)."""
-import os, posixpath, re
+import glob, os, posixpath, re, subprocess
 from urllib.parse import unquote
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))   # the repository this folder is in
@@ -102,3 +102,13 @@ def on_page_markdown(markdown, page, config, files):
 def on_post_build(config):
     print("hooks: %d links to files outside the site now point at GitHub (%s); %d links to directories or renamed "
           "files go to their site page" % (stats["github"], BRANCH, stats["readme"]))
+    for p in sorted(glob.glob(os.path.join(REPO, "hardware", "*", "kicad", "*-render-*.png"))):
+        boards = glob.glob(os.path.join(os.path.dirname(p), "*.kicad_pcb"))
+        if boards and 0 < committed(p) < max(committed(b) for b in boards):
+            print("hooks: %s is older than its board: render it again" % os.path.relpath(p, REPO))
+
+
+def committed(path):
+    """When a file was last committed (seconds), 0 when it never was."""
+    r = subprocess.run(["git", "-C", REPO, "log", "-1", "--format=%ct", "--", path], capture_output=True, text=True)
+    return int(r.stdout.strip() or 0)
