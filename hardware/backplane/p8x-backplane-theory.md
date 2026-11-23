@@ -1,6 +1,6 @@
 # Backplane — Theory of Operation
 
-The backplane is the P8X's **passive motherboard**: ten 96-pin DIN 41612 slots
+The backplane is the P8X's **passive motherboard**: eight 96-pin DIN 41612 slots
 wired in parallel, plus power distribution, data-bus pull-ups, clock termination
 (provisioned but DNP), and decoupling. It contains **no active logic** — every
 slot sees the same bus, and the cards plugged into it do all the work. Its theory
@@ -70,11 +70,11 @@ signals — slot position is electrically irrelevant (mechanical layout aside).
 ```
         +5V ─► J11 ─┬─ C11/C12 470µF bulk ─┬───────── VCC rail ───────────────┐
                     │                       │                                  │
-                    │   per-slot 100nF: C1..C10 across VCC/GND at each slot    │
+                    │   per-slot 100nF: C1..C8 across VCC/GND at each slot     │
                     ▼                                                          ▼
    ┌────────┐  ┌────────┐  ┌────────┐            ┌────────┐    RN1 8×10k pull-ups
-   │ SLOT 1 │  │ SLOT 2 │  │ SLOT 3 │   ...      │ SLOT 10│    on D0..D7 ─► VCC
-   │  J1    │══│  J2    │══│  J3    │════════════│  J10   │
+   │ SLOT 1 │  │ SLOT 2 │  │ SLOT 3 │   ...      │ SLOT 8 │    on D0..D7 ─► VCC
+   │  J1    │══│  J2    │══│  J3    │════════════│  J8    │
    └────────┘  └────────┘  └────────┘            └────────┘
         ║           ║           ║      (every pin bused in parallel)
         ╚═══════════╩═══════════╩═══════ 96-pin DIN 41612 bus ═══════════════►
@@ -91,7 +91,7 @@ signals — slot position is electrically irrelevant (mechanical layout aside).
 ### 4.1 Power distribution
 +5 V enters at terminal block `J11` onto the VCC rail; GND likewise. Two 470 µF
 electrolytics (`C11/C12`) provide **bulk** charge near the entry for the whole
-backplane, and a 100 nF ceramic (`C1–C10`) sits across VCC/GND **at every slot** so
+backplane, and a 100 nF ceramic (`C1–C8`) sits across VCC/GND **at every slot** so
 each card has local high-frequency bypass right at its connector. (Each card *also*
 carries its own per-IC decoupling — see the card standards.) `LED1` (via `R1`)
 indicates power-on.
