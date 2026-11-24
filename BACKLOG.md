@@ -1766,6 +1766,18 @@ Nothing below has been built or measured.
 
 ## VERIFY
 
+- **Decide before the first board order** (held 2026-11-23: no P8X board is being
+  ordered yet).
+    - **bustest-card D1**: its own diode footprint and a re-route (details below).
+    - **Thermal reliefs on the GND and VCC planes**, all nine boards: pins join the
+      planes solidly, chosen so the planes stay in one piece, but harder to solder by
+      hand. Keep, or change `SetPadConnection` in the generators.
+    - **Parts to buy**: the io-card's 8-segment LED bars and the PS/2 sockets; their
+      footprints wait on the choice (details below).
+    - Smaller `pcb-check` warnings to look at: no power LED found on the bus test and
+      PS/2 cards (both have a 5 V LED under another name or circuit: confirm), and 17
+      layers in each order zip that a fab does not use.
+
 - **Footprint substitutions: geometry and pin order, not just "it routes"**
   (2026-10-24). The board check lists every SUB footprint but still passes, and
   two were wrong: the bus test card's Pico was a 2x20 pin header (rows 2.54 mm
