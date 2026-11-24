@@ -59,44 +59,44 @@ and documentation.
 
 <div class="grid cards" markdown>
 
--   ![Control / microcode card, KiCad 3D render](hardware/control-card/kicad/p8x-control-card-render-3d.png)
+-   ![Control / microcode card, KiCad render](hardware/control-card/kicad/p8x-control-card-render-top.png)
 
     **[Control / microcode](hardware/control-card/README.md)** — the clock, reset and front-panel run controls, the
     instruction register, and the microcode engine that drives every other card over the backplane.
 
--   ![Register bank card, KiCad 3D render](hardware/regbank-card/kicad/p8x-regbank-card-render-3d.png)
+-   ![Register bank card, KiCad render](hardware/regbank-card/kicad/p8x-regbank-card-render-top.png)
 
     **[Register bank](hardware/regbank-card/README.md)** — the four 16-bit pointer registers, built from 74169
     up/down counters; there is no separate memory address register.
 
--   ![ALU card, KiCad 3D render](hardware/alu-card/kicad/p8x-alu-card-render-3d.png)
+-   ![ALU card, KiCad render](hardware/alu-card/kicad/p8x-alu-card-render-top.png)
 
     **[ALU](hardware/alu-card/README.md)** — the A and B registers, two hidden temporaries for the microcode, the
     74181 ALU, the shifter and the flags.
 
--   ![Memory card, KiCad 3D render](hardware/memory-card/kicad/p8x-memory-card-render-3d.png)
+-   ![Memory card, KiCad render](hardware/memory-card/kicad/p8x-memory-card-render-top.png)
 
     **[Memory](hardware/memory-card/README.md)** — the ROM and RAM and their address decode.
 
--   ![I/O card, KiCad 3D render](hardware/io-card/kicad/p8x-io-card-render-3d.png)
+-   ![I/O card, KiCad render](hardware/io-card/kicad/p8x-io-card-render-top.png)
 
     **[I/O](hardware/io-card/README.md)** — switches, LEDs, the serial ports, and a bus monitor of LEDs that shows
     the machine at work.
 
--   ![CF-IDE card, KiCad 3D render](hardware/cf-card/kicad/p8x-cf-card-render-3d.png)
+-   ![CF-IDE card, KiCad render](hardware/cf-card/kicad/p8x-cf-card-render-top.png)
 
     **[CF-IDE](hardware/cf-card/README.md)** — two CompactFlash drives in 8-bit True IDE mode, in the I/O page.
 
--   ![PS/2 card, KiCad 3D render](hardware/ps2-card/kicad/p8x-ps2-card-render-3d.png)
+-   ![PS/2 card, KiCad render](hardware/ps2-card/kicad/p8x-ps2-card-render-top.png)
 
     **[PS/2](hardware/ps2-card/README.md)** — a keyboard port and a mouse port at `$FF58`–`$FF5F`.
 
--   ![Backplane, KiCad 3D render](hardware/backplane/kicad/p8x-backplane-render-3d.png)
+-   ![Backplane, KiCad render](hardware/backplane/kicad/p8x-backplane-render-top.png)
 
     **[Backplane](hardware/backplane/p8x-backplane-design.md)** — eight slots on a passive 96-pin bus that carries the
     microcode control word itself ([bus definition](hardware/backplane/p8x-bus-definition.md)).
 
--   ![Bus test card, KiCad 3D render](hardware/bustest-card/kicad/p8x-bustest-card-render-3d.png)
+-   ![Bus test card, KiCad render](hardware/bustest-card/kicad/p8x-bustest-card-render-top.png)
 
     **[Bus test card](hardware/bustest-card/p8x-bustest-card-design.md)** — a USB-attached card that sits where the
     control card would and drives the bus one microcycle at a time, to bring up each card on its own.
