@@ -66,7 +66,7 @@ VIEWS = [
      ["--rotate", "-45,0,-20", "--zoom", "0.68", "--perspective", "--floor",
       "-w", "2400", "-h", "1600"]),
     ("p8x-assembly-render-low.png",    # low view along the slots: connectors and seating
-     ["--rotate", "-65,0,-25", "--zoom", "0.72", "--perspective", "-w", "2400", "-h", "1600"]),
+     ["--rotate", "-65,0,-25", "--zoom", "0.66", "--perspective", "-w", "2400", "-h", "1600"]),
     ("p8x-assembly-render-side.png",   # orthographic elevation looking along the sockets
      ["--rotate", "-90,0,0", "--zoom", "0.8", "-w", "1800", "-h", "1600"]),
 ]

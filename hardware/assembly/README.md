@@ -46,7 +46,7 @@ the left end of the backplane (silkscreen `SLOT 1`), away from the power entry.
   row a of the socket.
 - **Seating.** The cards are fully mated: the top face of each female socket
   (11.6 mm above the backplane) meets the inner face of the card connector's shroud.
-  That puts the card's lower edge 11.35 mm above the backplane surface.
+  That puts the card's lower edge 12.81 mm above the backplane surface.
 - **Overhang.** The 140 mm card edge is longer than the 128 mm backplane, and the
   connector is centred on the card but not on the backplane, so each card extends
   8 mm past one end of the backplane and 4 mm past the other.
