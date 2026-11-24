@@ -201,7 +201,7 @@
   (symbol (lib_id "p8x:ATMEGA1284") (at 342.90 266.70 0) (unit 1) (in_bom yes) (on_board yes) (dnp no)
     (uuid "84e1bbf1-d819-5eaf-b614-6c63d058cecb")
     (property "Reference" "U13" (at 332.74 229.76 0) (effects (font (size 1.27 1.27)) (justify left)))
-    (property "Value" "PS/2 MCU" (at 332.74 301.10 0) (effects (font (size 1.27 1.27)) (justify left)))
+    (property "Value" "ATmega1284P" (at 332.74 301.10 0) (effects (font (size 1.27 1.27)) (justify left)))
     (property "Footprint" "Package_DIP:DIP-40_W15.24mm" (at 342.90 266.70 0) (effects (font (size 1.27 1.27)) hide))
     (property "Datasheet" "" (at 342.90 266.70 0) (effects (font (size 1.27 1.27)) hide))
     (pin "1" (uuid "1aca07a2-8c26-524c-a47d-995d65b8a6f7"))

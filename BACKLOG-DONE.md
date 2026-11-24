@@ -2,6 +2,26 @@
 
 <!-- migrated from BACKLOG.md 2026-09-14 (category review: [x] done items belong here) -->
 
+- [x] **Board rules of November, every board (2026-11-23).** All silkscreen text on the
+      eight cards is at 270°, upright with the card standing connector down (rule of
+      2026-11-18; it was all at 0°; the backplane lies flat and keeps 0°). Every part's
+      type or value is printed (rule of 2026-11-02; the 100 nF capacitors and the
+      connectors had none), and no silk text is under 0.8 mm. KiCad draws a footprint's
+      field at 270° as 90°, upside down, while "keep upright" is on, although the
+      stored angle reads 270: found in the 3D render, so `check_card.sh` check 7
+      measures the angle as drawn.
+      ALU card: 23 spare inputs (U17 D4, U22 sections 3-4, U28/U29/U30 sections 2-4) to
+      GND; the pads join the inner plane. PS/2 card: both sockets moved from the bottom
+      edge to the front edge with the LEDs, routed again. U17, U4 and U13 carry their
+      part type as the value, as every other chip (74HCT175, 74HCT688, ATmega1284P).
+      `generators/refresh_board.py` applies the silkscreen and plane ties to a routed
+      board, tracks kept: needed because the six cards whose plug was moved on
+      2026-11-17 have a `.ses` from before the move, so `REUSE_ROUTE` would break them.
+      Compared with the boards before: ALU 23 pads changed and no track; PS/2 routed
+      again; the other seven no pad and no track changed. `check_card.sh` PASS and
+      `pcb-check` no failures on all nine; schematic ERC 0 and netlist = ours (ALU,
+      PS/2, memory); `check_artifacts.py` OK.
+
 - [x] **Bypass capacitors on 0.1-inch leads, every board (2026-11-07).** Board rule
       of the same date: 100 nF bypass capacitors take 0.1-inch (2.54 mm) leads, never
       5 mm. gen_eagle's `C_DISC1` was already 0.1-inch, but the KiCad generators

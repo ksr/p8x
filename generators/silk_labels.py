@@ -1,19 +1,22 @@
 """silk_labels.py -- the silkscreen labelling pass shared by every board generator.
 
-Board rules (docs/p8x-card-standards.md section 12, 2026-10-24):
+Board rules (docs/p8x-card-standards.md sections 8 and 12):
   * every reference (U12, R3, ...) stays readable with the parts fitted: printed
-    OUTSIDE every part's courtyard, never under a chip, socket or module; an IC
-    gets its type (74HCT374, ...) printed beside it;
+    OUTSIDE every part's courtyard, never under a chip, socket or module, with the
+    part's type or value (74HCT374, 1K, 100n, ...) beside it (2026-11-02);
   * every switch, button and LED carries its function (RESET, STEP, ...), and each
-    switch / jumper position what it selects.
+    switch / jumper position what it selects;
+  * all text reads upright with the card standing connector down (2026-11-18). The
+    bus connector is on the left as drawn, so a card's text is at 270 degrees; the
+    backplane lies flat and keeps 0.
 
-label_board() owns the Reference fields (re-placed, horizontal, on F.SilkS), hides
-the Value fields, and adds PCB_TEXT items for IC types, passive values, function
-labels and position labels. Free silk text a generator already placed is kept and
-treated as an obstacle. Each block is tried at candidate spots around the part
-(above, below, right, left, then further out, then stacked, then smaller) and the
-first spot clear of every courtyard, pad, placed text and the board edge wins.
-Returns the refs it could not place cleanly (the caller prints them).
+label_board() owns the Reference fields (re-placed, on F.SilkS), hides the Value
+fields, and adds PCB_TEXT items for types, values, function labels and position
+labels. Free silk text a generator already placed is kept and treated as an
+obstacle. Each block is tried at candidate spots around the part (above, below,
+right, left, then further out, then stacked, then smaller) and the first spot clear
+of every courtyard, pad, placed text and the board edge wins. Returns the refs it
+could not place cleanly (the caller prints them).
 
 title_block() prints the board's name + revision and cottageworker.com (every
 card of every system, 2026-10-26); generators call it just before label_board().
@@ -23,6 +26,7 @@ try:
 except ImportError:
     pcbnew = None
 
+MIN_TEXT = 0.8                               # mm: the boards' DRC minimum for silk text
 IU = 1000000                                 # internal units per mm
 def mm(v): return int(round(v * IU))
 
@@ -51,21 +55,26 @@ def chip_type(dev, val):
     if dev == "MEM28K8": return "AT28C256" if "28C256" in v else "62256"
     return None
 
-# passive / small parts whose value is worth printing beside the reference
-VALUED = {"RES", "RNISO8", "RNISO8D", "SIP9", "CAPP", "OSC", "XTAL32"}
+# parts whose function label says what they are: no value printed as well
+NO_VALUE = {"LED", "SW2", "DIP8SW", "LEDARR8", "JMP2X3", "DSUB9F", "DIN96", "MH"}
 
 def extra_text(dev, val):
-    """Text printed beside the reference: the chip type, or a passive's value."""
+    """Text printed beside the reference: the chip type, or the part's value."""
     t = chip_type(dev, val)
+    if dev == "PICO": return "Pico %s" % val
     if t: return t
-    if dev in VALUED and val: return val
-    if dev == "CAP" and val and val.lower() not in ("100n", "100nf"): return val
-    return None
+    if not val or (dev in NO_VALUE and val != "SCHOTTKY"): return None
+    if dev in ("CAP1", "CAP", "CAPP") and val.endswith("F"): return val[:-1]   # 100nF -> 100n
+    return val
 
 # ---- geometry --------------------------------------------------------------
 def _rect(b): return (b.GetX(), b.GetY(), b.GetRight(), b.GetBottom())
 def _grow(r, d): return (r[0] - d, r[1] - d, r[2] + d, r[3] + d)
 def _hit(a, b): return a[0] < b[2] and b[0] < a[2] and a[1] < b[3] and b[1] < a[3]
+
+def _gap(a, b):
+    dx = max(a[0] - b[2], b[0] - a[2], 0); dy = max(a[1] - b[3], b[1] - a[3], 0)
+    return (dx * dx + dy * dy) ** 0.5
 
 def _courtyard(fp):
     c = fp.GetCourtyard(pcbnew.F_Cu)
@@ -73,8 +82,8 @@ def _courtyard(fp):
     return _rect(fp.GetBoundingBox(False, False))
 
 class Labeler:
-    def __init__(self, board):
-        self.board = board
+    def __init__(self, board, angle=0):
+        self.board = board; self.angle = angle
         e = board.GetBoardEdgesBoundingBox()
         self.inside = _grow(_rect(e), -mm(0.6))
         self.fps = [f for f in board.GetFootprints()]
@@ -94,7 +103,8 @@ class Labeler:
         t.SetTextThickness(mm(max(0.1, size * 0.15)))
         t.SetHorizJustify(pcbnew.GR_TEXT_H_ALIGN_LEFT)
         t.SetVertJustify(pcbnew.GR_TEXT_V_ALIGN_TOP)
-        t.SetTextAngle(pcbnew.EDA_ANGLE(0, pcbnew.DEGREES_T))
+        t.SetKeepUpright(False)      # or KiCad draws a footprint's field at 270 as 90, upside down
+        t.SetTextAngle(pcbnew.EDA_ANGLE(self.angle, pcbnew.DEGREES_T))
         t.SetPosition(pcbnew.VECTOR2I(0, 0))
         r = _rect(t.GetBoundingBox())
         return r[0], r[1], r[2] - r[0], r[3] - r[1]      # offset x, y, width, height
@@ -108,45 +118,57 @@ class Labeler:
     def _candidates(self, box, w, h, toward=None):
         """Top-left corners around box for a w x h block, nearest first."""
         x0, y0, x1, y1 = box; out = []
-        for d in (0.35, 1.3, 2.6, 4.0):
+        xs = (x0, (x0 + x1 - w) // 2, x1 - w, (3 * x0 + x1) // 4 - w // 2, (x0 + 3 * x1) // 4 - w // 2)
+        ys = ((y0 + y1 - h) // 2, y0, y1 - h, (3 * y0 + y1) // 4 - h // 2, (y0 + 3 * y1) // 4 - h // 2)
+        for d in (0.35, 0.8, 1.3, 1.9, 2.6, 3.3, 4.0, 5.0, 6.0):
             g = mm(d)
-            above = [(x, y0 - g - h) for x in (x0, (x0 + x1 - w) // 2, x1 - w)]
-            below = [(x, y1 + g) for x in (x0, (x0 + x1 - w) // 2, x1 - w)]
-            right = [(x1 + g, y) for y in ((y0 + y1 - h) // 2, y0, y1 - h)]
-            left = [(x0 - g - w, y) for y in ((y0 + y1 - h) // 2, y0, y1 - h)]
-            sides = {"above": above, "below": below, "right": right, "left": left}
+            sides = {"above": [(x, y0 - g - h) for x in xs], "below": [(x, y1 + g) for x in xs],
+                     "right": [(x1 + g, y) for y in ys], "left": [(x0 - g - w, y) for y in ys]}
             order = ["above", "below", "right", "left"]
             if toward in sides: order.remove(toward); order.insert(0, toward)
             for s in order: out += sides[s]
         return out
 
+    def _measure(self, pieces, k, stacked):
+        """-> (ms, w, h) of a block of pieces at scale k, as drawn on the board."""
+        ms = [self._style(t, max(MIN_TEXT, s * k)) for t, s in pieces]
+        along = 2 if self.angle == 0 else 3              # the box side a line of text runs along
+        across = 5 - along; lg = mm(0.2) if stacked else mm(0.8)
+        run = across if stacked else along               # the side the pieces add up on
+        total = sum(m[run] for m in ms) + lg * (len(ms) - 1); most = max(m[5 - run] for m in ms)
+        return (ms, total, most) if run == 2 else (ms, most, total)
+
+    def _set(self, pieces, ms, x, y, w, stacked):
+        """Put a measured block's pieces down, its top-left corner at (x, y). At 270 a
+        line reads down the drawing and the next line lies to its left."""
+        lg = mm(0.2) if stacked else mm(0.8); c = 0
+        for (t, _s), m in zip(pieces, ms):
+            if self.angle == 0: px, py = (x, y + c) if stacked else (x + c, y)
+            else: px, py = (x + w - c - m[2], y) if stacked else (x + w - m[2], y + c)
+            t.SetPosition(pcbnew.VECTOR2I(px - m[0], py - m[1]))
+            c += m[3 if stacked == (self.angle == 0) else 2] + lg
+
+    def _its_own(self, r, box):
+        """True if r is nearer box, by 0.5 mm, than any part box is not inside."""
+        d = _gap(r, box) + mm(0.5)
+        return all(_hit(c, box) or _gap(r, c) >= d for c in self.crt)
+
     def place(self, box, pieces, toward=None, key=""):
         """Place a block of (text-object, size) pieces next to box. Tries one
         line, then stacked lines, at each size step. Returns True if clean."""
-        for shrink in (1.0, 0.85, 0.7):
-            for stacked in (False, True):
-                ms = [self._style(t, s * shrink) for t, s in pieces]
-                gap = mm(0.8)
-                if stacked:
-                    w = max(m[2] for m in ms); h = sum(m[3] for m in ms) + mm(0.2) * (len(ms) - 1)
-                else:
-                    w = sum(m[2] for m in ms) + gap * (len(ms) - 1); h = max(m[3] for m in ms)
+        # first where the block is clearly nearer its own part than any other, then anywhere clear
+        for shrink, own in ((1.0, True), (0.85, True), (1.0, False), (0.85, False), (0.7, False)):
+            for stacked in ((False,) if len(pieces) == 1 else (False, True)):
+                ms, w, h = self._measure(pieces, shrink, stacked)
                 for (bx, by) in self._candidates(box, w, h, toward):
                     r = (bx, by, bx + w, by + h)
-                    if not self._fits(r): continue
-                    cx, cy = bx, by
-                    for (t, _s), m in zip(pieces, ms):
-                        t.SetPosition(pcbnew.VECTOR2I(cx - m[0], cy - m[1]))
-                        if stacked: cy += m[3] + mm(0.2)
-                        else: cx += m[2] + gap
+                    if not self._fits(r) or (own and not self._its_own(r, box)): continue
+                    self._set(pieces, ms, bx, by, w, stacked)
                     self.texts.append(_grow(r, mm(0.25)))
                     return True
-                if len(pieces) == 1: break           # stacking one piece changes nothing
         # nothing clean: leave it above the part at the smallest size and report
-        ms = [self._style(t, s * 0.7) for t, s in pieces]
-        cx, cy = box[0], box[1] - mm(0.3) - max(m[3] for m in ms)
-        for (t, _s), m in zip(pieces, ms):
-            t.SetPosition(pcbnew.VECTOR2I(cx - m[0], cy - m[1])); cx += m[2] + mm(0.8)
+        ms, w, h = self._measure(pieces, 0.7, False)
+        self._set(pieces, ms, box[0], box[1] - mm(0.3) - h, w, False)
         self.failed.append(key)
         return False
 
@@ -164,13 +186,13 @@ def card_title(title):
     m = re.match(r"^(.*?\b(?:REV [A-Z0-9.]+|V\d+(?:\.\d+)*))", t)
     return m.group(1) if m else t
 
-def title_block(board, name, front="right"):
+def title_block(board, name, front="right", angle=270):
     """Print the board's name + revision with cottageworker.com beneath it.
     The front edge (the right edge on every P8X card: the DIN connector is on
     the left) is tried first, so the block reads with the card installed
     (standards section 8); then any edge band, scanning inward in 2mm steps.
     Call BEFORE label_board(), which then treats the block as an obstacle."""
-    L = Labeler(board)
+    L = Labeler(board, angle)
     pieces = [(L.new_text(name), 1.5), (L.new_text(SITE), 1.2)]
     x0, y0, x1, y1 = L.inside
     def band(side, g, w, h):
@@ -178,19 +200,19 @@ def title_block(board, name, front="right"):
         if side == "bottom": return [(x, y1 - g - h) for x in range(x0 + g, x1 - w - g, mm(2))]
         if side == "left":   return [(x0 + g, y) for y in range(y0 + g, y1 - h - g, mm(2))]
         return [(x1 - g - w, y) for y in range(y0 + g, y1 - h - g, mm(2))]
-    passes = ([front] if front else []) + [["top", "bottom", "left", "right"]]
-    for sides in passes:
-        sides = [sides] if isinstance(sides, str) else sides
+    edges = ["top", "bottom", "left", "right"]
+    # with 3 mm clear round it if there is such a spot, so no part's own label is pushed away
+    for sides, clear in (([front], mm(3)), ([front], 0), (edges, mm(3)), (edges, 0)):
+        if sides == [None]: continue
         for shrink in (1.0, 0.8):
-            ms = [L._style(t, s * shrink) for t, s in pieces]
-            w = max(m[2] for m in ms); h = sum(m[3] for m in ms) + mm(0.3)
+            ms, w, h = L._measure(pieces, shrink, True)
             for inset in range(1, 60, 2):
                 for side in sides:
                     for bx, by in band(side, mm(inset), w, h):
-                        if not L._fits((bx, by, bx + w, by + h)): continue
-                        cy = by
-                        for (t, _s), m in zip(pieces, ms):
-                            t.SetPosition(pcbnew.VECTOR2I(bx - m[0], cy - m[1])); cy += m[3] + mm(0.3)
+                        r = (bx, by, bx + w, by + h)
+                        if not L._fits(r): continue
+                        if clear and any(_hit(_grow(r, clear), c) for c in L.crt): continue
+                        L._set(pieces, ms, bx, by, w, True)
                         return True
     return False
 
@@ -199,7 +221,7 @@ def _order(ref, dev, ctype):
     if dev in ("LED", "SW2", "DIP8SW", "LEDARR8") or ref.startswith(("JP", "SW")): return 1
     return 2
 
-def label_board(board, parts, labels=None, positions=None, skip=()):
+def label_board(board, parts, labels=None, positions=None, skip=(), angle=270):
     """Label every footprint on board.
     parts: ref -> (device, value).  labels: ref -> function label.
     positions: ref -> [(pad numbers, text[, side]), ...] -- each text printed
@@ -207,10 +229,14 @@ def label_board(board, parts, labels=None, positions=None, skip=()):
     side facing away from the part's centre unless side names one.
     skip: refs left unlabelled."""
     labels = labels or {}; positions = positions or {}
-    L = Labeler(board)
+    L = Labeler(board, angle)
     fps = {f.GetReference(): f for f in board.GetFootprints()}
+    def corner(r):                                   # of the LEDs and switches, the corner ones first
+        if _order(r, parts[r][0], chip_type(*parts[r])) != 1: return 0
+        p = fps[r].GetPosition(); i = L.inside
+        return min(p.x - i[0], i[2] - p.x) + min(p.y - i[1], i[3] - p.y)
     refs = sorted((r for r in fps if r in parts and r not in skip),
-                  key=lambda r: (_order(r, parts[r][0], chip_type(*parts[r])), r))
+                  key=lambda r: (_order(r, parts[r][0], chip_type(*parts[r])), corner(r), r))
     for r in skip:
         if r in fps: fps[r].Reference().SetVisible(False)
     for r in refs:

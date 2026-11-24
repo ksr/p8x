@@ -654,7 +654,8 @@ PN={"74161":"74HCT161","74169":"74HCT169","74374":"74HCT374","74377V2":"74HCT377
  "74257":"74HCT257","74244":"74HCT244","74245":"74HCT245","7402":"74HCT02",
  "7410":"74HCT10","7430":"74HCT30","7474":"74HCT74","74181":"74HCT181",
  "74182":"74HCT182","74260":"74HCT260","28C64":"28C64","6850":"6850",
- "MAX232":"MAX232","DS1302":"DS1302"}
+ "MAX232":"MAX232","DS1302":"DS1302","74175":"74HCT175","74688":"74HCT688",
+ "ATMEGA1284":"ATmega1284P"}
 
 # Recognized LED color suffixes. A LED value written "FUNC-COLOR" is split into
 # value=COLOR, label=FUNC — but ONLY when the trailing token is one of these, so
@@ -1215,6 +1216,9 @@ N(n,"ALUK",("U19","3Y"),("LED4","K"))
 N(n,"LDFK",("U25","3Y"),("LED5","K"))
 N(n,"GND",("U19","4A"),("U19","4B"),("U24","3A"),
   ("U24","3B"),("U24","4A"),("U24","4B"),("LED3","K"))
+# spare inputs of U17/U22/U28/U29/U30 to GND: an HCT input must not float (2026-11-23)
+N(n,"GND",("U17","D4"),*[("U22",p) for p in ("A3","B3","A4","B4")],
+  *[(u,p) for u in ("U28","U29","U30") for p in ("A2","B2","A3","B3","A4","B4")])
 N(n,"VCC",("RP1","1"),("R4","1"),("R5","1"))
 N(n,"LEDP",("RP1","2"),("LED3","A"))
 N(n,"LEDAL",("R4","2"),("LED4","A")); N(n,"LEDLF",("R5","2"),("LED5","A"))

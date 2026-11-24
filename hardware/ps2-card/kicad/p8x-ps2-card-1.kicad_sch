@@ -126,7 +126,7 @@
   (symbol (lib_id "p8x:74688") (at 119.38 86.36 0) (unit 1) (in_bom yes) (on_board yes) (dnp no)
     (uuid "0cb3a405-dadf-50ad-9f3a-bee8c53df62a")
     (property "Reference" "U4" (at 111.76 54.50 0) (effects (font (size 1.27 1.27)) (justify left)))
-    (property "Value" "WIN CMP" (at 111.76 118.22 0) (effects (font (size 1.27 1.27)) (justify left)))
+    (property "Value" "74HCT688" (at 111.76 118.22 0) (effects (font (size 1.27 1.27)) (justify left)))
     (property "Footprint" "Package_DIP:DIP-20_W7.62mm" (at 119.38 86.36 0) (effects (font (size 1.27 1.27)) hide))
     (property "Datasheet" "" (at 119.38 86.36 0) (effects (font (size 1.27 1.27)) hide))
     (pin "1" (uuid "2327ce43-817c-5605-93e6-31b8fdeabbd3"))

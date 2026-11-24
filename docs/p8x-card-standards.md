@@ -98,8 +98,14 @@ memory card as the reference ([hardware/KICAD-BOARDS.md](../hardware/KICAD-BOARD
   (right) edge first; the backplane, which has no front edge, takes any clear edge
 - Pin 1 markers on every IC; connector A1/C32 corners labeled
 - Designators readable after assembly (not under sockets): the generators print
-  every reference outside every part's courtyard, with the IC type beside it, and
-  `check_card.sh` fails a board where one is hidden or under a part (2026-10-24)
+  every reference outside every part's courtyard, with the part's type or value
+  beside it (`U12 74HCT374`, `R3 1K`, `C25 100n`; 2026-11-02), and `check_card.sh`
+  fails a board where one is hidden or under a part (2026-10-24)
+- All text reads upright, left to right, with the card standing connector down
+  (2026-11-18): the bus connector is on the left as drawn, so a card's text is at
+  270°. The backplane lies flat and keeps 0°. KiCad turns a footprint's own field at
+  270° round to 90°, upside down, unless the field's "keep upright" is off; the
+  generators turn it off and `check_card.sh` measures the angle as drawn
 
 ## 9. Status LEDs (required on every card)
 
@@ -162,7 +168,8 @@ yet). **Always ask Ken before changing a card that might be built, ordered or in
 - A plug-in module (Pico, Tang Nano, ...) goes at an edge other than the bus connector's, where possible, with its
   USB port facing that edge.
 - Every reference (U12, R3, ...) stays readable with the parts fitted: printed outside the part, never under a chip,
-  socket or module. ICs get their type (74HCT374, ...) printed beside it.
+  socket or module, with its type or value beside it (74HCT374, 1K, 100n).
+- All silkscreen text reads upright with the card standing connector down (270° with the bus on the left).
 - Every switch, button and LED is labelled with its function (RESET, STEP, RUN, ...), and each switch position with
   what it selects.
 - Placement drawings (PDF) show the outline and the parts in one orientation, on a sheet shaped like the board.

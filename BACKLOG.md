@@ -1780,6 +1780,9 @@ Nothing below has been built or measured.
       anodes 1–8 / cathodes 16–9 exists, or move to a 10-segment DIP-20.
     - **ps2-card PS2A/PS2B (custom MiniDIN-6)** — from a vendor drawing; check
       against the connector bought (also listed under the backplane order item).
+    - **bustest-card D1 (Schottky, the 5 V feed diode)** is on `LED_D5.0mm` in the LED
+      bank (found 2026-11-23 in the render): give it the diode's own footprint
+      (a DO-41 1N5817 is 10.16 mm pin to pin) and route the card again.
   Checked and matching their parts: oscillator can DIP-14 (1/7/8/14), 6 mm tact
   switch, 8-way DIP switch (1↔16), bussed SIP-9 (pin 1 COM), 2x20 IDC for IDE
   (odd/even is the IDE numbering), 3 mm round 32 kHz crystal, DIP-16 isolated

@@ -12,6 +12,8 @@
 #   4. keepout    -- no track/via within 4mm of a DIN mounting hole (metal screws)
 #   5. fab report -- smallest track width + drill vs conservative fab minimums,
 #                    plus a reminder of the manual pre-order steps
+#   6. labels     -- every reference on the silk and clear of every part
+#   7. angle      -- every silk text upright with the card standing connector down
 # Needs KiCad (kicad-cli + bundled pcbnew) and iverilog. GENERATORS ARE CANON.
 # (no 'set -e': per-card failures are tracked explicitly and must not abort the run)
 PYK=/Applications/KiCad/KiCad.app/Contents/Frameworks/Python.framework/Versions/3.9/bin/python3
@@ -109,9 +111,18 @@ unread = [f.GetReference() for f in b.GetFootprints()
                or any(_hit(_r(f.Reference().GetBoundingBox()), c) for c in crts))]
 print("  6. labels     : " + ("PASS (every reference on the silk, clear of every part)" if not unread
       else "FAIL (%d reference(s) hidden or under a part: %s)" % (len(unread), " ".join(sorted(unread)[:10]))))
+# 7. angle: every text on the silk reads upright with the card standing connector down
+#    (board rule, 2026-11-18): 270 as drawn, the bus on the left; the backplane lies flat, 0
+want = 0 if "backplane" in brd else 270
+def _ang(t): return round(t.GetDrawRotation().AsDegrees()) % 360
+silk = [t for t in b.GetDrawings() if isinstance(t, pcbnew.PCB_TEXT) and t.GetLayer() == pcbnew.F_SilkS]
+silk += [f.Reference() for f in b.GetFootprints() if f.Reference().IsVisible()]
+turned = [t.GetText() for t in silk if _ang(t) != want]
+print("  7. angle      : " + ("PASS (%d texts at %d)" % (len(silk), want) if not turned
+      else "FAIL (%d not at %d: %s)" % (len(turned), want, " ".join(turned[:10]))))
 # verdict: FAIL only on blocking DRC / unconnected / keepout / sub-min features /
 # unreadable references. Cosmetic silk is a WARNING, not a manufacturing blocker.
-bad = blocking or unconn or near or (mintw and mintw < mintr) or (mindl and mindl < mindr) or unread
+bad = blocking or unconn or near or (mintw and mintw < mintr) or (mindl and mindl < mindr) or unread or turned
 if cosmetic and not bad:
     print("  (note: %d cosmetic silk overlap(s) -- fab trims silk; not a blocker)" % cosmetic)
 sys.exit(1 if bad else 0)

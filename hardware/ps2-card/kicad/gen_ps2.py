@@ -5,10 +5,11 @@ Run with KiCad's bundled Python (needs pcbnew):
     PYK hardware/ps2-card/kicad/gen_ps2.py
 
 Placement is bespoke so the external parts land in chosen positions:
-  * the two PS/2 mini-DIN-6 sockets on the BOTTOM long edge (openings facing off
-    the edge for cable access), with the ICSP header + reset pull-ups beside them
+  * the two PS/2 mini-DIN-6 sockets on the RIGHT (front) edge, opposite the bus
+    connector, openings facing off it (2026-11-23; they were on the bottom edge)
   * the four status LEDs (power, kbd-read, mouse-read, keystroke-available) on the
-    RIGHT edge, opposite the bus connector
+    same edge, above them as drawn
+  * the ICSP header + reset pull-ups on the bottom edge
   * the DIN41612 bus edge connector J1 on the LEFT edge
   * the ICs (ATmega1284 + the decode/latch bridge) + their decoupling caps and the
     PS/2 pull-up SIP grid-flowed in the interior, courtyard-spaced so nothing overlaps
@@ -49,22 +50,21 @@ if "J1" in footp:
     j = footp["J1"]; j.SetOrientationDegrees(90); j.SetPosition(P(0, 0))
     x0, y0, x1, y1 = GK.pad_bbox(j)
     j.SetPosition(VECTOR2I(mm(GK.PLUG_EDGE - 2.54) - x0, mm(BH/2) - (y0 + y1)//2))   # (x0: the mounting holes, 2.54 outside row a)
-# bottom edge: the two PS/2 sockets (rot 180 so the footprint's -Y opening faces
-# +Y = off the bottom edge), then the ICSP header + reset pull-ups beside them
-BY = BH - 9.0
-place("PS2A", 92.0, BY, 180); place("PS2B", 132.0, BY, 180)   # keyboard, mouse
-place("JICSP", 172.0, BH - 7.0); place("RRST", 192.0, BH - 6.0); place("RRB", 210.0, BH - 6.0)
-# right edge (opposite J1): the four status LEDs, each with its series resistor
+# right edge (the front): the two PS/2 sockets (rot 270 turns the footprint's -Y
+# opening to +X = off the edge), then the four status LEDs, each with its resistor
+place("PS2A", BW - 9.0, 82.0, 270); place("PS2B", BW - 9.0, 114.0, 270)   # keyboard, mouse
 LX, RX = BW - 6.0, BW - 15.0
-for ref, rref, yy in (("LEDPWR", "RPWR", 30.0), ("LEDKR", "RKR", 55.0),
-                      ("LEDMR", "RMR", 80.0), ("LEDKA", "RKA", 105.0)):
+for ref, rref, yy in (("LEDPWR", "RPWR", 12.0), ("LEDKR", "RKR", 26.0),
+                      ("LEDMR", "RMR", 40.0), ("LEDKA", "RKA", 54.0)):
     place(ref, LX, yy, 90); place(rref, RX, yy, 90)
+# bottom edge: the ICSP header + reset pull-ups
+place("JICSP", 172.0, BH - 7.0); place("RRST", 192.0, BH - 6.0); place("RRB", 210.0, BH - 6.0)
 
 EDGE_REFS = {"J1", "PS2A", "PS2B", "JICSP", "RRST", "RRB",
              "LEDPWR", "RPWR", "LEDKR", "RKR", "LEDMR", "RMR", "LEDKA", "RKA"}
 
 # --- 2. interior: grid-flow the ICs (+ their caps) then the passives ----------
-IX0, IX1, IY0, IY1, GAP, CAPH = 17.0, BW - 22.0, 5.0, BH - 18.0, 1.8, 4.5
+IX0, IX1, IY0, IY1, GAP, CAPH = 17.0, BW - 30.0, 5.0, BH - 18.0, 1.8, 4.5
 capfor = GK.CARDCAPS.get(CARD, {})
 caprefs = set(capfor.values())
 cx = [IX0]; cyt = [IY0]; rowh = [0.0]; overflow = [0.0]

@@ -55,10 +55,11 @@ decoded (the MCU senses `-WR1`/`-WR3`); there is no write-data capture latch —
 mouse runs in its power-on stream mode, matching the emulator and `lib_ps2` stub.
 
 **Board layout** (bespoke, `hardware/ps2-card/kicad/gen_ps2.py`): the two PS/2
-**mini-DIN-6 sockets on the bottom edge** (custom footprint from the vendor
-drawing — a right-angle shielded socket, shield tabs → GND; verify vs the physical
-part), the four **status LEDs on the right edge** opposite the bus, the DIN41612
-**bus connector on the left**, ICS + decoupling caps + the PS/2 pull-ups in the
+**mini-DIN-6 sockets on the right (front) edge** opposite the bus, opening off it
+(custom footprint from the vendor drawing — a right-angle shielded socket, shield
+tabs → GND; verify vs the physical part; they were on the bottom edge until
+2026-11-23), the four **status LEDs on the same edge**, the DIN41612
+**bus connector on the left**, the ICSP header on the bottom edge, ICS + decoupling caps + the PS/2 pull-ups in the
 interior.
 
 The MCU reset (`-RESET`) is tied to the backplane **`-RES`** through a **470 Ω

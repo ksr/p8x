@@ -25,7 +25,8 @@ for the status of each board.
 | `gen_kicad.py <card>` | Generic board builder: turns a `CARDS` netlist into a placed KiCad board — footprints, a bypass cap above each IC, the labelled LED bank, planes, outline |
 | `hardware/<card>/kicad/gen_*.py` | Bespoke placement for the memory (`gen_mem.py`, which also applies the rev F 6 KB ROM decode), I/O (`gen_io.py`), CF (`gen_cf.py`) and PS/2 (`gen_ps2.py`) cards |
 | `gen_backplane.py` | The backplane board (8 DIN 41612 sockets, power entry, bulk + per-slot caps, wired-OR pull-ups) |
-| `silk_labels.py` | The silkscreen pass every board generator runs last: each reference outside every part's courtyard, the IC type or passive value beside it, function labels (LEDs, switches, jumpers, connectors) and position labels (what each jumper or switch position selects); the title block (board name + revision, `cottageworker.com` beneath, front edge first); also the device → chip-type table `gen_bom.py` uses |
+| `silk_labels.py` | The silkscreen pass every board generator runs last: each reference outside every part's courtyard, the part's type or value beside it, all of it at 270° (upright with the card standing connector down; the backplane 0°), function labels (LEDs, switches, jumpers, connectors) and position labels (what each jumper or switch position selects); the title block (board name + revision, `cottageworker.com` beneath, front edge first); also the device → chip-type table `gen_bom.py` uses |
+| `refresh_board.py <card>` | Brings a routed board up to the generators with its tracks kept: the silkscreen made again, the values, spare pins tied to GND or VCC; refuses any other difference from the netlist. Then `kicad_tools.py finish <board>` and `check_card.sh` |
 | `kicad_tools.py` | DSN export, routing import, the heal steps after Freerouting, Gerbers and renders |
 | `build_kicad_card.sh <card>` | The generic pipeline: generate → export DSN → Freerouting → import + stitch → Gerbers/renders → readiness check |
 | `build.sh <card>` (or `all`) | One command per board: dispatches to the bespoke `kicad/build.sh` or to `build_kicad_card.sh` |
@@ -43,7 +44,10 @@ REUSE_ROUTE=1 sh generators/build.sh io-card   # silkscreen-only change: keep th
 
 `REUSE_ROUTE=1` skips Freerouting and re-imports the board's existing `.ses`. Use it
 only when every pad stays where it was (a silkscreen change); the DRC in the check
-still reports a stale route as unconnected or shorted nets.
+still reports a stale route as unconnected or shorted nets. Not for the six cards
+whose plug was moved with the tracks kept (2026-11-17: ALU, CF, control, memory,
+PS/2 until it was routed again 2026-11-23, register bank): their `.ses` has the plug
+where it was. `refresh_board.py` is for those, and for any silkscreen change.
 
 ### `gen_eagle.py` and the frozen Eagle boards
 

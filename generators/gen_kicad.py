@@ -169,7 +169,7 @@ SILK = {
     "io-card": {
         "labels": {"SW1": "IN $FF00 ON=0", "JP1": "SER1 RX/TX", "JP2": "SER2 RX/TX",
                    "LA1": "OUT $FF02", "LM3": "D0-7", "LM1": "A0-7", "LM2": "A8-15",
-                   "DB9A": "SERIAL 1", "DB9B": "SERIAL 2", "LED4": "I/O SEL",
+                   "DB9A": "SERIAL 1", "DB9B": "SERIAL 2", "LED4": "SEL",
                    "J3": "RTC 3-WIRE"},
         # JP1/JP2: centre pins 3/4 are the MAX232 side; shunts 1-3 + 2-4 = straight
         # (DTE), 3-5 + 4-6 = crossed (null-modem). SW1 switch n drives D(n-1).
@@ -184,7 +184,13 @@ SILK = {
         "positions": {"JP1": [(("1", "2"), "4M", "above"), (("3", "4"), "2M", "above"),
                               (("5", "6"), "1M", "above")]},
     },
-    "bustest-card": {"labels": {"A1": "PICO (USB)"}},
+    "memory-card": {
+        "labels": {"LED3": "PWR", "LED2": "ROM", "LED7": "RAML", "LED4": "RAMH", "LED5": "RD",
+                   "LED6": "WR", "JWP": "ROM-WP"},
+        # JWP: pin 1 = -WE, 2 = ROM !WE, 3 = VCC; a shunt on 1-2 = writable, 2-3 = protected
+        "positions": {"JWP": [(("1",), "WR"), (("3",), "WP")]},
+    },
+    "bustest-card": {"labels": {"A1": "USB"}},
     "ps2-card": {"labels": {"JICSP": "ICSP", "PS2A": "KEYBOARD", "PS2B": "MOUSE"}},
     "cf-card": {"labels": {"J2": "CF 0 $FF10", "J5": "CF 1 $FF18"}},
     "backplane": {"labels": {"LED1": "PWR", "J11": "POWER IN"},

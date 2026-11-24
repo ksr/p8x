@@ -220,9 +220,9 @@ pcbnew.ZONE_FILLER(board).Fill(board.Zones())
 # silkscreen: references outside every part, values, function + position labels
 import gen_kicad as GK
 # rev C, as the schematic title (p8x_card.py)
-if not GK.SL.title_block(board, "P8X BACKPLANE REV C", front=None): print("  SILK: no clean spot for the title block")
+if not GK.SL.title_block(board, "P8X BACKPLANE REV C", front=None, angle=0): print("  SILK: no clean spot for the title block")
 _fails = GK.SL.label_board(board, dict({r: (s[0], s[1]) for r, s in bps.items()}, **holes),
-                           *GK.silk_spec("backplane", {}))
+                           *GK.silk_spec("backplane", {}), angle=0)
 if _fails: print("  SILK: no clean spot for %d: %s" % (len(_fails), _fails[:12]))
 
 outdir = os.path.join(ROOT, "hardware", "backplane", "kicad"); os.makedirs(outdir, exist_ok=True)

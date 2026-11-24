@@ -178,6 +178,9 @@ mux reads for branches.
   slow the clock during bring-up if needed.
 - **V validity:** V is only meaningful after ADD/SUB/CMP (ungated by mode) — a
   software/microcode convention, not a hardware fault.
+- **Spare inputs:** tied to GND (2026-11-23): `U17` D4, `U22` sections 3 and 4, and
+  sections 2 to 4 of `U28`, `U29`, `U30`, 23 pins that floated before. An HCT input
+  must not float. The pads join the inner GND plane, so no track changed.
 - Confirmed OK: DOE one-hot (no on-card bus contention), 74182 unused groups tied
   off, conventional-carry inversion, Z/N source muxing.
 

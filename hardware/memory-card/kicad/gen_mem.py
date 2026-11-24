@@ -234,23 +234,6 @@ def edge(x1, y1, x2, y2):
     s.SetLayer(pcbnew.Edge_Cuts); s.SetWidth(mm(0.15)); board.Add(s)
 edge(0, 0, BW, 0); edge(BW, 0, BW, BH); edge(BW, BH, 0, BH); edge(0, BH, 0, 0)
 
-# ---- 5b. silkscreen LED labels (between each resistor and its LED) ----------
-def silk(s, x, y, size=1.4):
-    t = pcbnew.PCB_TEXT(board)
-    t.SetText(s); t.SetPosition(P(x, y)); t.SetLayer(pcbnew.F_SilkS)
-    t.SetTextThickness(mm(0.25))
-    t.SetTextSize(pcbnew.VECTOR2I(mm(size), mm(size)))
-    t.SetHorizJustify(pcbnew.GR_TEXT_H_ALIGN_CENTER)
-    board.Add(t)
-for i, (_rs, _led, label) in enumerate(LEDPAIR):
-    silk(label, 262, 30 + i*14 - 2.0)      # just above each LED, inboard of the edge
-
-# JWP ROM write-protect jumper: mark the two shunt positions. Pins (row): 1=-WE,
-# 2=ROMWE (common, to U1 !WE), 3=VCC. Shunt 1-2 = ROM WRITABLE; 2-3 = PROTECTED.
-_jp = {p.GetNumber(): p.GetPosition() for p in footp["JWP"].Pads()}
-silk("WR", pcbnew.ToMM(_jp["1"].x), pcbnew.ToMM(_jp["1"].y) + 3.3, size=1.0)  # 1-2
-silk("WP", pcbnew.ToMM(_jp["3"].x), pcbnew.ToMM(_jp["3"].y) + 3.3, size=1.0)  # 2-3
-
 # ---- 6. internal power planes: In1.Cu = GND, In2.Cu = VCC ------------------
 # THT pads penetrate every layer, so each GND/VCC pin connects to its plane with
 # no routing at all -- which is why this board goes to 4 layers. Freerouting then
@@ -292,11 +275,11 @@ for _fp in board.GetFootprints():
 print("  %d DIN mounting-hole keepouts (r=%.1fmm)" % (_nk, SCREW_KEEPOUT_R))
 pcbnew.ZONE_FILLER(board).Fill(board.Zones())
 
-# silkscreen: references outside every part and the IC types (silk_labels.py). The
-# LED function labels and the JWP position marks above are this script's own.
-import silk_labels as SL
+# silkscreen: references, types, values, function + position labels (silk_labels.py;
+# the labels themselves are gen_kicad.SILK's)
+import silk_labels as SL, gen_kicad as GK
 if not SL.title_block(board, mem_revf.TITLE): print("  SILK: no clean spot for the title block")
-_fails = SL.label_board(board, PARTS, {"JWP": "ROM-WP"})
+_fails = SL.label_board(board, PARTS, *GK.silk_spec("memory-card", PARTS))
 if _fails: print("  SILK: no clean spot for %d: %s" % (len(_fails), _fails[:12]))
 pcbnew.SaveBoard(OUT, board)
 board.BuildConnectivity()
