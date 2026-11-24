@@ -43,6 +43,8 @@ How the assembly is put together
 import argparse, collections, itertools, math, os, shutil, struct, subprocess, sys
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+sys.path.insert(0, os.path.join(ROOT, "generators", "models"))
+import fit_ps2     # the PS/2 sockets' 3D model
 CLI = "/Applications/KiCad/KiCad.app/Contents/MacOS/kicad-cli"
 
 # Slot order. No card is tied to a slot electrically (every slot sees the same
@@ -202,6 +204,7 @@ def main():
         for ext in (".kicad_pcb", ".kicad_pro"):
             if os.path.exists(src + ext):
                 shutil.copyfile(src + ext, dst + ext)
+        fit_ps2.fit_file(dst + ".kicad_pcb")      # the PS/2 card's sockets, which have no KiCad model
         return dst + ".kicad_pcb"
 
     def xy(p):              # pcbnew position -> 3D frame (mm, Y up)

@@ -12,6 +12,8 @@ some steps shell out to kicad-cli). Subcommands:
 These mirror the memory card's bespoke scripts, generalised to any board path.
 """
 import os, sys, subprocess, pcbnew
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "models"))
+import fit_ps2     # PS/2 sockets fitted in the renders
 try:
     import wx; _app = wx.App()
 except Exception:
@@ -616,10 +618,11 @@ def plug_edge(brd, edge, clear=0.25, near=0.03, edge_clear=0.5):
 def finish(brd):
     d = os.path.dirname(brd); name = os.path.basename(brd)[:-len(".kicad_pcb")]
     order_files(brd)
-    _run(CLI, "pcb", "render", "--side", "top", "--quality", "high", "--floor",
-         "-w", "1800", "-h", "1000", "-o", os.path.join(d, name + "-render-top.png"), brd)
-    _run(CLI, "pcb", "render", "--rotate", "-25,0,22", "--perspective", "--quality", "high", "--floor",
-         "-w", "1800", "-h", "1100", "-o", os.path.join(d, name + "-render-3d.png"), brd)
+    with fit_ps2.fitted(brd) as drawn:
+        _run(CLI, "pcb", "render", "--side", "top", "--quality", "high", "--floor",
+             "-w", "1800", "-h", "1000", "-o", os.path.join(d, name + "-render-top.png"), drawn)
+        _run(CLI, "pcb", "render", "--rotate", "-25,0,22", "--perspective", "--quality", "high", "--floor",
+             "-w", "1800", "-h", "1100", "-o", os.path.join(d, name + "-render-3d.png"), drawn)
     placement(brd)
     _boilerplate(d, name)
     print("finish: gerbers + renders + placement for", name)

@@ -77,9 +77,11 @@ tables at the top of the generator.
 
 ## Limits of the render
 
-- The two PS/2 mini-DIN sockets on the PS/2 card use a custom footprint with no 3D
-  model, so they are missing from that card. Every other part has a model, though
-  exotic parts use the closest standard KiCad footprint and model.
+- KiCad has no 3D model of the PS/2 card's two mini-DIN sockets: the build now fits
+  one of our own (`generators/models`), the body only, its opening's height an
+  estimate. The pictures here are from before it (2026-11-23), so the sockets are
+  missing from them. Every other part has a model, though exotic parts use the
+  closest standard KiCad footprint and model.
 - The cards are drawn with silkscreen and solder mask but without their copper
   tracks (tracks would make each card's STEP several times larger). The backplane
   is drawn by KiCad directly, tracks included.
