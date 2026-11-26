@@ -23,8 +23,16 @@ emulator/OS. It adds NO new chips -- it rewires three spare gates:
     ROM!CE = OR(A13|A14|A15, P)     on U11.2 (spare 74HCT32 gate)
     S      = OR(A13|A14, P)         on U11.3 (spare 74HCT32 gate)
     -RAM2CE= NAND(!A15, S)          on U7.3  (its B input moves from Q to S)
-so ROM answers only $0000-$17FF and U10 (low RAM) widens to $1800-$7FFF. The
-transform lives in mem_revf.py (the schematic uses it too) and is asserted there.
+so ROM answers only $0000-$17FF and U10 (low RAM) widens to $1800-$7FFF.
+
+REV F also keeps the data-bus buffer off in the I/O page (2026-11-26). -BOE
+was AND(-RD,-MEMW) alone, so a read of $FF00-$FFFF turned U3 on and drove the
+undriven MD lines onto D0-D7 against the I/O, CF and PS/2 cards. Two more gates:
+    IOPG   = NAND(-IOPG,-IOPG)      on U7.4  (was the RAM2 LED driver)
+    -BOE   = OR(AND(-RD,-MEMW), IOPG) on U11.4 (the last spare 74HCT32 gate)
+and the RAM2 LED sinks into -RAM2CE instead (VCC - RS5 - LED7 - -RAM2CE).
+The transform lives in mem_revf.py (the schematic uses it too) and is asserted
+there.
 
 This script builds the board (footprints, nets, placement, GND pour, outline).
 Routing is done afterwards by Freerouting via a Specctra DSN/SES round-trip

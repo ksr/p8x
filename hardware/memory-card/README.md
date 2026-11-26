@@ -71,9 +71,15 @@ ORs `Q` with `A15` for the ROM `!CE` (`A13|A14|A15`); and `U7.3` NANDs `!A15` wi
 ### Data-bus transceiver
 The 74245 (U3) connects on-card memory to the backplane data bus. Its **direction**
 is set by read vs write: on a read (DOE = 7 → `-RD`) it drives the bus from memory;
-on a write (DLD = 7 → `-MEMW`) it drives memory from the bus. It is **enabled only
-for on-card addresses** (`-BOE`, gated in U9), so the card never fights another
-driver during I/O cycles.
+on a write (DLD = 7 → `-MEMW`) it drives memory from the bus. It is **enabled on a
+memory read or write outside the I/O page**: `-BOE = OR(AND(-RD, -MEMW), IOPG)`,
+with `AND(-RD, -MEMW)` in U9.1, `IOPG` (the I/O page, active high) from `U7.4`
+wired as an inverter on `-IOPG`, and the OR in `U11.4`. In `$FF00–$FFFF` the
+buffer stays off, so the card never drives D0–D7 while the I/O, CF or PS/2 card
+answers. (Until 2026-11-26 the drawn rev F had `-BOE = AND(-RD, -MEMW)` alone:
+every read of the I/O page turned U3 on and drove the undriven memory data lines
+onto the bus against the I/O card. Found before any board was made; the gate-level
+simulation `tools/gatesim/run.sh` now checks the buffer for every address.)
 
 ### Read path
 DOE code 7 (`-RD`, decoded by U5) drives the memory output-enables (`!OE`) and sets
@@ -94,6 +100,7 @@ EEPROM programming is out of scope for normal operation).
 ## LEDs
 PWR (green), ROM (yellow), RAM (yellow), RD (green), WR (red) — show which region
 and direction is active each cycle. **RAM2 (yellow, rev E)** lights when the new
-`$2000–$7FFF` bank (U10) is addressed — a bank-select indicator (driven by U7's
-spare gate inverting `-RAM2CE`; not `-BOE`-gated like the others, as only one
-spare gate remained).
+`$1800–$7FFF` bank (U10) is addressed — a bank-select indicator. Its cathode sits
+on `-RAM2CE` itself (VCC – `RS5` – LED – `-RAM2CE`), so it needs no gate; it is not
+`-BOE`-gated like the ROM and RAM LEDs. (Through 2026-11-25 a `U7` gate inverted
+`-RAM2CE` to source it; that gate now makes `IOPG` for the buffer enable.)

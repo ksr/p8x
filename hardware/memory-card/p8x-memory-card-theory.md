@@ -85,8 +85,8 @@ and includes a jumper to write-protect the ROM.
   DOE0-3 ─►┌─────────┐ -RD (Y7)
            │U5 74138 ├──────┬──────────────► U1/U2/U10 !OE  (output enable on read)
            │DOE decode│      ├──────────────► U3 74245 DIR (read → drive bus)
-           └─────────┘       └──► U9 ─┐
-  DLD0-3 ─►┌─────────┐ -MEMW(Y7)        ├─AND─► -BOE ─► U3 74245 !OE (buffer active on R or W)
+           └─────────┘       └──► U9 ─┐       IOPG = NOT -IOPG (U7.4) ─┐
+  DLD0-3 ─►┌─────────┐ -MEMW(Y7)        ├─AND─► -ACC ─► U11.4 OR ──┴─► -BOE ─► U3 !OE (off in $FFxx)
            │U6 74138 ├──┬──► U8 ─┐      │
            │DLD decode│  │  AND  ├─ -WE─┴─► U2/U10 !WE (RAM write)┌─────┐
            └─────────┘  │CLK ───┘            └─► JWP 1 ──────────│ JWP │ 2─► U1 !WE (ROM)
@@ -152,9 +152,19 @@ The card's `D0–7` (backplane) and `MD0–7` (the EEPROM/SRAM data pins) are jo
 through a 74245 transceiver:
 - **Direction** (`DIR`) = `-RD`: on a read the buffer drives bus ← memory; on a
   write it drives memory ← bus.
-- **Output enable** (`!OE`) = `-BOE` = `AND(-RD, -MEMW)` (`U9`): the buffer is
-  active whenever a read *or* a write is happening, and high-Z otherwise so it
-  never contends with other cards' bus drivers.
+- **Output enable** (`!OE`) = `-BOE` = `OR(AND(-RD, -MEMW), IOPG)`: `U9.1` ANDs
+  the two strobes (net `-ACC`, low on a read *or* a write), `U7.4` (a NAND wired as
+  an inverter) turns `-IOPG` into `IOPG`, high in `$FF00–$FFFF`, and `U11.4` ORs the
+  two. The buffer is active on a memory read or write outside the I/O page and
+  high-Z otherwise, so it never contends with other cards' bus drivers — in
+  particular not with the I/O, CF and PS/2 cards, which answer in `$FFxx`.
+- **Why the `IOPG` term (2026-11-26):** with `-BOE = AND(-RD, -MEMW)` alone, as
+  drawn in rev F until then, a read of the I/O page turned `U3` on while all three
+  memory chips were deselected, so the buffer drove the undriven `MD0–7` onto
+  `D0–7` against the answering I/O card. Writes were harmless (the buffer then
+  drives toward the card). Found before any board was made. The gate-level
+  simulation (`tools/gatesim/run.sh`) sweeps every address in read, write and idle
+  cycles and fails if `U3` is on anywhere in `$FF00–$FFFF`.
 
 ### 3.4 ROM write-protect jumper (JWP)
 The ROM (a 28C64, or a 28C256 used as 8K) is electrically writable (an EEPROM), which is convenient for
@@ -167,11 +177,14 @@ ROM `!WE`.)
 
 ### 3.5 Status LEDs
 `U8` and `U9` spare gates also drive activity LEDs: ROM-select, RAM-select, RD, and
-WR, which is invaluable during bring-up to *see* the bus cycles. **Rev E** keeps the
-**RAM2** LED for the new `$2000–$7FFF` bank: `U7`'s last spare gate (a NAND wired
-as an inverter) flips `-RAM2CE` to active-high and sources the LED through `RS5`.
-Unlike the others it isn't `-BOE`-gated (no spare gate left for that), so it's a
-bank-*select* indicator — it lights whenever an address in `$2000–$7FFF` is driven.
+WR, which is invaluable during bring-up to *see* the bus cycles. **Rev E** added the
+**RAM2** LED for the low RAM bank (`$2000–$7FFF` in rev E, `$1800–$7FFF` in rev F).
+In rev F it needs no gate: `RS5` runs from VCC to the LED's anode and its cathode
+sits on `-RAM2CE`, so it lights whenever that bank is selected. (Through
+2026-11-25, `U7.4`, a NAND wired as an inverter, flipped `-RAM2CE` to active-high
+and sourced the LED; that gate now makes `IOPG` for the buffer enable.) Unlike the
+others it isn't `-BOE`-gated, so it's a bank-*select* indicator — it lights whenever
+an address in that bank is driven.
 
 ---
 

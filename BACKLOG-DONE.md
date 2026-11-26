@@ -1574,6 +1574,18 @@ end is the original DONE section, newest first.
 
 ## Completed — from VERIFY
 
+- **Memory card silent in the I/O page** (2026-11-26). The check asked for in VERIFY
+  found a real fault in the drawn rev F (never built): the data-bus buffer `U3`'s
+  `!OE` was `-BOE = AND(-RD, -MEMW)` with no address term, so every read of
+  `$FF00-$FFFF` drove the deselected memory's floating `MD0-7` onto `D0-7` against
+  the I/O, CF or PS/2 card. Now `-BOE = OR(AND(-RD, -MEMW), IOPG)`: `U11.4` (the
+  last spare OR) and `U7.4` (a NAND as inverter on `-IOPG`), freed by wiring the
+  RAM2 LED to sink into `-RAM2CE` (VCC - RS5 - LED7 - `-RAM2CE`). No new chips.
+  Changed in mem_revf.py; board re-routed with placement unchanged. The gate-level
+  simulation now runs on the rev F netlist (it was on rev E) and sweeps every
+  address in read, write and idle cycles; on the old netlist it fails (512 I/O-page
+  cycles turn `U3` on). The card stays REV F, as none has been made.
+
 - **Control card clock select reaches ÷4 with a shunt** (2026-10-24). `JP1` was a
   1x4 header (1 = OSCO, 2 = CLKRAW, 3 = ÷2, 4 = ÷4); ÷4 needed pins 2 and 4 joined,
   which only a wire could do. `JP1` is now a 2x3 header with CLKRAW on the even

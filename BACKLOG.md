@@ -1811,10 +1811,11 @@ Nothing below has been built or measured.
 - **System-wide data-bus arbitration is one-hot** (2026-06 review). Bus drivers
   are distributed: ALU U20 decodes DOE 1-6 (reg/ALU/flags); at DOE = 7 exactly one
   of memory/IO/CF should drive based on address decode. No check enforces "no
-  DOE/address combination enables two drivers" across cards. In particular confirm
-  the memory card is fully silent in the $FF00-$FFFF I/O page (via -IOPG) so it
-  can't fight the I/O / CF cards on a read. (Backplane RN1 10k pull-ups hold the
-  bus at $FF when nothing drives, so a no-driver case is defined.)
+  DOE/address combination enables two drivers" across cards. The memory card's
+  side is settled (2026-11-26, see BACKLOG-DONE: its buffer is now off in
+  $FF00-$FFFF, and tools/gatesim checks it); still open: the I/O, CF and PS/2 cards'
+  decodes never overlap one another. (Backplane RN1 10k pull-ups hold the bus at
+  $FF when nothing drives, so a no-driver case is defined.)
 
 - Control card single-step circuit (7474 one-pulse + self-clear NAND): verify
   one-clock-per-press behaviour at bring-up; refine debounce RC if needed.

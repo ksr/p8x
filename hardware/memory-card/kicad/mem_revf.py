@@ -5,7 +5,8 @@ so both draw the same circuit. Plain Python, no pcbnew.
 The canonical netlist is gen_eagle.py's CARDS["memory-card"] (rev E, left at
 rev E on purpose: the Eagle flow is frozen). revf() applies the rev-F decode
 on a copy -- three spare gates rewired, no new chips; see gen_mem.py's
-docstring for the logic -- and asserts it.
+docstring for the logic -- plus the I/O-page gating of the data-bus buffer
+(2026-11-26, two more gates), and asserts it.
 """
 import copy
 
@@ -31,7 +32,25 @@ def revf(GE):
     NETS["ROMCE"]  = [("U11","2Y"),("U1","!CE"),("U8","3A")]  # 6K ROM !CE (+ ROM LED sel)
     NETS["S"]      = [("U11","3Y"),("U7","3B")]               # A13|A14|(A11*A12) -> RAM2 NAND
 
-    # sanity: no pad assigned to two nets; only the spare U11.4Y output floats
+    # bus buffer off in the I/O page (fixed 2026-11-26): -BOE was AND(-RD,-MEMW)
+    # alone, so on a read of $FF00-$FFFF U3 drove the undriven MD lines onto
+    # D0-D7 against the I/O, CF and PS/2 cards. Now
+    #   -BOE = OR(AND(-RD,-MEMW), IOPG),  IOPG = NAND(-IOPG,-IOPG)
+    # using U11.4 (the last spare OR) and U7.4 (freed from the RAM2 LED driver).
+    # The LED control gates U8.2/U8.3 move with -BOE; their chip selects are
+    # high in the I/O page anyway, so those LEDs behave as before.
+    _rm("GND", ("U11","4A"),("U11","4B"))
+    NETS["-ACC"] = [("U9","1Y"),("U11","4A")]                 # AND(-RD,-MEMW)
+    NETS["-BOE"] = [("U11","4Y"),("U3","!OE"),("U8","2B"),("U8","3B")]
+    _rm("-RAM2CE", ("U7","4A"),("U7","4B"))
+    _add("-IOPG", ("U7","4A"),("U7","4B"))
+    del NETS["RAM2ON"]
+    NETS["IOPG"] = [("U7","4Y"),("U11","4B")]                 # I/O page, active high
+    # RAM2 LED now sinks into -RAM2CE like a plain indicator: VCC-RS5-LED7-(-RAM2CE)
+    _add("VCC", ("RS5","1"))
+    _rm("GND", ("LED7","K")); _add("-RAM2CE", ("LED7","K"))
+
+    # sanity: no pad assigned to two nets; no gate pin left floating
     owner = {}
     for net, mem in NETS.items():
         for k in mem:
@@ -40,5 +59,5 @@ def revf(GE):
     for u in ("U7","U8","U9","U11"):
         dev = PARTS[u][0]
         un = [pn for pn in DEV[dev]["L"]+DEV[dev]["R"] if (u,pn) not in owner]
-        assert un == (["4Y"] if u == "U11" else []), "%s unexpected floats %s" % (u, un)
+        assert un == [], "%s unexpected floats %s" % (u, un)
     return PARTS, NETS
