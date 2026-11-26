@@ -198,7 +198,7 @@ RES̄ forces a synchronous load of $0000 into P0 (gates the P0 load strobes and 
 
 - **28C256** (or 28C64) EEPROM, 6 KB used: `$0000–$17FF` (rev F decode: A13, A14, A15 and an `A11·A12` term)
 - **2× 62256** SRAM from `$1800`: U10 covers `$1800–$7FFF`, U2 `$8000–$FEFF`; a 7430 (8-input NAND on A8–A15) detects $FFxx and inhibits RAM CS
-- **74245** transceiver to the data bus: direction from read (DOE=7) vs write (DLD=7); enabled only for on-card addresses
+- **74245** transceiver to the data bus: direction from read (DOE=7) vs write (DLD=7); enabled on a memory read or write outside the I/O page, `-BOE = OR(AND(-RD, -MEMW), IOPG)`, so it stays off in `$FF00–$FFFF` and never drives D0–D7 against the I/O, CF or PS/2 card (the `IOPG` term added 2026-11-26, before any board was made)
 - Write pulse: DLD=7 ∧ CLK̄ → W̄Ē, giving address/data setup in the first half-cycle and a clean strobe in the second
 
 **BOM:** 28C256, 2× 62256, 74245, 7430, 2× 74138, 74HCT00, 2× 74HCT32, 74HCT08 = **11 chips** (U1–U11)
