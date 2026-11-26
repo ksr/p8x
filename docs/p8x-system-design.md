@@ -114,9 +114,11 @@ Note `MEMW` is just another destination: the Memory and I/O cards decode DLD=7 a
 
 | Bits | Source |
 |---|---|
-| 12–5 | IR (opcode, 74273) |
-| 4–1 | Step counter (74161) |
-| 0 | Selected condition (74151 mux: 0, 1, C, Z, N, V, …) |
+| 7–0 | IR (opcode, 74273) |
+| 11–8 | Step counter (74161) |
+| 12 | Selected condition (74151 mux: 0, 1, C, Z, N, V, …) |
+
+So the address is `opcode | step<<8 | cond<<12` (control card theory §4.5).
 
 ### 3.2 Control word (32 bits, 4× 28C64 EPROM)
 
@@ -148,7 +150,7 @@ comment in `microcode/genucode.py`; this table mirrors it.
 **Pipeline latch:** the 32 EPROM outputs are registered in 4× **74374** clocked on the opposite edge (CLK̄), so glitching ROM outputs never reach the backplane. Non-negotiable for reliability.
 
 ### 3.3 Also on this card
-- Crystal oscillator + 74161 divider (÷1/2/4/8 selectable)
+- 4 MHz oscillator + 74161 divider; jumper JP1 selects ÷1, ÷2 or ÷4 (4, 2 or 1 MHz)
 - Power-on/pushbutton reset (RC + 7414), drives RES̄ and clears step counter and IR
 - **Front-panel run controls:** RUN/HALT toggle, single-STEP pushbutton (debounced 74279), clocked through a 7474 synchronizer so the machine always stops on a microcycle boundary. HALT microcode bit ORs into the same stop logic.
 
@@ -194,12 +196,12 @@ RES̄ forces a synchronous load of $0000 into P0 (gates the P0 load strobes and 
 
 ## 6. Memory Card
 
-- **28C256** EEPROM, selected when A15 = 0
-- **62256** SRAM, selected when A15 = 1 **and not** the I/O page: 7430 (8-input NAND on A8–A15) detects $FFxx and inhibits RAM CS
+- **28C256** (or 28C64) EEPROM, 6 KB used: `$0000–$17FF` (rev F decode: A13, A14, A15 and an `A11·A12` term)
+- **2× 62256** SRAM from `$1800`: U10 covers `$1800–$7FFF`, U2 `$8000–$FEFF`; a 7430 (8-input NAND on A8–A15) detects $FFxx and inhibits RAM CS
 - **74245** transceiver to the data bus: direction from read (DOE=7) vs write (DLD=7); enabled only for on-card addresses
 - Write pulse: DLD=7 ∧ CLK̄ → W̄Ē, giving address/data setup in the first half-cycle and a clean strobe in the second
 
-**BOM:** 28C256, 62256, 74245, 7430, 74154 or 74138 + gates ≈ **6 chips**
+**BOM:** 28C256, 2× 62256, 74245, 7430, 2× 74138, 74HCT00, 2× 74HCT32, 74HCT08 = **11 chips** (U1–U11)
 
 ---
 

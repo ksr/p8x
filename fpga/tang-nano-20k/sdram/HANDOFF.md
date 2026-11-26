@@ -243,7 +243,8 @@ CSTACKTOP gap; a wedged board needs a human reset.
 
 **STAGE 10a IN PROGRESS (2026-08-23, branch graphic-test):** the GRAPHICS
 LANGUAGE — the PGC-class command port (STAGE10-DESIGN.md; the Matrox
-PG-640A manual at docs/reference/pg640a.pdf is the reference, its opcodes
+PG-640A manual at docs/reference/pg640a.pdf -- kept out of this public
+repository since 2026-11-20, see docs/reference/README.md -- is the reference, its opcodes
 kept verbatim). $FF50 GLDATA feeds a 256-byte FIFO; a consumer FSM in
 p8x_geom decodes hex-mode commands and executes them through the SAME
 walker pipeline the record engine uses (S_MAC for 3D, S_CS for 2D lines,

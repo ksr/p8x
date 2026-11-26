@@ -525,8 +525,9 @@ emulator's `IE`/`irq_pending`/`$08`-injection model as the reference.
 
 Each runs with only the card under test in the backplane.
 
-**Memory card.** Drive `A`, `DOE=MEM`, step, read `D`. Walk all 8 K and diff
-against `eeprom.bin` — the golden image already exists. Then write/read-back the
+**Memory card.** Drive `A`, `DOE=MEM`, step, read `D`. Walk the 6 K ROM
+(`$0000–$17FF`) and diff against `rom/p8x-prog-rom.bin` — the golden image already
+exists. Then write/read-back the
 SRAM (`DLD=MEMW`; note the write commits on the A→B transition, §4.3).
 
 **ALU card.** Sweep `ALUS/ALUM/CIN/BSEL` over operand pairs; diff result and

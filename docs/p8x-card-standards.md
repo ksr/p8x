@@ -79,7 +79,7 @@ memory card as the reference ([hardware/KICAD-BOARDS.md](../hardware/KICAD-BOARD
 ## 7. Schematic & Naming Conventions
 
 - Net names match the bus pinout document exactly (D0–D7, A0–A15, DOE0–3,
-  DLD0–3, PSEL0–1, PINC, PDEC, CLK, CLKB, -RES, LDF, ALUS0–3, ALUM, CIN,
+  DLD0–3, PSEL0–2, PINC, PDEC, CLK, CLKB, -RES, LDF, ALUS0–3, ALUM, CIN,
   SH0–1, SPARE4–23). Active-low signals are prefixed with a dash
   (e.g. -RES, -RD, -MEMW)
 - Reference designators: U = ICs, J = connectors, C = caps, R/RN = resistors/

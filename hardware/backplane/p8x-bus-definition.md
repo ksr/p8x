@@ -1,4 +1,4 @@
-# P8X Bus Definition — Rev C2
+# P8X Bus Definition — Rev C3
 
 This document is the authoritative human-readable description of the P8X backplane
 bus. The machine-authoritative source is the `busnet()` function in
@@ -88,15 +88,19 @@ output; always use a tri-state buffer enabled by the card's assigned DOE code.
 ### 3.2 Address Bus — A0–A15
 
 16-bit address bus, input-only to every card except the register bank. The
-address is always driven by one of the four 16-bit pointer registers (74169
-counters) selected by PSEL0–1:
+address is always driven by one of the 16-bit pointer registers (74169
+counters) selected by PSEL0–2:
 
-| PSEL1 | PSEL0 | Pointer | Role |
-|-------|-------|---------|------|
-| 0 | 0 | P0 | Program Counter (PC) |
-| 0 | 1 | P1 | General-purpose pointer |
-| 1 | 0 | P2 | General-purpose pointer |
-| 1 | 1 | P3 | Stack Pointer (SP) — empty-descending |
+| PSEL2 | PSEL1 | PSEL0 | Pointer | Role |
+|-------|-------|-------|---------|------|
+| 0 | 0 | 0 | P0 | Program Counter (PC) |
+| 0 | 0 | 1 | P1 | General-purpose pointer |
+| 0 | 1 | 0 | P2 | General-purpose pointer |
+| 0 | 1 | 1 | P3 | Stack Pointer (SP) — empty-descending |
+| 1 | 0 | 0 | PT | Hidden microcode scratch pointer (absolute addressing) |
+| 1 | 0 | 1 | PT2 | Second hidden scratch pointer, the `MOVW` write cursor (regbank rev D) |
+
+PT and PT2 are microcode-only, not programmer-visible; codes 6 and 7 are unused.
 
 ### 3.3 DOE — Data Output Enable (4-bit field, A12–A15)
 
@@ -137,11 +141,11 @@ Selects which register or destination latches D0–D7 on the rising CLK edge
 | 9 | PTRH — load selected pointer high byte |
 | 10–15 | Reserved |
 
-### 3.5 Pointer Control — PSEL0–1, PINC, PDEC
+### 3.5 Pointer Control — PSEL0–2, PINC, PDEC
 
 | Signal | Description |
 |--------|-------------|
-| PSEL0, PSEL1 | Select which pointer (P0–P3) drives the address bus and is the target of PINC/PDEC/PTRL/PTRH operations |
+| PSEL0, PSEL1, PSEL2 | Select which pointer (P0–P3, PT, PT2) drives the address bus and is the target of PINC/PDEC/PTRL/PTRH operations |
 | PINC | Increment the selected pointer after this microcycle |
 | PDEC | Decrement the selected pointer after this microcycle |
 
@@ -172,15 +176,16 @@ multiplexer. Allocated from what was SPARE0–3 in rev C1.
 
 | Signal | Flag | Polarity |
 |--------|------|----------|
-| FC | Carry | **Active-low** — latches raw 74181 Cn+4 (1 = no carry out). See note below. |
+| FC | Carry | Active-high — 1 = carry out (ADD) / A≥B (SUB/CMP). See note below. |
 | FZ | Zero | Active-high — 1 when ALU result is all-zeros |
 | FN | Negative | Active-high — 1 when bit 7 of ALU result is set |
-| FV | Overflow | Hardwired 0 in rev A (V flag unimplemented on ALU card) |
+| FV | Overflow | Active-high — signed overflow (rev C), sign-bit method on the ALU card (U34/U35) |
 
-**C flag polarity note (deliberate hardware quirk):** The flag register latches
-the raw 74181 Cn+4 output pin, which asserts low on carry. FC=1 therefore means
-*no carry out*. The emulator reproduces this exactly. Do not invert it — this is
-a VERIFY item in BACKLOG.md (add inverter in rev B vs. adopt as the convention).
+**C flag polarity note:** the 74181 Cn+4 pin is active-low (it asserts low on
+carry). Since rev B the ALU card inverts it (a U25 NAND, net `CFLGI`) before the
+C-flag source mux, so FC is the conventional carry: FC=1 means carry out. The
+microcode, emulator, monitor and FPGA RTL all use this sense. (Rev A latched the
+raw pin, FC=1 meaning no carry; V was hardwired 0 until rev C.)
 
 ### 3.9 Clock — CLK, CLKB
 
@@ -196,7 +201,7 @@ the far slot) are provided DNP — populate only if ringing observed on scope.
 
 ### 3.10 LDF — Load Flags
 
-When asserted, causes the FLAGS register to latch the ALU result flags (C, Z, N)
+When asserted, causes the FLAGS register to latch the ALU result flags (C, Z, N, V)
 at the end of the microcycle. This is distinct from DLD=FLAGS (code 5), which
 restores FLAGS from the data bus.
 
@@ -244,7 +249,7 @@ Layout updated for rev B (3-bit PSEL + new flag/shift control bits):
 |------|-------|-------------|
 | 3:0 | DOE | Data output enable (see §3.3) |
 | 7:4 | DLD | Data load destination (see §3.4) |
-| 10:8 | PSEL | Pointer select (3 bits: P0–P3 + PT scratch = 4) |
+| 10:8 | PSEL | Pointer select (3 bits: P0–P3, PT scratch = 4, PT2 scratch = 5) |
 | 11 | PINC | Pointer increment |
 | 12 | PDEC | Pointer decrement |
 | 16:13 | ALUS | ALU function select S0–S3 |
@@ -260,12 +265,14 @@ Layout updated for rev B (3-bit PSEL + new flag/shift control bits):
 | 28 | SHCIN | Shifter shift-in = C flag (rotate through carry) |
 | 29 | SETC | Force C = 1 |
 | 30 | CLRC | Force C = 0 |
-| 31 | — | Reserved |
+| 31 | BSEL | ALU B-input mux select: 0 = B register, 1 = T register |
 
 The C flag is **conventional active-high** in rev B (C=1 = carry-out / A≥B); the
 ALU card inverts the raw 74181 Cn+4 pin. SETC/CLRC force the C latch directly.
 
-FCOND encoding: 0=C, 1=Z, 2=N, 3=V (selects which flag pin drives A12).
+FCOND encoding (`FC` in `microcode/genucode.py`; the control card's condition mux
+inputs): 0=never, 1=always, 2=C, 3=Z, 4=N, 5=V, 6=LT (N^V, signed A<B),
+7=LE ((N^V)|Z, signed A≤B). The selected input drives A12.
 
 ---
 
@@ -283,7 +290,7 @@ FCOND encoding: 0=C, 1=Z, 2=N, 3=V (selects which flag pin drives A12).
 | $FF10–$FF17 | CF-IDE | CF | 8-bit True IDE, memory-mapped task file |
 | $FF30–$FF3F | MDU (multiply/divide) | *(FPGA / emulator; no TTL card yet)* | `$FF30–$FF36` low regs + `$FF39–$FF3C` highs; `MDID`=`'M'` |
 | $FF50–$FF54 | GL graphics-language port | *(FPGA graphics card / emulator)* | `GLDATA/GLSTAT/GLRB/GLERR/GLID`; `GLID`=`'G'` |
-| $FF58–$FF5F | PS/2 keyboard + mouse | **PS/2 (design)** | `PSADAT/PSAST/PSBDAT/PSBST/PSLINE/PSID`; `PSID`=`'K'`. See [ps2-card/](../ps2-card/README.md). |
+| $FF58–$FF5F | PS/2 keyboard + mouse | **PS/2** (routed in KiCad, not yet fabricated) | `PSADAT/PSAST/PSBDAT/PSBST/PSLINE/PSID`; `PSID`=`'K'`. See [ps2-card/](../ps2-card/README.md). |
 
 $FF20–$FF2F (old graphics device door) and $FF40–$FF4F (old geometry-engine
 window) are RETIRED — the single-interface migration made the GL port the one
@@ -318,10 +325,10 @@ their I/O address allocation in this document before building.
 
 | Card | DOE codes used | DLD codes used |
 |------|---------------|----------------|
-| Register bank | 1 (A), 2 (B), 8 (PTRL), 9 (PTRH) | 1 (A), 2 (B), 8 (PTRL), 9 (PTRH) |
-| ALU card | 5 (ALU result) | — |
-| Control card | 3 (T), 4 (T2), 6 (FLAGS) | 3 (T), 4 (T2), 5 (FLAGS restore), 6 (IR) |
-| Memory / I/O | 7 (MEM read) | 7 (MEMW write) |
+| Register bank | 8 (PTRL), 9 (PTRH) | 8 (PTRL), 9 (PTRH) |
+| ALU card | 1 (A), 2 (B), 3 (T), 4 (T2), 5 (ALU result), 6 (FLAGS) | 1 (A), 2 (B), 3 (T), 4 (T2), 5 (FLAGS restore) |
+| Control card | — | 6 (IR) |
+| Memory / I/O / CF / PS/2 | 7 (MEM read) | 7 (MEMW write) |
 | All | 0 (idle) | 0 (none) |
 
 ---
@@ -338,3 +345,4 @@ their I/O address allocation in this document before building.
 | C3 | 2026-06 | rev-B control signals allocated: C27–C30 = PSEL2/LDZN/SHCIN/SETC, B27 = CLRC (were SPARE4–8); SPARE9–11 remain on B28–B30 |
 | C  | 2026-06 | 2nd ALU-input mux added: B28 = BSEL (was SPARE9), ALU B-side selects B reg / T reg; SPARE10–11 remain on B29–B30 |
 | C  | 2026-06 | Interrupt support: B29 = IRQ (was SPARE10); control-card controller provisioned as DNP footprints (U20/U21); SPARE11 remains on B30 |
+| C  | 2026-06-19 | Row B even pins B4–B26 become spare bus lines SPARE12–23; the odd pins stay GND guards |

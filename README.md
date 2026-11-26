@@ -194,14 +194,16 @@ There is one geometry and no modes or palette to manage.
 The same device is modelled in `p8xemu`, and the two are byte-compared frame
 by frame.
 
-**3D** (stages 7–8, `fpga/tang-nano-20k/sdram/STAGE*.md`): a wireframe
-pipeline available three ways from C — all in software (`//#use gfx` +
-`//#use g3d`), accelerated by the **MDU** (a memory-mapped hardware
-multiply-divide unit at `$FF30`), or fully in fabric via the **geometry
-engine** (`$FF40`): edge lists in SDRAM, an S7.8 matrix, one command to
-transform/clip/project/draw, and page-flipped double buffering. The same
-program picks the fastest fitted path at runtime; `cube` on the shipped disk
-demonstrates all of them (`man cube`, `man g3d`).
+**3D** (stages 7–10, `fpga/tang-nano-20k/sdram/STAGE*.md`): a wireframe
+pipeline available from C in software (`//#use gfx` + `//#use g3d`),
+accelerated by the **MDU** (a memory-mapped hardware multiply-divide unit at
+`$FF30`), or fully on the card through the **GL engine** (`$FF50`): card-side
+modeling and viewing matrices, clipping and projection, command lists stored in
+SDRAM, and page-flipped double buffering. (The stage-8 geometry engine's
+`$FF40` register window was retired at stage 10b; the GL engine is its
+successor.) The same program picks the fastest fitted path at runtime; `cube`
+on the shipped disk is a self-spinning GL command list, with the software path
+as its fallback (`man cube`, `man g3d`).
 
 **Verification is the point.** Every milestone is "make the RTL match the
 emulator": the same program runs on both and their per-cycle architectural state

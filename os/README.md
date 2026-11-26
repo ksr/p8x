@@ -18,19 +18,20 @@ assembly ([`p8xos.asm`](p8xos.asm)) and assembled by
 > | `load name` | read a file into its stored load address |
 > | `run name [args]` | `load` it, then `JSR` its exec address; `args` → `P2` (program `RTS` → shell) |
 > | `save name start end` | write memory `[start,end)` to a new file (hex addrs) |
-> | `del name` | mark the directory entry deleted (`$FF`) and write it back |
 > | `pack` | compact the data area, reclaiming `del`/`rmdir`'d extents |
 > | `fsck` | check filesystem integrity (read-only) |
 > | `format` | erase the card and lay a fresh P8XFS v2 volume (asks `Y/N`) |
 > | `umount` / `mount` | swap the CF in the `/d1` slot without rebooting (see **Two drives**) |
-> | `help` | list commands |
-> | `man name` | show a command's manual page (reads `/man/<name>`) |
+> | `sh file` | run a shell script |
+> | `make [target]` | rebuild from the `Makefile` in the current directory |
+> | `bootload file` | install an OS image into the boot sectors (LBA 1 onward) |
+> | `exit` / `mon` | return to the ROM monitor |
 >
 > A second CF is **mounted at `/d1`** in one unified namespace — any `path` on a
 > built-in (or `/bin` command) reaches it with ordinary path syntax
 > (`cd /d1/SRC`, `mkdir /d1/LIB`, `cat /d1/NOTES`). See **Two drives** below.
 >
-> The table above is the **built-in** command set. `cat`, `wc`, `grep`, `cp`,
+> The table above is the **built-in** command set. `del`, `help`, `cat`, `wc`, `grep`, `cp`,
 > `mv`, `head`, `tail`, `more`, `sort`, `uniq`, `sed`, `find`, `diff`, `touch`,
 > `vi`, `man`, `dump`, `dep` (and richer `dir -R`, the `vi` screen editor, etc.)
 > are **userland C
@@ -138,7 +139,7 @@ ROM (EEPROM $0000-$17FF, 6K)                 RAM ($1800-$FEFF)
                                       $5700 OS scratch  |  $5900 TPA (programs)
 ```
 (ROM shrunk 8K→6K on 2026-09-14; the top 2K became the $1800-$1FFF RAM island,
-which let the TPA base drop $5900→$5900. See [docs/p8x-monitor.md](../docs/p8x-monitor.md).)
+which let the TPA base drop $6100→$5900. See [docs/p8x-monitor.md](../docs/p8x-monitor.md).)
 
 Boot path: monitor `B` reads the boot block (LBA 0), checks the `P8`
 signature + `OSCNT`, loads `OSCNT` sectors from LBA 1 to `$2000`, and `JMP`s

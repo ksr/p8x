@@ -34,7 +34,7 @@ and documentation.
 | **Address space** | 64K: 6 KB of ROM at `$0000`, RAM from `$1800` to `$FEFF`, and an I/O page at `$FF00` |
 | **Instructions** | 143 opcodes, all microcoded; the microcode address is the opcode, the step and the condition |
 | **Construction** | about 130 74HCT chips on six cards, in a passive 8-slot backplane with a 96-pin DIN 41612 bus |
-| **Clock** | a 4 MHz oscillator, divided by 1, 2, 4 or 8 (a jumper) |
+| **Clock** | a 4 MHz oscillator, divided by 1, 2 or 4 (a jumper: 4, 2 or 1 MHz) |
 | **Console** | RS-232 serial through a 6850 ACIA |
 | **Disk** | CompactFlash in 8-bit True IDE mode, two drives |
 | **FPGA build** | a Sipeed Tang Nano 20K: 9 MHz, a microSD card as the disk, a 4.3" 480×272 colour panel |
@@ -136,14 +136,15 @@ desktop with a Finder and full-screen applications; without one, it runs over th
 | see what is being worked on | [Where P8X stands](docs/p8x-status.md), then the [backlog](BACKLOG.md) |
 | build it from source | [Working on the code](repository.md) |
 
-## Status (October 2026)
+## Status (November 2026)
 
 - **Running on the FPGA build:** the monitor, P8X/OS booting from a microSD card, the whole `/bin` toolchain, and the
-  graphics engine. Next there: the RTL follows the 6 KB ROM map (`$1800`–`$1FFF` is RAM), then a faster clock than
-  today's 9 MHz, and interrupts.
+  graphics engine. The RTL follows the 6 KB ROM map (`$1800`–`$1FFF` is RAM) since 2026-11-20; next there: rebuild
+  and load the board's bitstreams with it, then a faster clock than today's 9 MHz, and interrupts.
 - **TTL cards:** all boards are designed and routed in KiCad; none is fabricated yet. The memory card (rev F) already
-  decodes the 6 KB ROM. Before ordering, the register bank gains a counting scratch pointer and a second one for the
-  16-bit instructions (rev D), and the second CF drive's port gets its software; the backplane is ordered first. An
+  decodes the 6 KB ROM, and the register bank (rev D, 2026-10-11) has the counting scratch pointer and the second one
+  the 16-bit instructions need. Before ordering, the second CF drive's port gets its software; the backplane is
+  ordered first. An
   interrupt controller card is still to be designed.
 - **Software:** the C compiler compiles itself on P8X. Next on the list: pipes of more than two stages
   (`a | b | c`), and opening a file by name as a single system call.

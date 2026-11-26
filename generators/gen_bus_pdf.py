@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""P8X Bus Definition rev C -- review PDF.
+"""P8X Bus Definition rev C3 -- review PDF.
 Pin map generated from the SAME busnet() function as the CAD generators,
 so this document cannot drift from the boards."""
 from reportlab.lib.pagesizes import letter
@@ -30,16 +30,16 @@ def busnet(pin):
             27:"PSEL2",28:"LDZN",29:"SHCIN",30:"SETC"}.get(n,"SPARE%d"%(n-27+4))
 
 DESC={
- "FC":"Flag: Carry. Driven continuously by the ALU card flag register; read by the control card condition mux for conditional branches",
+ "FC":"Flag: Carry, conventional active-high (1 = carry out / A>=B; the ALU card inverts the 74181 Cn+4). Driven continuously by the ALU card flag register; read by the control card condition mux for conditional branches",
  "FZ":"Flag: Zero. ALU card to control card, as FC",
  "FN":"Flag: Negative (result bit 7). ALU card to control card, as FC",
- "FV":"Flag: oVerflow. ALU card to control card; rev A ALU card drives 0 (V unimplemented, see backlog)",
+ "FV":"Flag: oVerflow (signed, rev C: sign-bit method on the ALU card). ALU card to control card, as FC",
  "+5V":"Power, 6 pins total","GND":"Ground / row-B guard",
  "-RES":"System reset, active low","CLK":"System clock","CLKB":"Inverted clock",
  "LDF":"Latch flags (ALU card)","PINC":"Selected pointer increment",
  "PDEC":"Selected pointer decrement","ALUM":"74181 mode (logic/arith)",
  "CIN":"ALU carry in","SH0":"Shifter control 0","SH1":"Shifter control 1",
- "PSEL2":"Pointer-select bit 2 (rev B: P0-P3 + PT scratch=4); to reg-bank",
+ "PSEL2":"Pointer-select bit 2 (P0-P3, PT scratch=4, PT2 scratch=5 since reg-bank rev D); to reg-bank",
  "LDZN":"Latch Z,N from the data bus on loads (rev B); to ALU card",
  "SHCIN":"Shifter shift-in = C flag, for rotate-through-carry (rev B); to ALU card",
  "SETC":"Force C flag = 1 (SEC, rev B); to ALU card",
@@ -64,16 +64,17 @@ SM=ParagraphStyle("sm",parent=N,fontSize=8,leading=10)
 import os as _os; _DOCS=_os.path.join(_os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))),"hardware","backplane")
 doc=SimpleDocTemplate(_os.path.join(_DOCS,"p8x-bus-definition.pdf"),
     pagesize=letter,topMargin=18*mm,bottomMargin=16*mm,
-    title="P8X Bus Definition Rev C",author="P8X Project")
+    title="P8X Bus Definition Rev C3",author="P8X Project")
 story=[]
 story.append(Paragraph("P8X Backplane Bus Definition", H1))
-story.append(Paragraph("Revision C &mdash; June 2026 &mdash; FOR REVIEW", styles["Heading3"]))
+story.append(Paragraph("Revision C3 &mdash; June 2026 &mdash; FOR REVIEW", styles["Heading3"]))
 story.append(Spacer(1,6))
 story.append(Paragraph(
  "Connector: DIN 41612, 3 rows (A/B/C) &times; 32 pins. Backplane: 8 slots, "
- "25.4&nbsp;mm pitch, 4-layer (signals / GND plane / +5V plane / signals). "
+ "28&nbsp;mm pitch, 4-layer (signals / GND plane / +5V plane / signals). "
  "Power: A1,B1,C1,A2,B2,C2 = +5V; A31,B31,C31,A32,B32,C32 = GND. "
- "Row B pins 3&ndash;30 are a grounded guard row between the two signal rows. "
+ "Row B pins 3&ndash;26 alternate: odd pins are a grounded guard between the two "
+ "signal rows, even pins are spare bus lines SPARE12&ndash;23; B27&ndash;30 carry signals. "
  "This table is generated from the same pin-map function used by the CAD "
  "generators, so it cannot drift from the board files.", N))
 story.append(Spacer(1,10))
@@ -107,7 +108,7 @@ story.append(Paragraph("Legend",H2))
 leg=[["Acronym","Meaning","Acronym","Meaning"],
  ["Dn","Data bus, bit n (8-bit)","An","Address bus, bit n (16-bit)"],
  ["DOE0-3","Data Output Enable field: selects\nwhich card drives the data bus","DLD0-3","Data LoaD field: selects which\nregister latches the data bus"],
- ["PSEL0-1","Pointer SELect: which of P0-P3\n(PC/ptr/ptr/SP) is active","PINC / PDEC","Pointer INCrement / DECrement\n(applies to selected pointer)"],
+ ["PSEL0-2","Pointer SELect: which of P0-P3\n(PC/ptr/ptr/SP), PT or PT2 is active","PINC / PDEC","Pointer INCrement / DECrement\n(applies to selected pointer)"],
  ["ALUS0-3","74181 ALU function Select lines","ALUM","74181 Mode: logic vs arithmetic"],
  ["CIN","ALU Carry IN","SH0-1","SHifter control (pass/left/right/rotate)"],
  ["LDF","LoaD Flags: latch C,Z,N,V from ALU","-RES","RESet, active low (_N = active low)"],
@@ -205,7 +206,7 @@ for note in [
  "4. Address bus is driven exclusively by the register-bank card (selected pointer).",
  "5. rev C3: C27-C30 = PSEL2/LDZN/SHCIN/SETC and B27 = CLRC (were SPARE4-8). rev C: B28 = BSEL (ALU B-mux select, was SPARE9), B29 = IRQ (interrupt request, was SPARE10); SPARE11 (B30) remains reserved.",
  "5b. SPARE0-3 were reallocated as flag lines FC/FZ/FN/FV (A27-A30). SPARE numbering therefore starts at 4.",
- "5c. Row B ground guard spans B3-B26; B27 = CLRC, B28 = BSEL, B29 = IRQ, B30 = SPARE11.",
+ "5c. Row B: odd pins B3-B25 are ground guards, even pins B4-B26 are SPARE12-23; B27 = CLRC, B28 = BSEL, B29 = IRQ, B30 = SPARE11.",
  "6. Verify row A/C orientation against physical DIN connectors before first fab."]:
     story.append(Paragraph(note,N))
 doc.build(story)

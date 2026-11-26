@@ -101,17 +101,17 @@ leg_data = [
     ["Address bus", "A0-A15 (C3-C18)", "16-bit address; driven solely by the register-bank card (selected pointer)."],
     ["DOE field", "DOE0-3 (A12-A15)", "Data Output Enable: selects which card drives the data bus."],
     ["DLD field", "DLD0-3 (A16-A19)", "Data LoaD: selects which register latches the data bus."],
-    ["Pointer sel", "PSEL0-1 (A20-A21), PSEL2 (C27)", "Selects active pointer P0-P3 (+PT scratch=4); PINC/PDEC inc/dec it."],
+    ["Pointer sel", "PSEL0-1 (A20-A21), PSEL2 (C27)", "Selects active pointer P0-P3 (+PT scratch=4, PT2=5); PINC/PDEC inc/dec it."],
     ["Ptr inc/dec", "PINC (A22), PDEC (A23)", "Increment / decrement the selected pointer."],
     ["ALU select", "ALUS0-3 (C19-C22), ALUM (C23), CIN (C24)", "74181 function select, mode (logic/arith), carry-in."],
     ["Shifter", "SH0 (C25), SH1 (C26), SHCIN (C29)", "Shifter control; SHCIN = shift-in is C flag (rotate-through-carry)."],
-    ["Flags out", "FC FZ FN FV (A27-A30)", "Carry/Zero/Negative/oVerflow; ALU card -> control card cond mux."],
+    ["Flags out", "FC FZ FN FV (A27-A30)", "Carry (active-high)/Zero/Negative/signed oVerflow; ALU card -> control card cond mux."],
     ["Flag latch", "LDF (A26), LDZN (C28)", "LDF latches C/Z/N/V; LDZN latches only Z,N on loads."],
     ["C control", "SETC (C30), CLRC (B27)", "Force C=1 (SEC) / C=0 (CLC), leaving Z/N/V untouched."],
     ["Clock/reset", "CLK (A24), CLKB (A25), -RES (A11)", "System clock + complement; reset active-low. (Control card -> all.)"],
     ["Rev-C lines", "BSEL (B28), IRQ (B29)", "BSEL: ALU B-mux 0=B reg,1=T reg. IRQ: maskable int request (reserved)."],
-    ["Power/GND", "+5V (1,2 all rows), GND (31,32 + row-B guard)", "+5V/GND planes; row B 3-26 is a grounded guard between signal rows."],
-    ["Spare", "SPARE4-11 (rev-C reallocations noted)", "Reserved, bused to all 8 slots. SPARE0-3 became FC/FZ/FN/FV."],
+    ["Power/GND", "+5V (1,2 all rows), GND (31,32 + row-B guard)", "+5V/GND planes; row B odd pins 3-25 are a grounded guard between signal rows."],
+    ["Spare", "SPARE11 (B30), SPARE12-23 (row B even pins 4-26)", "Reserved, bused to all 8 slots. SPARE0-10 became flag and rev-B/C lines."],
 ]
 leg = legtbl(leg_data, [16 * mm, 38 * mm, 105 * mm])
 
@@ -139,7 +139,7 @@ two_col = Table([[t, KeepInFrame(165 * mm, 175 * mm, right, mode="shrink")]],
 two_col.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "TOP"),
                              ("LEFTPADDING", (1, 0), (1, 0), 6)]))
 
-story = [Paragraph("P8X Backplane Bus -- Quick Reference (rev C)", H1),
+story = [Paragraph("P8X Backplane Bus -- Quick Reference (rev C3)", H1),
          Paragraph("DIN 41612 96-pin pin&rarr;signal map (component-side view of card connector)", SUB),
          Spacer(1, 3), two_col]
 

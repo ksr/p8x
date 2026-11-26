@@ -46,7 +46,8 @@ for a **DS1302 real-time clock**. Everything lives in the `$FF00–$FF0F` I/O pa
   A8..A15 ─►┌────────┐ IOPG     ┌────────┐ -P0 ($FF00 switches)
             │U1 7430 ├─────────►│U2 74138├─► -P1 ($FF02 LEDs)
             │I/O page│   A1-3 ─►│PORT DEC│─► -P2 ($FF04/5 ACIA)
-            └────────┘          └────────┘   (-P3 $FF08 RTC, reserved)
+            └────────┘          └────────┘─► -P4 ($FF08/9 ACIA2, rev B)
+                                             (-P3 $FF06/7 not used)
   DOE ─►U3 74138 ─► -RD ─┐
   DLD ─►U4 74138 ─► -MEMW┼─ gates (U5/U6/U15) ─► -SWOE, LCK, EEN
                           │

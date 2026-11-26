@@ -143,13 +143,17 @@ correctly.)
 | `$FF00` | switch input port (read) |
 | `$FF02` | LED output port (write) |
 | `$FF04 / $FF05` | 6850 ACIA status / data (the console serial port) |
+| `$FF06` | `IRQGEN`: a write asserts a maskable IRQ — the emulator's device-IRQ model; on hardware the IRQ is to come from the planned interrupt-controller card |
 | `$FF08 / $FF09` | **second** 6850 ACIA status / data — the 2nd serial port added for **two-mode operation** (register-identical to the console ACIA: status bit0 RDRF, bit1 TDRE). Drives host file transfer via the `kermit` command while the console keeps `$FF04`. Modelled by `p8xemu` (`-2i`/`-2o` file-backed RX/TX). |
 | `$FF10–$FF17` | CF-IDE task-file registers |
 | `$FF20–$FF2F` | retired — was the graphics display's DEVICE door (register pokes drew immediately). Closed by the single-interface migration: reads float `$FF` like any absent card, and the register file survives only as the GL walker's internal property. The GL/PGC port at `$FF50` is the one graphics interface — see [p8x-graphics-theory.md](p8x-graphics-theory.md). Modelled by `p8xemu` — see [emulator/README.md](../emulator/README.md#the-graphics-display) |
+| `$FF30–$FF3C` | **MDU** (multiply-divide unit): `MDA`/`MDB`/`MDC` `$FF30–$FF32` with highs `$FF39–$FF3B`, `MDQ` `$FF33` / `MDQH` `$FF3C`, `MDGO` `$FF34`, `MDSTAT` `$FF35`, `MDID` `$FF36` (`'M'`). FPGA and emulator; no TTL card |
+| `$FF50–$FF54` | **GL port**: `GLDATA` `$FF50`, `GLSTAT` `$FF51`, `GLRB` `$FF52`, `GLERR` `$FF53`, `GLID` `$FF54` (`'G'`; the monitor probes it at wake for `GFXPRES`) |
+| `$FF58–$FF5E` | **PS/2 card**: `PSADAT`/`PSAST` `$FF58/59` (keyboard), `PSBDAT`/`PSBST` `$FF5A/5B` (mouse), `PSLINE` `$FF5C`, `PSID` `$FF5E` (`'K'`) |
 
 > Every data address above is single-sourced in `generators/gen_memmap.py`
 > (which emits `memmap.inc` for the OS/monitor to `.include`, plus `memmap.h`,
-> `memmap.py`, and the command-facing `lib_mem`). This table is a hand-maintained
+> `memmap.py`, the command-facing `lib_mem` and the FPGA RTL's `memmap.vh`). This table is a hand-maintained
 > mirror — regenerate the map and update it together. (Generating the table
 > itself from `gen_memmap.py` is a tracked BACKLOG item.)
 

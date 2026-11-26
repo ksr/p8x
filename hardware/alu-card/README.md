@@ -23,14 +23,24 @@ the **FLAGS** register. All arithmetic and logic happens here.
 | U11 | 74182 | Carry-lookahead generator across the two 74181s |
 | U12–U15 | 74157 | Two-stage shifter (pass / <<1 / >>1) |
 | U16 | 74244 | ALU-result bus driver |
-| U17 | 74175 | FLAGS register (C, Z, N, V) |
+| U17 | 74175 | Z, N and V flag flip-flops |
 | U18 | 74260 | Zero-detect NOR over the result |
-| U19 | 74HCT08 | AND glue (zero combine, flag-clock gate) |
+| U19 | 74HCT08 | AND glue (zero combine, ALU LED) |
 | U20 | 74138 | DOE decoder (codes 1–6) |
-| U21 | 74138 | DLD decoder (codes 1–5) |
-| U22 | 74157 | Flag mux — select computed flags vs restore-from-bus |
+| U21 | 74138 | DLD decoder (codes 1–4, the four registers) |
+| U22 | 74157 | Z/N source mux: ALU result, or the bus byte on a load (`LDZN`) |
 | U23 | 74244 | FLAGS → data bus driver |
-| U24, U25 | 74HCT32 / 74HCT00 | Flag-load and restore gating |
+| U24 | 74HCT32 | OR: flag clock enable (`LDF | LDZN`), any-shift detect |
+| U25 | 74HCT00 | NAND: inverts the 74181 `Cn+4` (net `CFLGI`), `SETC`/`CLRC`/LDF-LED inverters |
+| U26 | 7474 | C flag flip-flop (async preset/clear for `SETC`/`CLRC`) |
+| U27 | 74260 | Bus zero-detect over `D0–7` (Z on a load) |
+| U28 | 74157 | Shift-out select (bit 0 or bit 7) |
+| U29 | 74157 | C source mux: shift-out when shifting, else inverted `Cn+4` |
+| U30 | 74157 | Shift-in mux (`SHCIN`): `CIN` or the current C |
+| U31 | 74HCT08 | AND: flag clocks, C clear |
+| U32, U33 | 74157 | B-operand mux (`BSEL`): B register or T (rev C) |
+| U34 | 74HCT86 | XOR: V (signed overflow) derivation (rev C) |
+| U35 | 74HCT08 | AND: V derivation (rev C) |
 
 ## How it works
 
@@ -38,9 +48,9 @@ the **FLAGS** register. All arithmetic and logic happens here.
 A, B, T, T2 are each a **74377** (8-bit latch with a load enable) paired with a
 **74244** output buffer. The 74377 loads from the data bus when its DLD code is
 decoded by U21 (`-LDA`/`-LDB`/`-LDT`/`-LDT2`). The 74244 drives the register's value
-back onto the data bus when its DOE code is decoded by U20. A and B also feed the
-74181 inputs directly and continuously — they don't need to be on the bus for the
-ALU to operate on them.
+back onto the data bus when its DOE code is decoded by U20. A feeds the 74181 A
+inputs directly and continuously; the 74181 B inputs come through the U32/U33
+B-mux, which passes the B register (`BSEL`=0) or T (`BSEL`=1).
 
 ### The ALU (74181 + 74182)
 Two 74181s (U9 low nibble, U10 high nibble) form the 8-bit ALU. Function is set by
@@ -50,29 +60,33 @@ and **CIN** (carry in). Instead of rippling carry between the two 74181s, the
 (`!P`/`!G`) and produces the fast intermediate carry `CNX` into the high nibble —
 keeping the carry chain short and fast.
 
-> **Carry flag polarity quirk:** the C flag latches the *raw* 74181 `Cn+4` pin,
-> which is **active-low** (C=1 means *no* carry out). This is deliberate and the
-> emulator reproduces it faithfully — do not "fix" it. See
-> [p8x-bus-definition.md §3.8](../backplane/p8x-bus-definition.md).
+> **Carry flag polarity:** the 74181 `Cn+4` pin is active-low; since rev B a U25
+> NAND inverts it (net `CFLGI`) before the C-source mux, so the C flag is
+> conventional **active-high** (C=1 = carry out, or A≥B after SUB/CMP). Microcode,
+> emulator, monitor and FPGA RTL all use this sense. (Rev A latched the raw pin.)
 
 ### The shifter
 Two stages of 74157 muxes (U12/U13 then U14/U15) sit after the ALU, selected by
-**SH0/SH1**, giving pass-through, shift-left, or shift-right. The shift-in bit is
-wired to CIN. The shifted result is driven onto the data bus by U16 (74244) when
-DOE selects the ALU result (code 5).
+**SH0/SH1**, giving pass-through, shift-left, or shift-right. The shift-in bit
+comes from the U30 mux: `CIN`, or the current C flag when **SHCIN** is set (how
+`ROL`/`ROR` rotate through carry). The shifted result is driven onto the data bus
+by U16 (74244) when DOE selects the ALU result (code 5).
 
 ### Flags
 - **Z** (zero): U18 (74260) NORs the result bits, combined in U19 — asserted when
-  the whole 8-bit result is zero.
-- **N** (negative): bit 7 of the result.
-- **C** (carry): the raw 74181 `Cn+4` (see quirk above).
-- **V** (overflow): **hardwired 0 in rev A** — unimplemented (see BACKLOG).
+  the whole 8-bit result is zero. On a load (`LDZN`) U22 takes Z from the bus
+  zero-detect U27 instead.
+- **N** (negative): bit 7 of the result, or `D7` on a load (`LDZN`).
+- **C** (carry): in its own 7474 (U26), clocked by `LDF` from the U29 C-source mux
+  (shift-out when shifting, else the inverted `Cn+4`); `SETC`/`CLRC` force it.
+- **V** (overflow): signed overflow since rev C, by the sign-bit method
+  `V = (A7^F7) & (A7^B7^~ALUS2)` in U34/U35, ungated by M (meaningful after
+  ADD/SUB/CMP).
 
-The 74175 (U17) latches all four flags, but **only when LDF is asserted** (the flag
-clock is gated by U19/U24 so non-ALU cycles don't disturb the flags). The U22 74157
-mux lets FLAGS be either freshly computed *or* restored from the data bus (DLD
-code 5, for PLP-style flag pops), and U23 (74244) drives FLAGS onto the bus for
-PHP-style pushes (DOE code 6).
+U17 (Z, N, V) is clocked by `CLK & (LDF | LDZN)` (U24/U31), so non-ALU cycles don't
+disturb the flags; `-RES` clears it. U23 (74244) drives FLAGS onto the bus for
+PHP-style pushes (DOE code 6). See
+[p8x-alu-card-theory.md](p8x-alu-card-theory.md) §3.5 for the detail.
 
 ## Bus codes this card owns
 - **DOE:** 1=A, 2=B, 3=T, 4=T2, 5=ALU result, 6=FLAGS

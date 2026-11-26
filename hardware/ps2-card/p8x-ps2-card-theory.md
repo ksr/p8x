@@ -28,7 +28,7 @@ The built card (`CARDS["ps2-card"]` in `generators/gen_eagle.py`) hands the PS/2
 protocol to an **ATmega1284P (U13, PDIP-40)** running in firmware — 5 V-native,
 open-drain in software, so there is **no level translation anywhere** (the TXS0102
 is only the 3.3 V FPGA path). The MCU does framing / parity / ready / overrun for
-both ports and keeps four **74HC374** read latches (U7–U10 =
+both ports and keeps four **74HCT374** read latches (U7–U10 =
 `PSADAT`/`PSAST`/`PSBDAT`/`PSBST`) loaded over its `MB0–7` bus (the full `PA` port);
 each latch tri-states onto D0–7 under its read strobe. `PSLINE` (U11 74244) reads
 the four live PS/2 lines, and `PSID` (U12 74244) drives the constant `$4B` (`'K'`)

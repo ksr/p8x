@@ -1,6 +1,7 @@
 # P8X two-mode operation — headless console vs. graphics desktop (design)
 
-Status: **design, 2026-09-09.** A major direction change (checkpoint tag
+Status: **designed 2026-09-09; all five phases (P1-P5) done in the emulator by
+2026-09-10** (the phase log below). A major direction change (checkpoint tag
 `checkpoint-wm-tty-2026-09-09` marks the state before it). Supersedes the tiled
 resident-window `wdesk` model (see [p8x-wm-design.md](p8x-wm-design.md)) with a
 full-screen-app + Finder-desktop model. Reuses that work's *plumbing*; retires
@@ -108,7 +109,8 @@ command. Independent of the graphics work; needed before the transfer app.
 
 - **P1 — `graphics_present` flag. DONE (2026-09-09).** The monitor's `DISPINIT`
   probes `GLID` at wake, records the result in the resident byte `GFXPRES`
-  (`$60A4`, a memmap anchor shared by firmware + OS + programs), and prints
+  (`$1FA4` today, in the `$1800-$1FFF` RAM island; a memmap anchor shared by
+  firmware + OS + programs), and prints
   `GRAPHICS AVAILABLE` / `NO GRAPHICS` on serial; the OS `COLD` re-affirms
   `GFXPRES` after the banner so programs can trust it across the monitor→OS
   handoff. `has_graphics()` (in `lib_gfx.c`) reads the flag, and `gpresent()` now
@@ -185,8 +187,8 @@ command. Independent of the graphics work; needed before the transfer app.
     that framebuffer-grab at the cycle cap must not send `exit`/return-to-console
     first (see the `c_demo` fix), or they capture a cleared screen and wrongly
     read the program as "drew nothing."
-  - **ROM budget resolved:** the driver + `MONFONT` fit in the 8 KB with room to
-    spare; the font itself lives on disk (5.3 KB), which is what made "monitor on
+  - **ROM budget resolved:** the driver + `MONFONT` fit in the ROM (8 KB then, 6 KB
+    since 2026-09-14) with room to spare; the font itself lives on disk (5.3 KB), which is what made "monitor on
     screen" viable without a font in ROM.
   - **SHIPPED (2026-09-15) — the text overlay:** proper **scrollback**,
     **per-cell erase**, and the per-char-GTEXT **speed** cut all landed together by
@@ -215,8 +217,9 @@ command. Independent of the graphics work; needed before the transfer app.
   captures TX — which is both self-testable and pipeable to a host `kermit`.
   Verified by `c_serial2_test.sh` (a probe drains `-2i` to both the console and
   `-2o`). **Hardware:** a second 6850 (or equivalent) at the same `$FF08/$FF09`
-  window, its own baud clock + line driver to a second connector — a card/wiring
-  task on the FPGA/TTL track, not yet built. The serial-terminal / Kermit command
+  window, its own baud clock + line driver to a second connector. On the TTL
+  build that is the io-card rev B (second 6850 U17 and a second DB9), designed
+  and routed in KiCad, not yet fabricated. The serial-terminal / Kermit command
   that drives this port is P5. Independent of the graphics work.
 - **P4 — Finder desktop + full-screen-app frame. FIRST CUT DONE (2026-09-09).**
   `os/commands/finder.c` -- a full-screen file browser (no tiling): a white menu
@@ -260,24 +263,24 @@ command. Independent of the graphics work; needed before the transfer app.
   emulator's file-backed 2nd port (-2o/-2i). C-only for now; the hand-asm twin
   is on the backlog (as with `screen`). **All five phases (P1-P5) are done.**
 
-## Open questions (resolve as we go)
+## Open questions (all answered)
 
-- **ROM budget for the glass TTY.** The monitor+BIOS live in 8 KB ($0000-$1FFF).
-  Measure the glass-TTY code + font-draw cost; if it doesn't fit ROM, fall back to
-  an OS-level console (monitor stays serial — but that trades away "monitor on
-  screen").
-- **Glass-TTY font/geometry.** Screen is 480×272. With the GL stroke font at a
-  chosen `TSIZE`, how many cols×rows? Determines the framebuffer size and scroll
-  cost.
-- **Scroll method** — CPU-side text-buffer repaint vs. a card blit/scroll (faster
-  if the card supports it).
+The questions raised at the start, with the answer each one got:
+
+- **ROM budget for the glass TTY.** It fits: the driver and `MONFONT` live in the
+  monitor ROM (8 KB when this was written, 6 KB `$0000-$17FF` since 2026-09-14);
+  the font itself loads from `/FONT.GL` on disk, so the monitor is on screen.
+- **Glass-TTY font/geometry.** Answered by the text overlay (2026-09-15): a
+  character-generator plane of 80 x 34 cells, 6 x 8 pixels each, on the 480x272
+  panel (`gtxt.v`), not GL stroke text.
+- **Scroll method** — the card scrolls its own char RAM (`TXSCR`); the CPU
+  repaints nothing.
 - **Keyboard** — input stays serial for the console; a PS/2 keyboard + mouse are
-  now MODELLED (emulator `$FF58-$FF5F` window + `lib_ps2` Set-2/packet decode, man
-  ps2) and a standalone TTL receiver card + the FPGA-fabric option are designed
-  (see the PS/2 interface doc and `hardware/ps2-card/`). The hardware is not wired
-  yet; a real PS/2 device feeds the same `CONIN`/pointer path the SGR pad uses.
-- **Write app scope** — plain text editor vs. richer "word processor"; likely
-  starts as a screen editor (evolve `vi`/`edit`, or new).
-- **Desktop file ops UX** — modal dialogs vs. menu-driven for rename/duplicate/
-  move. Finder now has a mouse (following cursor + click), so the FILE menu can
-  be clicked as well as keyed; the typed-name step still uses a modal text box.
+  MODELLED (emulator `$FF58-$FF5F` window + `lib_ps2` Set-2/packet decode, man
+  ps2), and the PS/2 card (`hardware/ps2-card/`) is designed and routed in KiCad,
+  not yet fabricated. A real PS/2 device feeds the same `CONIN`/pointer path the
+  SGR pad uses.
+- **Write app scope** — a plain full-screen text editor (`os/commands/write.c`,
+  P5).
+- **Desktop file ops UX** — menu-driven: the FILE menu, keyed or clicked, with a
+  modal text box for a typed name and a Y/N prompt for delete (P4).

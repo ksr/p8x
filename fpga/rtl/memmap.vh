@@ -6,7 +6,7 @@
 // memory-region anchors
 `define MM_RAMBASE   16'h1800    // first RAM address (ROM shrunk 8K->6K 2026-09-14; $1800-$1FFF is a low RAM island)
 `define MM_IOBASE    16'hFF00    // memory-mapped I/O page
-`define MM_ROMSIZE   16'h1800    // 6K firmware ROM $0000-$17FF (monitor uses ~5.2K)
+`define MM_ROMSIZE   16'h1800    // 6K firmware ROM $0000-$17FF (monitor uses ~4.9K)
 `define MM_RAMSIZE   16'hE700    // RAM span $1800-$FEFF (IOBASE-RAMBASE)
 `define MM_OSORG     16'h2000    // OS load/link address (still $2000; the $1800-$1FFF RAM island holds relocated scratch)
 `define MM_TPABASE   16'h5900    // transient program area base (RUNnable programs load here)
@@ -283,7 +283,7 @@
 `define MM_GTCOL     16'h1FA5    // glass TTY cursor column (0..GTCOLS-1)
 `define MM_GTROW     16'h1FA6    // glass TTY cursor row (0..GTROWS-1)
 `define MM_GTSUSP    16'h1FA7    // nonzero = glass TTY suspended (a full-screen GL app owns the screen; CONOUT is serial-only)
-`define MM_GCONEN    16'h1FAF    // 1 = glass TTY console ENABLED (CONOUT mirrors to the GL screen); 0 = off (serial-only, the default -- `screen on` enables it)
+`define MM_GCONEN    16'h1FAF    // 1 = glass TTY console ENABLED (CONOUT mirrors to the GL screen; the monitor sets it at wake when a card is fitted); 0 = off (serial-only; no card, or `screen off`)
 `define MM_GTXL      16'h1FA8    // glass TTY cursor pixel x, low byte (0..474, step 6)
 `define MM_GTXH      16'h1FA9    // glass TTY cursor pixel x, high byte
 `define MM_GTYL      16'h1FAA    // glass TTY text-baseline pixel y (window, y-up), low byte

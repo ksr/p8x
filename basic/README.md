@@ -150,7 +150,7 @@ origin), `BASRAM` (data base), `PBUF` (rebuild scratch), and `MONITOR` (where
 
 > **The standalone build no longer works.** BASIC's `PUTC`/`GETC` now tail-call the
 > BIOS (`CONOUT` `$0103` / `CONIN` `$0100`) instead of driving the ACIA directly,
-> so it needs the monitor resident at `$0000-$1FFF` — which the `$0000` build
+> so it needs the monitor resident at `$0000-$17FF` — which the `$0000` build
 > replaces. Nothing had built that variant for some time (every target passes
 > `-D BASORG=$2000` or `$5900`, and `build_rom.sh` states BASIC is no longer
 > ROM-resident), so this formalises an existing state rather than removing a
@@ -234,15 +234,13 @@ call) and the byte-at-a-time pointer walks the compiler emits. Note for anyone
 running the two side by side: the C image reaches `$BD00`, so a BASIC program
 that `POKE`s into `$A000`–`$BC00` (free under the 9 KB asm build) corrupts it.
 
-## Planned layout (proposed — see open decisions)
+## Standalone EEPROM layout (retired 2026-08-13)
 
-| Region | Use |
-|--------|-----|
-| `$0000-$1FFF` | interpreter code (EEPROM, 6 KB) |
-| `$2000-$7FFF` | RAM (rev E) — unused by the standalone build |
-| `$8000-…`     | tokenized program text (standalone `BASRAM=$8000`) |
-| `…-$FDFF`     | named numeric vars (32) + string-var table + string/eval scratch |
-| `$FE00-$FEFF` | stack (P3), incl. GOSUB return stack |
+The first plan ran BASIC from its own EEPROM at `$0000`, with its program text
+from `BASRAM=$8000` and its stack at `$FE00-$FEFF`. That standalone build is
+retired (see the note under the build table above); BASIC now runs from disk
+(`$2000`) or as the TPA program `BASIC.BIN` (`$5900`), with the monitor in the
+6 KB ROM at `$0000-$17FF`.
 
 ## Milestones
 

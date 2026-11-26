@@ -88,7 +88,8 @@ Layout rules:
   is beyond the autorouter; the spacing does its job
 - **Decoupling**: one 100 nF within 10 mm of each slot's power pins (C1–C8
   in the schematic), 2 × 470 µF bulk near the power entry (C11/C12)
-- Power entry (J11, 4-pos screw terminal: 2 × +5V, 2 × GND) at one end;
+- Power entry (J11, a 2-position Phoenix Contact MSTBA 2,5/2-G-5,08 pluggable
+  screw terminal, ~12 A: +5V on terminal 1, GND on 2) at one end;
   via-stitch generously into the planes (≥ 8 vias per terminal)
 - Tie every ground pin straight into L2 at every slot — 18 per slot (the 12
   odd row-B guards plus rows 31–32), 144 along the bus, a low-inductance grid
@@ -248,7 +249,7 @@ already solved it.
 | Ref | Part |
 |---|---|
 | J1–J8 | DIN 41612 Type C 96-pin **female, straight (vertical), THT solder** — see the connector note below |
-| J11 | 4-pos screw terminal, 5.08 mm |
+| J11 | 2-pos Phoenix Contact MSTBA 2,5/2-G-5,08 pluggable screw terminal, 5.08 mm |
 | C11, C12 | 470 µF 10 V electrolytic |
 | C1–C8 | 100 nF ceramic disc |
 | RN1 | 10 kΩ × 8 bussed SIP-9 |

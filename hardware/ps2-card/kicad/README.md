@@ -1,7 +1,9 @@
 # ps2-card -- KiCad
 
-Built by the bespoke `gen_ps2.py` (placement: the two mini-DIN-6 sockets on the
-bottom edge, the four status LEDs on the right, the bus connector on the left) from
+Built by the bespoke `gen_ps2.py` (placement: the two mini-DIN-6 sockets and the
+four status LEDs on the front (right) edge, the sockets facing off the board (moved
+from the bottom edge 2026-11-23), the ICSP header on the bottom edge, the bus
+connector on the left) from
 the canonical gen_eagle netlist (`CARDS["ps2-card"]`: an ATmega1284P behind a
 74HCT374/74HCT244 latch bridge), to the same standard as the memory card: 4-layer
 (F/B signals, In1=GND, In2=VCC planes), a bypass cap above each IC, part values on

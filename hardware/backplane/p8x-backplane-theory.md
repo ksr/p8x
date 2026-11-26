@@ -43,7 +43,7 @@ A DIN 41612 connector has three rows (A, B, C) × 32 pins. The mapping:
   A23      = PDEC           C28     = LDZN            B4,6,..26 = SPARE12..23
   A24      = CLK            C29     = SHCIN                       (even pins)
   A25      = CLKB           C30     = SETC            B3,5,..25 = GND guard
-  A26      = LDF            (spares: SPARE4..)                    (odd pins)
+  A26      = LDF                                                  (odd pins)
   A27..30  = FC,FZ,FN,FV
 ```
 
@@ -145,7 +145,7 @@ all slots. A useful mental model of one bus cycle:
   parts are connectors, the resistor network, caps, and an LED, all explicitly
   netted.
 - **Clock termination (DNP):** scope `CLK`/`CLKB` at the far slot after bring-up
-  and decide whether to populate `RT/CT`.
+  and decide whether to populate `R2/C13` and `R3/C14`.
 - **Clearance:** the Eagle-era layout ran the clock verticals close (~0.6 mm) to
   the slot-10 pad columns. The routed KiCad board (8 slots, [`kicad/`](kicad/README.md))
   passes DRC at 0.13 mm clearance with 0 unconnected, and since 2026-10-21 holds

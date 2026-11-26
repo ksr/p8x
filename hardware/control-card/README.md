@@ -45,9 +45,11 @@ so the control word is already stable when CLK arrives.
 
 ### Reset
 A pushbutton + RC network feeds two 74HCT14 Schmitt inverters (U2) to produce a
-clean, debounced **-RES**. Reset clears the step counter (U18) and the instruction
-register (U7), and is broadcast on the backplane so every card returns to a known
-state (notably the Register Bank zeroes P0 → execution starts at $0000).
+clean, debounced **-RES**. Reset clears the step counter (U18), the clock divider
+(U1) and the run/halt synchronizer flip-flop (U3.1). The instruction register (U7,
+a 74377) has no clear and is not reset: step 0 of every opcode is the fetch cycle, so
+whatever the IR holds, the first cycle after reset is a fetch. -RES is broadcast on
+the backplane so every card returns to a known state (notably the Register Bank zeroes P0 → execution starts at $0000).
 
 ### Front-panel run control
 - **RUN/HALT** toggle and a debounced **STEP** pushbutton feed a 7474 (U3)
@@ -67,8 +69,8 @@ state (notably the Register Bank zeroes P0 → execution starts at $0000).
 3. Four **28C64 EPROMs** (U10–U13) output the 32-bit control word at that address.
 4. The 4 × **74374** pipeline latch (U14–U17) registers all 32 bits on CLK̄, so
    glitchy ROM transitions never reach the backplane. The latched outputs *are*
-   the bus control signals: DOE0–3, DLD0–3, PSEL0–1, PINC, PDEC, ALUS0–3, ALUM,
-   CIN, SH0–1, LDF, FCOND0–2, plus µRESET and HALT.
+   the bus control signals: DOE0–3, DLD0–3, PSEL0–2, PINC, PDEC, ALUS0–3, ALUM,
+   CIN, SH0–1, LDF, LDZN, SHCIN, SETC, CLRC, BSEL, FCOND0–2, plus µRESET and HALT.
 5. The step counter (U18) increments each cycle. The **µRESET** bit reloads it to
    zero, ending the current instruction and forcing the shared fetch cycle next.
 
@@ -82,7 +84,7 @@ ROM page.
 ## Control word layout (32 bits)
 See [p8x-system-design.md §3.2](../../docs/p8x-system-design.md) for the full bit map, and
 `microcode/genucode.py` `w()` for the authoritative packing. In brief: bits 0–3
-DOE, 4–7 DLD, 8–10 PSEL (3-bit: P0–P3 + PT scratch), 11 PINC, 12 PDEC, 13–16 ALU
+DOE, 4–7 DLD, 8–10 PSEL (3-bit: P0–P3, PT scratch = 4, PT2 scratch = 5), 11 PINC, 12 PDEC, 13–16 ALU
 S0–3, 17 ALU M, 18 CIN, 19–20 SH0/1, 21 LDF, 22–24 FCOND, 25 µRESET, 26 HALT,
 27 LDZN, 28 SHCIN, 29 SETC, 30 CLRC, 31 BSEL.
 

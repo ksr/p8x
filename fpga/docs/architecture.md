@@ -61,12 +61,13 @@ the single-interface migration retired it — it floats `$FF` everywhere now.)
 
 | Range | Size | Contents | FPGA realization |
 |-------|------|----------|------------------|
-| `$0000–$1FFF` | 8 KB | firmware ROM (monitor) | BRAM, **initialized** from the ROM image |
-| `$2000–$FEFF` | ~56 KB | RAM: OS + scratch + TPA (`$5900`) | BRAM, uninitialized |
+| `$0000–$17FF` | 6 KB | firmware ROM (monitor) | BRAM, **initialized** from the ROM image |
+| `$1800–$FEFF` | ~58 KB | RAM: scratch island `$1800–$1FFF`, OS (`$2000`), TPA (`$5900`) | BRAM, uninitialized |
 | `$FF00–$FFFF` | 256 B | memory-mapped I/O | address-decoded to peripherals |
 
 Address decode: `$FF00–$FFFF` → I/O; else BRAM (the ROM/RAM split is just which
-BRAM region and whether writes are allowed below `$2000`).
+BRAM region and whether writes are allowed below RAMBASE `$1800`, the `MM_RAMBASE` of the
+generated `fpga/rtl/memmap.vh`).
 
 ### Peripheral decode (`$FF00` page)
 
@@ -101,8 +102,9 @@ BRAM region and whether writes are allowed below `$2000`).
 ## Microcode BRAM
 
 `microcode/genucode.py` emits the four 8 K×8 EEPROM images
-(`rom/p8x-ucode0..3.bin`) = one **8192 × 32-bit** control store = 256 Kbit.
-`fpga/sim/mk_ucode_mem.py` combines them into a `$readmemh` file for simulation.
+(`microcode/u0-u3.bin`; `make rom` copies them to `rom/p8x-ucode0..3.bin`) = one
+**8192 × 32-bit** control store = 256 Kbit.
+`fpga/sim/mk_ucode_mem.py` combines the `microcode/` copies into a `$readmemh` file for simulation.
 
 It did **not** fit on the board: 256 Kbit of microcode plus 512 Kbit of memory
 needs 47 BSRAM blocks and the GW2AR-18 has 46. All 32 control-word bits are used,

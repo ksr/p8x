@@ -22,7 +22,7 @@ back onto the data bus.
 | Signal | Purpose |
 |--------|---------|
 | `D0–D7` | byte to load into a pointer's low or high half; also the readback path's tristate source |
-| `PSEL0–2` | selects the active pointer (0–3 = P0–P3, 4 = PT) |
+| `PSEL0–2` | selects the active pointer (0–3 = P0–P3, 4 = PT, 5 = PT2) |
 | `PINC` / `PDEC` | increment / decrement the active pointer this clock |
 | `DLD0–3` | data-load field — decoded here to "load pointer low/high" |
 | `DOE0–3` | data-output field — decoded here to "drive pointer low/high onto D0–7" |
@@ -108,8 +108,8 @@ scratch pointer PT2 (PSEL = 5)** — see the note below.
 > `PSEL` is already 3 bits and `U33` already decodes select 5 (this also defines
 > the previously-floating PSEL = 5 case noted in the backplane VERIFY notes), ~10
 > chips added on this card (53 ICs total). The microcode, emulator, assembler and
-> `p8cc.py` already emit and model the counting PT; PT2 is provisioned for `MOVW`,
-> which remains a microcode/emulator item on the BACKLOG.
+> `p8cc.py` emit and model both: `MOVW` (opcode `$78`, microcode and emulator done
+> 2026-06-27) uses PT as its read cursor and PT2 as its write cursor.
 
 ### 3.2 Pointer selection → the internal pointer bus (PB0–15)
 `PSEL0–2` drive `U33` (74138), producing the one-hot select `-SEL0..-SEL5`. The
@@ -178,8 +178,9 @@ one of those actions is just a combination of `PSEL`, `PINC/PDEC`, `DLD`, and
 ## 5. Known issues / verify (from the design review)
 
 - **IC power pins:** *fixed* — `card()` now nets every IC's VCC/GND supply pin to
-  the power pours (the review found it previously omitted them). This card has 44
-  ICs and was the most affected; verified all 44 now have both rails.
+  the power pours (the review found it previously omitted them). This card (44 ICs
+  at the time, 53 since rev D) was the most affected; verified all 44 then had both
+  rails, and every IC added since is netted the same way by `card()`.
 - **Address bus floats for PSEL = 6, 7** (rev B/C: 5, 6, 7): `U33` is always
   enabled; in rev B/C only 0–4 are populated, so codes 5–7 drive an undefined PB
   onto `A0–15`. **Rev D defines PSEL = 5 (PT2)** with real hardware + `-SEL5`

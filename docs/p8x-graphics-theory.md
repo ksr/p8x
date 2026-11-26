@@ -65,8 +65,9 @@ DISCARDED, not clipped (the one rule trivially identical in C and
 Verilog). Screen space is 480x272, y down, RGB565 direct colour: a
 pixel IS its colour.
 
-`GMODE` ($FF2E's write side, stage 10f) selects the pixel-write mode
-for lines, points and outlines: 0 replace, 1 complement (dest
+The `LINFUN` verb (opcode `$EB`, stage 10f) sets the engine's pixel-write
+mode, `GMODE` (no longer bus-decoded: `$FF2E` went with the retired
+`$FF20-$FF2F` window), for lines, points and outlines: 0 replace, 1 complement (dest
 inverted, pen ignored), 2 OR, 3 AND, 4 XOR. Fills and CLS always
 replace — the burst filler is not modal. A nonzero mode turns the
 single-pixel write into a read-modify-write against the framebuffer.
@@ -229,9 +230,11 @@ margin) needs its own bench or a human eye on the panel.
 
 ## 9. What is deliberately NOT here
 
-Read-back (FLAGRD/MATXRD/CLRD/CLMOD — stage 10e) is built and proven
-in simulation but not fitted: it costs more logic than the current
-FPGA has free. Its port plumbing (GLRB, GLSTAT bit0) is already in the
-contract. AREA seed fill (10g) and vector TEXT (10h) are scoped in
-BACKLOG.md. The stage-8 record engine and its $FF40 window are retired
-— a scene is a command list now.
+CLMOD, the one-byte command-list patch, left on 2026-09-01: its logic
+funded BLIT. The stage-8 record engine and its $FF40 window are
+retired — a scene is a command list now.
+
+Once listed here and built since: read-back (FLAGRD/MATXRD/CLRD, stage
+10e — backed out for room on 2026-08-26, restored and fitted on the
+card on 2026-08-28; GLRB and GLSTAT bit0 carry it, `clsave` is its
+payoff), AREA seed fill (10g) and vector TEXT (10h), both in §4.

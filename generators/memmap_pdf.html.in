@@ -144,7 +144,7 @@
         <div class="addr mono">$0000</div>
         <div class="body tint" style="--c:var(--rom);--cbg:var(--rom-bg)">
           <div class="rn">Firmware ROM <span class="tag">ROM</span></div>
-          <div class="rc">Monitor + BIOS. Reset vector $0000, BIOS jump table $0100. ~5.2&nbsp;KB used; shrunk 8&nbsp;KB→6&nbsp;KB to open the island below.</div>
+          <div class="rc">Monitor + BIOS. Reset vector $0000, BIOS jump table $0100. ~4.9&nbsp;KB used; shrunk 8&nbsp;KB→6&nbsp;KB to open the island below.</div>
         </div>
         <div class="sz mono"><b>6&nbsp;KB</b>–$17FF</div>
       </div>
@@ -252,7 +252,7 @@
       <div class="card">
         <h2>What changed</h2>
         <ul class="chg">
-          <li><span class="d"></span><span><b>ROM 8&nbsp;KB → 6&nbsp;KB.</b> <span class="sub">The monitor only used ~5.2&nbsp;KB; the top 2&nbsp;KB became RAM.</span></span></li>
+          <li><span class="d"></span><span><b>ROM 8&nbsp;KB → 6&nbsp;KB.</b> <span class="sub">The monitor uses ~4.9&nbsp;KB; the top 2&nbsp;KB became RAM.</span></span></li>
           <li><span class="d"></span><span><b>Scratch → the island.</b> <span class="sub">SBUF and the BIOS/FS scratch moved into $1800–$1FFF.</span></span></li>
           <li><span class="d"></span><span><b>TPABASE $6100 → {{TPABASE}}.</b> <span class="sub">+2&nbsp;KB per program (now ~39.8&nbsp;KB).</span></span></li>
           <li><span class="d"></span><span><b>Compiler self-hosts.</b> <span class="sub">The extra room lets cc.c compile itself on the machine.</span></span></li>

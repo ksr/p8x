@@ -18,4 +18,4 @@
 //#define ROSDRV    0x1F85       /* read-stream drive (captured by FOPEN, re-asserted by FG_FILL) */
 //#define GFXPRES   0x1FA4       /* 1 = GL card fitted (screen is the display); 0 = headless serial console */
 //#define GTSUSP    0x1FA7       /* nonzero = glass TTY suspended (a full-screen GL app owns the screen; CONOUT is serial-only) */
-//#define GCONEN    0x1FAF       /* 1 = glass TTY console ENABLED (CONOUT mirrors to the GL screen); 0 = off (serial-only, the default -- `screen on` enables it) */
+//#define GCONEN    0x1FAF       /* 1 = glass TTY console ENABLED (CONOUT mirrors to the GL screen; the monitor sets it at wake when a card is fitted); 0 = off (serial-only; no card, or `screen off`) */

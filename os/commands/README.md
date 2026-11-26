@@ -130,7 +130,7 @@ print a one-line usage summary and exit.
   `FSDIRBUF` ($0145) to move iteration off the shared `SBUF` so output can stream.
   `-R`: the `FNEXT` cursor is **global** BIOS state, so each level streams its
   entries while only recording child-directory LBAs (16-bit) into a small
-  per-level array, then descends (poking the high byte into `LBA1`/`$7048` before
+  per-level array, then descends (poking the high byte into `LBA1`/`$1F48` before
   `FOPENDIRAT`) — bounded memory, no whole-tree buffer.
 - **pwd.c** — `SYS_GETCWD` ($2003): the CWD comes through the syscall ABI, not
   by peeking OS RAM.
@@ -172,7 +172,7 @@ print a one-line usage summary and exit.
   directory through `SBUF` — which is also the write stream's buffer, so the
   naïve version overwrites each file's already-buffered output with directory
   data (`.   BBB`). Fix: cat points `FSDIRBUF` ($0145) at page `$FA`, and
-  **FSCAN now honors that page too** (not just `FNEXT`; default `$71`=`SBUF`
+  **FSCAN now honors that page too** (not just `FNEXT`; default `$1D`, the page of `SBUF` `$1D00`,
   keeps every other caller byte-identical), so the per-file path walks read
   into `$FA00` and leave the write stream's `SBUF` intact. This is the general
   fix that lets any glob-expanding command redirect to a file — `cp`/`mv`'s

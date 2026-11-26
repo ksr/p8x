@@ -23,8 +23,9 @@ for the status of each board.
 |--------|--------------|
 | `gen_eagle.py` | **The netlists.** Device library (pin maps, packages), the 96-pin DIN 41612 bus map (`busnet()`), and every card's netlist (`CARDS`), imported by everything below. Its own Eagle output is frozen at rev E (see below). |
 | `gen_kicad.py <card>` | Generic board builder: turns a `CARDS` netlist into a placed KiCad board — footprints, a bypass cap above each IC, the labelled LED bank, planes, outline |
-| `hardware/<card>/kicad/gen_*.py` | Bespoke placement for the memory (`gen_mem.py`, which also applies the rev F 6 KB ROM decode), I/O (`gen_io.py`), CF (`gen_cf.py`) and PS/2 (`gen_ps2.py`) cards |
+| `hardware/<card>/kicad/gen_*.py` | Bespoke placement for the memory (`gen_mem.py`, on the rev F netlist that `mem_revf.py` makes by applying the 6 KB ROM decode), I/O (`gen_io.py`), CF (`gen_cf.py`) and PS/2 (`gen_ps2.py`) cards |
 | `gen_backplane.py` | The backplane board (8 DIN 41612 sockets, power entry, bulk + per-slot caps, wired-OR pull-ups) |
+| `bp_parts.py` | The backplane's parts as built (the 2-terminal Phoenix power block in place of the netlist's frozen 4-pin header), shared by the board, its schematic and `gen_bom.py` |
 | `silk_labels.py` | The silkscreen pass every board generator runs last: each reference outside every part's courtyard, the part's type or value beside it, all of it at 270° (upright with the card standing connector down; the backplane 0°), function labels (LEDs, switches, jumpers, connectors) and position labels (what each jumper or switch position selects); the title block (board name + revision, `cottageworker.com` beneath, front edge first); also the device → chip-type table `gen_bom.py` uses |
 | `refresh_board.py <card>` | Brings a routed board up to the generators with its tracks kept: the silkscreen made again, the values, spare pins tied to GND or VCC; refuses any other difference from the netlist. Then `kicad_tools.py finish <board>` and `check_card.sh` |
 | `kicad_tools.py` | DSN export, routing import, the heal steps after Freerouting, Gerbers and renders |
@@ -33,6 +34,8 @@ for the status of each board.
 | `check_card.sh <card>` (or `all`) | The manufacture-readiness check: ERC, gate-level simulation (where a testbench exists), DRC, mounting-hole keepout, fab minimums, readable references → PASS/FAIL |
 | `gen_erc.py` | The netlist electrical-rules check `check_card.sh` runs |
 | `gen_bom.py` | The bill of materials → `hardware/p8x-bom.csv` |
+| `check_artifacts.py [board ...]` | The freshness gate: rebuilds each board's schematic, schematic PDF, unrouted board and other artifacts in a temporary copy of the tree and fails if a committed one no longer matches its source; writes nothing in the repository |
+| `bus_pins.py [--backplane]` | Prints the bus pinout from `busnet()`, one line per connector pin (`J1 A3 D0`); the `bus_pins` command in each board's pcb-check settings |
 | `render_assembly.py` | 3D renders of the assembled machine: each card exported as a STEP and seated in its backplane slot (transform derived from the connector pads and models) → `hardware/assembly/*.png`; driver `sh hardware/assembly/build.sh` |
 
 ```sh
@@ -70,7 +73,7 @@ KiCad flow makes its own placement PDF per board.
 
 | Script | Produces | Output |
 |--------|----------|--------|
-| `gen_memmap.py` | **The memory map** — every data address: `memmap.inc` (assembler), `memmap.h` (C), `memmap.py`, and the command libraries `lib_mem.c`/`.inc` | `generators/`, `os/` |
+| `gen_memmap.py` | **The memory map** — every data address: `memmap.inc` (assembler), `memmap.h` (C), `memmap.py`, the command libraries `lib_mem.c`/`.inc`, and `fpga/rtl/memmap.vh` (Verilog `MM_<NAME>` macros for the RTL) | `generators/`, `os/`, `fpga/rtl/` |
 | `gen_memmap_pdf.py` | The printable memory map | `docs/p8x-memory-map.pdf` |
 | `gen_isa_card.py` | The instruction-set quick reference (Markdown + PDF), from `genucode.py` | `docs/p8x-isa-card.{md,pdf}` |
 | `gen_bus_pdf.py` | Bus-definition PDF (pinout, DOE/DLD tables, microcode word layout) | `hardware/backplane/` |

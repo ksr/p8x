@@ -1,4 +1,4 @@
-# Where P8X stands (October 2026)
+# Where P8X stands (November 2026)
 
 P8X exists in two forms that run the same microcode: an **FPGA build** on a Sipeed
 Tang Nano 20K, which runs the whole software stack today, and the **TTL card set**,
@@ -72,11 +72,12 @@ The backplane is to be ordered first, as the cheap validation article.
 
 ## What is next
 
-- **TTL:** the register bank rev D, then an **interrupt controller card** (the last
+- **TTL:** an **interrupt controller card** (the last
   core-machine card still to design), then ordering and bring-up, backplane first.
-- **FPGA:** the RTL still write-protects `$0000–$1FFF`, while since the 6 KB ROM map
-  (2026-09-14) `$1800–$1FFF` is RAM; the board build and the co-simulation follow that
-  boundary next. Then Milestone 5: a faster clock than today's 9 MHz, and
+- **FPGA:** the RTL writes RAM from RAMBASE `$1800`, as the 6 KB ROM map
+  (2026-09-14) has it, in both the board build and the co-simulation (2026-11-20, from
+  the generated `fpga/rtl/memmap.vh`); the board's `cpu` and `lcd` bitstreams are still
+  to be rebuilt with it and loaded. Then Milestone 5: a faster clock than today's 9 MHz, and
   interrupts.
 - **Software:** pipes of more than two stages (`a | b | c`), and opening a file by
   name as a single system call (`SYS_OPEN`).

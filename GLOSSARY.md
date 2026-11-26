@@ -120,7 +120,7 @@ The word burned to the 4× 28C64 EPROMs and interpreted by the emulator. Bit map
 | Term | Meaning |
 |------|---------|
 | **EEPROM** | `$0000–$17FF` (6 KB; shrunk from 8 KB 2026-09-14 to free the $1800–$1FFF RAM island) — monitor + BIOS at `$0000` (~4.9 KB used). BASIC is no longer ROM-resident; it runs as the disk program `/bin/basic.bin`. |
-| **SRAM / RAM** | `$2000–$FEFF` (56 KB, rev E — 2× 62256). |
+| **SRAM / RAM** | `$1800–$FEFF` (58 KB, rev E — 2× 62256; RAMBASE `$1800` since the 6K ROM, 2026-09-14). |
 | **SBUF** | 512-byte sector buffer at `$1D00` (in the $1800–$1FFF RAM island; was `$6100`, then `$5E00`). Fixed by the BIOS — `CFWRITE` reads from it. |
 | **LBA** | Logical Block Address — the CF sector number; the BIOS reads the target LBA from fixed bytes at `$1F47`–`$1F49` (`LBA`/`LBA1`/`LBA2`). |
 | **RBUF** | The OS's `>`-redirect capture buffer (= the TPA base, `$5900`). |
@@ -130,7 +130,7 @@ The word burned to the 4× 28C64 EPROMs and interpreted by the emulator. Bit map
 | **PUTS / PHEX8** | BIOS print-string / print-byte-as-hex (`$0112/$0115`). |
 | **GCLS** | BIOS clear-the-glass-TTY + home-cursor (`$014E`) — the on-screen text console of two-mode operation. A no-op when no GL card is fitted. |
 | **two-mode operation** | The same OS runs headless over serial OR as a GL graphics desktop, auto-selected at wake by the `GFXPRES` flag. See [`docs/p8x-two-mode-design.md`](docs/p8x-two-mode-design.md). |
-| **glass TTY** | The on-screen text console: with a GL card, `CONOUT` MIRRORS every byte onto the display via stroke `TEXT` as well as the serial port — so the ROM monitor, the OS and every program are on the LCD. On by default whenever a card is fitted (the monitor switches it on and installs the font at wake); `screen off` disables it for a session. |
+| **glass TTY** | The on-screen text console: with a GL card, `CONOUT` MIRRORS every byte onto the display's character-generator text overlay (the `TX*` GL opcodes; `gtxt.v` in the fabric) as well as the serial port — so the ROM monitor, the OS and every program are on the LCD. On by default whenever a card is fitted (the monitor switches it on and installs the font at wake); `screen off` disables it for a session. |
 | **GFXPRES / GCONEN / GTSUSP** | The two-mode flags at `$1FA4`/`$1FAF`/`$1FA7`: GL card present / glass-TTY console enabled / console suspended because a full-screen program owns the screen. Generated in `generators/gen_memmap.py`. |
 | **2nd ACIA** | The second 6850 serial port at `$FF08`/`$FF09` (status/data), register-identical to the console ACIA — added for two-mode operation; the `kermit` command transfers files over it while the console keeps `$FF04`. Emulator: `-2i`/`-2o`. |
 
@@ -171,7 +171,7 @@ The word burned to the 4× 28C64 EPROMs and interpreted by the emulator. Bit map
 | **28C256 / 28C64** | Parallel EEPROM — program ROM ($8000-class) / microcode ROMs. |
 | **62256** | 32K×8 SRAM. |
 | **DS1302** | Serial real-time clock (rev C, DNP). |
-| **DIN 41612** | The 96-pin backplane connector standard. **FABC96R** = the card-edge connector part; the backplane has the mating receptacles. |
+| **DIN 41612** | The 96-pin backplane connector standard. **MABC96R** = the card-edge connector part (male right-angle); the backplane has the mating **FABC96S** receptacles (female vertical). |
 | **CF / IDE** | CompactFlash storage in 8-bit True IDE mode (`$FF10–$FF17`). |
 
 ---
@@ -184,7 +184,7 @@ The word burned to the 4× 28C64 EPROMs and interpreted by the emulator. Bit map
 | **PKG** | Package table — pad geometry (name, x, y, drill, dia) per footprint. |
 | **DIP8/14/16/20/24W/28W** | Dual In-line Package, N pins. `W` = wide (0.6″ row spacing). |
 | **SIP9/16** | Single In-line Package (resistor networks). |
-| **DIN96 / DIN96C** | DIN 41612 96-pin: backplane receptacle / card edge connector (the `C` variant carries the FABC96R mounting holes). |
+| **DIN96 / DIN96C** | DIN 41612 96-pin: backplane receptacle / card edge connector (the `C` variant carries the MABC96R mounting holes). |
 | **HDR3/4/40** | 0.1″ pin headers, N pins. |
 | **TB4** | 4-position terminal block. |
 | **LED5 / LEDARR8** | 3 mm LED footprint / 8-segment LED bar array (DIP). |
@@ -214,7 +214,7 @@ The word burned to the 4× 28C64 EPROMs and interpreted by the emulator. Bit map
 | **PC / SP / MAR** | Program Counter / Stack Pointer / Memory Address Register — the classic roles, all subsumed by the P0–P3 pointer bank here (no separate MAR). |
 | **UART** | Universal Asynchronous Receiver/Transmitter — the serial-port role the 6850 ACIA fills. |
 
-## Graphics display (`$FF20-$FF2F`)
+## Graphics display (GL port `$FF50-$FF54`; the `$FF20-$FF2F` window is retired)
 
 Same device whether it is inside the FPGA P8X or on a bus card, so one command
 set and one golden model (`gpu_*` in `emulator/p8xemu.c`) serve both.
@@ -240,7 +240,7 @@ set and one golden model (`gpu_*` in `emulator/p8xemu.c`) serve both.
 | **page flip** | Double buffering: two 512K-aligned framebuffer pages (address bit 19). The engine owns the state; a flip latches at the scanout frame boundary with the rule display ← draw, draw ← other. Power-on page contents are UNDEFINED — clear both before flipping — and `PGSYNC` (GECMD 4 / `g3sync()`) is the only way back to single-buffer. |
 | **typed records** | The retired stage-9 list format (type byte, flags, RGB565 colour, vertices). Superseded at stage 10 by the GL command stream — a scene is now a command list, not a record list. |
 | **scene** | GL command list 0 (stage 10c): the byte stream `tri` records (`tri …k` appends via CLAPP) and `rotate`/`camera` replay with new matrices. Stored on the card in SDRAM; the card's matrix/window state persists alongside it. |
-| **command list** | A GL byte stream stored on the card (CLBEG…CLEND, 256 slots of 4KB at `$100000`), replayed by CLRUN/CLOOP. Matrix deltas inside a looped list accumulate per pass — the fly-through/self-spinning-demo mechanism. |
+| **command list** | A GL byte stream stored on the card (CLBEG…CLEND, 64 slots of 4KB at `$100000`; the PG-640A had 256), replayed by CLRUN/CLOOP. Matrix deltas inside a looped list accumulate per pass — the fly-through/self-spinning-demo mechanism. |
 | **P8I** | The display's own picture format: `"P8I"`, version, width/height little-endian, depth `$10`, then raw RGB565 row-major. Self-describing, so BASIC's `IMAGE x,y,name$` cannot be lied to. `tools/p8img.py` converts anything into one. |
 | **GTEXT** | Died and was REBORN (2026-09-01): the old software-rasterized bitmap text is gone — PGC `TEXT` draws stroke glyphs card-side from the font the OS streams from `/FONT.GL` at boot (raw 3D idiom: `MOVE3 x,y,0 : TEXT s$`). The `GTEXT x,y,size,s$` statement survives as pure-GL 2D sugar over it: it resets the matrix and camera each call and anchors unscaled at window (x,y). |
 | **FONT57** | RETIRED (2026-09-01, with the GTEXT rasterizer): the 5x7 bitmap glyph table and its generator. Text is stroke glyphs now — `generators/gen_font.py` builds `/FONT.GL`, the TDEFIN stream the OS loads at boot; lowercase still folds onto uppercase. |

@@ -9,6 +9,12 @@ remember their place across launches (`wm_switch_test`). Chrome polish
 (multi-window focus/close/menu) and the deluxe full-suspend switcher
 are optional follow-ons; the core resident-WM goal is met.
 
+Since 2026-09-09 the [two-mode design](p8x-two-mode-design.md) supersedes the
+tiled-window UI as the direction: full-screen apps launched from a Finder
+desktop. It reuses this kernel's plumbing (the window sink, `SYS_RUNSH`
+launch-and-return); the tiled `desk` and `wdesk` still ship, and retiring them
+once Finder covers their use is on the backlog.
+
 ## Why resident, and why assembler
 
 The C window system (rungs 1–4, `desk` + `lib_wm` + `lib_ptr`) proved the

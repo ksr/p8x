@@ -5,7 +5,7 @@
 ; memory-region anchors
 RAMBASE     = $1800              ; first RAM address (ROM shrunk 8K->6K 2026-09-14; $1800-$1FFF is a low RAM island)
 IOBASE      = $FF00              ; memory-mapped I/O page
-ROMSIZE     = $1800              ; 6K firmware ROM $0000-$17FF (monitor uses ~5.2K)
+ROMSIZE     = $1800              ; 6K firmware ROM $0000-$17FF (monitor uses ~4.9K)
 RAMSIZE     = $E700              ; RAM span $1800-$FEFF (IOBASE-RAMBASE)
 OSORG       = $2000              ; OS load/link address (still $2000; the $1800-$1FFF RAM island holds relocated scratch)
 TPABASE     = $5900              ; transient program area base (RUNnable programs load here)
@@ -282,7 +282,7 @@ GFXPRES     = $1FA4              ; 1 = GL card fitted (screen is the display); 0
 GTCOL       = $1FA5              ; glass TTY cursor column (0..GTCOLS-1)
 GTROW       = $1FA6              ; glass TTY cursor row (0..GTROWS-1)
 GTSUSP      = $1FA7              ; nonzero = glass TTY suspended (a full-screen GL app owns the screen; CONOUT is serial-only)
-GCONEN      = $1FAF              ; 1 = glass TTY console ENABLED (CONOUT mirrors to the GL screen); 0 = off (serial-only, the default -- `screen on` enables it)
+GCONEN      = $1FAF              ; 1 = glass TTY console ENABLED (CONOUT mirrors to the GL screen; the monitor sets it at wake when a card is fitted); 0 = off (serial-only; no card, or `screen off`)
 GTXL        = $1FA8              ; glass TTY cursor pixel x, low byte (0..474, step 6)
 GTXH        = $1FA9              ; glass TTY cursor pixel x, high byte
 GTYL        = $1FAA              ; glass TTY text-baseline pixel y (window, y-up), low byte

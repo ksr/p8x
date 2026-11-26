@@ -5,7 +5,8 @@ every transform (modeling, viewing, projection, window/viewport), and is
 driven by a **command language** through a FIFO — not by register pokes.
 The reference design is the **Matrox PG-640A** (IBM Professional
 Graphics Controller compatible; manual: `docs/reference/pg640a.pdf`,
-chapter 3 + 4). Where its semantics fit the P8X we borrow them —
+chapter 3 + 4 — kept out of this public repository since 2026-11-20, see
+[docs/reference/README.md](../../../docs/reference/README.md)). Where its semantics fit the P8X we borrow them —
 including verb names, so the manual doubles as our background reading —
 and where they don't (16.16 reals, indexed colour + LUT, CGA emulator)
 we deliberately diverge.

@@ -69,8 +69,10 @@ resolve(path):
 ```
 
 Worst case RAM: the 512-byte sector buffer plus a 64-byte component
-scratch — fits the existing $9Dxx variable page. Estimated kernel growth:
-**~1.5–2 KB**, still comfortably inside the $8000–$8FFF kernel region.
+scratch. Estimated kernel growth: **~1.5–2 KB**. (This estimate was made
+when the OS lived at `$8000–$8FFF` with its variables at `$9Dxx`; since rev E
+the OS loads at `$2000`, below its scratch at `$5700`, with the shared sector
+buffer `SBUF` at `$1D00`, and the hierarchical code is built.)
 
 ### 2.1 OS state
 
@@ -135,8 +137,8 @@ scratch card, and have the Mac-side tool able to verify a volume (§6).
 - Formatting: **done as an OS-level `FORMAT` command** (P8X/OS, since the OS moved
   to $2000 and had room). It writes the v2 boot block (version 2, free = 37) and a
   fresh root extent at LBA 33 (4 sectors, `.`/`..`), preserving OSCNT so the card
-  stays bootable. The monitor's `F` still writes a **v1** volume — policy for v2
-  lives on disk where it's cheap to change, and the monitor stays frozen.
+  stays bootable. The monitor's `F` writes the same **v2** volume (boot block
+  version 2 and the root extent; `firmware/p8xmon.asm`), since v1 is retired.
 - v1→v2 migration: none. Reformat and re-copy via the Mac tool — at these
   volume sizes that's a 10-second operation
 

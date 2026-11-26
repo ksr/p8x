@@ -22,7 +22,7 @@ import os
 MAP = [
     ('memory-region anchors', 'RAMBASE', 0x1800, 'first RAM address (ROM shrunk 8K->6K 2026-09-14; $1800-$1FFF is a low RAM island)'),
     ('memory-region anchors', 'IOBASE', 0xFF00, 'memory-mapped I/O page'),
-    ('memory-region anchors', 'ROMSIZE', 0x1800, '6K firmware ROM $0000-$17FF (monitor uses ~5.2K)'),
+    ('memory-region anchors', 'ROMSIZE', 0x1800, '6K firmware ROM $0000-$17FF (monitor uses ~4.9K)'),
     ('memory-region anchors', 'RAMSIZE', 0xE700, 'RAM span $1800-$FEFF (IOBASE-RAMBASE)'),
     ('memory-region anchors', 'OSORG', 0x2000, 'OS load/link address (still $2000; the $1800-$1FFF RAM island holds relocated scratch)'),
     ('memory-region anchors', 'TPABASE', 0x5900, 'transient program area base (RUNnable programs load here)'),
@@ -378,13 +378,14 @@ MAP = [
     ('graphics presence', 'GFXPRES', 0x1FA4, '1 = GL card fitted (screen is the display); 0 = headless serial console'),
 
     # glass TTY (two-mode P2): the on-screen text console behind BIOS CONOUT.
-    # When GFXPRES and not GTSUSP, CONOUT draws each byte to the GL screen (via GL
-    # TEXT) as well as the serial ACIA. Cursor is (col,row); clear-on-full MVP (no
-    # framebuffer). Shared monitor + OS state. See docs/p8x-two-mode-design.md.
+    # When GFXPRES and GCONEN and not GTSUSP, CONOUT writes each byte to the card's
+    # character-generator text overlay (the TX* GL opcodes; gtxt.v) as well as the
+    # serial ACIA; the overlay scrolls its own char RAM. Cursor is (col,row). Shared
+    # monitor + OS state. See docs/p8x-two-mode-design.md.
     ('glass tty', 'GTCOL', 0x1FA5, 'glass TTY cursor column (0..GTCOLS-1)'),
     ('glass tty', 'GTROW', 0x1FA6, 'glass TTY cursor row (0..GTROWS-1)'),
     ('glass tty', 'GTSUSP', 0x1FA7, 'nonzero = glass TTY suspended (a full-screen GL app owns the screen; CONOUT is serial-only)'),
-    ('glass tty', 'GCONEN', 0x1FAF, '1 = glass TTY console ENABLED (CONOUT mirrors to the GL screen); 0 = off (serial-only, the default -- `screen on` enables it)'),
+    ('glass tty', 'GCONEN', 0x1FAF, '1 = glass TTY console ENABLED (CONOUT mirrors to the GL screen; the monitor sets it at wake when a card is fitted); 0 = off (serial-only; no card, or `screen off`)'),
     ('glass tty', 'GTXL', 0x1FA8, 'glass TTY cursor pixel x, low byte (0..474, step 6)'),
     ('glass tty', 'GTXH', 0x1FA9, 'glass TTY cursor pixel x, high byte'),
     ('glass tty', 'GTYL', 0x1FAA, 'glass TTY text-baseline pixel y (window, y-up), low byte'),

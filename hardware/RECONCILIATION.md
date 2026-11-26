@@ -85,7 +85,7 @@ emulator and/or on the FPGA graphics card.
 
 | Subsystem | Window | Lives now in | Action to build |
 |-----------|--------|--------------|-----------------|
-| **PS/2 keyboard + mouse** | `$FF58-$FF5F` | emulator model + `lib_ps2`; FPGA-fabric option | **Designed** — [ps2-card/](ps2-card/README.md) (74HC164/161/574 + 7407 per port, 5 V, no level shift). Next: gen the CAD, DRC, order. |
+| **PS/2 keyboard + mouse** | `$FF58-$FF5F` | emulator model + `lib_ps2`; FPGA-fabric option | **Designed and routed in KiCad** — [ps2-card/](ps2-card/README.md) (an ATmega1284P behind a 74HCT374/74HCT244 latch bridge, 5 V, no level shift; bespoke `gen_ps2.py`, 0 unconnected). Not yet fabricated. |
 | **MDU (multiply/divide)** | `$FF30-$FF3F` | emulator model + FPGA `mdu_core.v` | No TTL card yet. Only needed for the TTL build if 3D/`lib_g3d` math must run there at speed; otherwise the software muldiv still works. |
 | **GL graphics-language port** | `$FF50-$FF54` | emulator model + the Tang Nano 20K graphics card | The **FPGA card *is*** the graphics engine (~19 k LUT4). A discrete-TTL GL walker is out of scope — the graphics card is the intended realisation. |
 | **IRQ controller** | (`$FF06` device-IRQ model) | emulator model | No card yet. The emulator raises a maskable IRQ on a `$FF06` write to exercise the interrupt path; on hardware the IRQ must come from a controller card. This is the standing near-term TTL item (see `CLAUDE.md` roadmap, `BACKLOG.md`). |
@@ -93,14 +93,18 @@ emulator and/or on the FPGA graphics card.
 ## Second serial port
 
 The 2nd ACIA (`$FF08-$FF09`, the Kermit / serial-terminal port) is modelled and
-now named in the map. On hardware it is a second 6850 — either a small daughter
-addition to the I/O card or a second I/O card strapped to `$FF08`. Low priority.
+now named in the map. On hardware it is a second 6850 (U17) on the io-card rev B,
+with its own DB9, designed and routed in KiCad, not yet fabricated.
 
 ## Known deltas that are NOT bugs
 
-- **C flag is active-low** (raw 74181 Cn+4); the emulator must not "fix" it. A
-  rev-B *verify* item, not a board error (`CLAUDE.md` hard rule 5).
-- **V flag hardwired 0** in rev A (matches the ALU card) — hard rule 6.
+- **C flag is conventional active-high carry** (rev B): the ALU card inverts the
+  active-low 74181 Cn+4 (U25 NAND, net CFLGI) before the C-flag mux; microcode,
+  emulator, monitor and RTL all use C=1 = carry out (`CLAUDE.md` hard rule 5). Rev A
+  latched the raw pin.
+- **V flag is signed overflow** (rev C), derived on the ALU card by the sign-bit
+  method (U34/U35) and modelled the same way in the emulator (hard rule 6). It was
+  hardwired 0 in rev A.
 - **FPGA runs at 9 MHz** (three fabric phases per microcycle) vs a ~50 MHz Fmax
   ceiling; a clock-up milestone, not a board issue.
 
@@ -111,9 +115,9 @@ addition to the I/O card or a second I/O card strapped to `$FF08`. Low priority.
    (6 KB ROM + the `$1800-$1FFF` RAM island; see above) and regenerate its `.sch`,
    and **reburn the microcode EPROMs** from the current `genucode.py`, before
    bring-up.
-3. **PS/2 card** once its CAD is generated and DRC-clean — it is the one new card
-   with a finished design and a working emulator/`lib_ps2` counterpart to test
-   against.
+3. **PS/2 card** — its KiCad board is generated and routed (0 unconnected); it is
+   the one new card with a finished design and a working emulator/`lib_ps2`
+   counterpart to test against.
 4. **IRQ controller card** — design it next (the last core-machine gap); until
    then interrupt-driven I/O stays polled (`$FF06`/poll convention).
 

@@ -346,12 +346,13 @@ the stack pointer starts at `$FEFF` (top of RAM, growing down), and step 0 with
 ## 9. Memory map and I/O
 
 ```
-0000–1FFF  ROM   (8K, decoded from the EEPROM image)
-2000–FEFF  RAM   (56K: 2×62256, $2000–7FFF and $8000–FEFF)
+0000–17FF  ROM   (6K, decoded from the EEPROM image)
+1800–FEFF  RAM   (58K: 2×62256; $1800–$1FFF is the low scratch island)
 FF00–FFFF  I/O
 ```
 
-`memrd`/`memwr` implement the decode. Writes below `$2000` are refused with a
+`memrd`/`memwr` implement the decode against `RAMBASE` and `IOBASE` (from
+`generators/gen_memmap.py`). Writes below RAMBASE `$1800` are refused with a
 warning (you can't write ROM). The I/O page:
 
 | Addr | R/W | Device |
@@ -361,7 +362,15 @@ warning (you can't write ROM). The I/O page:
 | `$FF04` | R | 6850 ACIA status: bit1 `TDRE` (always ready), bit0 `RDRF` (key waiting) |
 | `$FF05` | R/W | ACIA data: read = next console byte, write = transmit |
 | `$FF06` | W | raise a maskable IRQ (models an external device, rev C) |
-| `$FF10–$FF17` | R/W | CF-IDE task file (only when `-c` attaches an image) |
+| `$FF08` | R/W | 2nd ACIA status (TDRE, RDRF) / control (writes ignored) |
+| `$FF09` | R/W | 2nd ACIA data: RX from the `-2i` file, TX to the `-2o` file |
+| `$FF10–$FF17` | R/W | CF-IDE task file (only when `-c` attaches an image; `-c2` adds drive 1, picked by `$FF16` bit 0) |
+| `$FF30–$FF3C` | R/W | MDU: `MDA`/`MDB`/`MDC` and their high bytes `$FF39–$FF3B`, `MDGO` `$FF34` computes (a×b)/c at once, `MDQ`/`MDQH` `$FF33`/`$FF3C`, `MDSTAT` `$FF35` (never busy), `MDID` `$FF36` reads `'M'` |
+| `$FF50–$FF54` | R/W | GL port: `GLDATA` command byte, `GLSTAT`, `GLRB` read-back, `GLERR`, `GLID` reads `'G'` (`$FF` with `-ng`) |
+| `$FF58–$FF5E` | R/W | PS/2 card (with `-ps2`, `-ps2a`, `-ps2b`): `PSADAT`/`PSAST` keyboard, `PSBDAT`/`PSBST` mouse, `PSLINE` line states, `PSID` reads `'K'`; absent, the window floats `$FF` |
+
+The retired graphics windows (`$FF20–$FF2F`, and `$FF40` of the record engine)
+read `$FF` like any absent card.
 
 ## 10. The CompactFlash model
 

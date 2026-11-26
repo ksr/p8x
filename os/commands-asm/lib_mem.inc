@@ -17,4 +17,4 @@ ROSTAT    = $1F5E                ; read-stream state base (ROLBA..ROCNT, 11 byte
 ROSDRV    = $1F85                ; read-stream drive (captured by FOPEN, re-asserted by FG_FILL)
 GFXPRES   = $1FA4                ; 1 = GL card fitted (screen is the display); 0 = headless serial console
 GTSUSP    = $1FA7                ; nonzero = glass TTY suspended (a full-screen GL app owns the screen; CONOUT is serial-only)
-GCONEN    = $1FAF                ; 1 = glass TTY console ENABLED (CONOUT mirrors to the GL screen); 0 = off (serial-only, the default -- `screen on` enables it)
+GCONEN    = $1FAF                ; 1 = glass TTY console ENABLED (CONOUT mirrors to the GL screen; the monitor sets it at wake when a card is fitted); 0 = off (serial-only; no card, or `screen off`)

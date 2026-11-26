@@ -2,9 +2,10 @@
 
 > **Theory of operation:** [p8x-regbank-card-theory.md](p8x-regbank-card-theory.md) — deep walkthrough of inputs/outputs, signal flow, and logic.
 
-The largest card and the architectural centerpiece of the P8X. It holds the four
-16-bit pointer registers **P0–P3** and **always drives the address bus** — there
-is no separate MAR. Every memory access is "select a pointer, drive its value on
+The largest card and the architectural centerpiece of the P8X (rev D, 53 ICs). It
+holds the four 16-bit pointer registers **P0–P3**, the two hidden microcode scratch
+pointers **PT** and **PT2**, and **always drives the address bus** — there is no
+separate MAR. Every memory access is "select a pointer, drive its value on
 A0–A15, optionally increment/decrement at the clock edge."
 
 | Pointer | Role |
@@ -12,6 +13,8 @@ A0–A15, optionally increment/decrement at the clock edge."
 | P0 | Program counter |
 | P1, P2 | General pointers (indirect addressing modes) |
 | P3 | Stack pointer (empty-descending) |
+| PT (PSEL=4) | Hidden scratch pointer: absolute addressing, the 16-bit ops, `MOVW`'s read cursor |
+| PT2 (PSEL=5) | Second hidden scratch pointer: `MOVW`'s write cursor (rev D) |
 
 > This README describes the circuit as actually built in
 > [`generators/gen_eagle.py`](../../generators/gen_eagle.py). See
@@ -29,42 +32,50 @@ A0–A15, optionally increment/decrement at the clock edge."
 | U29 | 74244 | Readback driver — selected byte → data bus D0–D7 |
 | U30 | 74138 | DLD decoder (load low / load high) |
 | U31 | 74138 | DOE decoder (read low / read high) |
-| U32 | 74139 | Load decoder — which pointer's byte gets loaded |
-| U33 | 74139 | Select + count decoder — which pointer drives address / counts |
-| U34 | 7402 | NOR — count-request gating |
-| U35 | 74HCT14 | Inverters — up/down direction and select polarity |
+| U32 | 74139 | Load decoder — which of P0–P3 gets the byte loaded |
+| U33 | 74138 | Select decoder — `-SEL0..5` from the 3-bit PSEL: which pointer drives the address bus |
+| U34 | 7402 | NOR — count request (`PINC` or `PDEC`) |
+| U35 | 74HCT14 | Inverters — up/down direction and byte select |
 | U36 | 74244 | Forced-zero buffer for the P0 reset trick |
-| U37, U38 | 74HCT08 | AND glue — reset-gated P0 loads, LED drive |
+| U37, U38 | 74HCT08 | AND glue — reset-gated P0 loads, readback/load enables, LED drive |
+| U39 | 74138 | Count decoder — `-CNT0..5` from the 3-bit PSEL: which pointer counts |
+| U40 | 74HCT32 | OR — PSEL2 gating of the U32 load decoder; PT load strobes `-LDL4`/`-LDH4` |
+| U41–U44 | 74169 | PT, four counters (16 bits) |
+| U45–U48 | 74169 | PT2, four counters (16 bits) |
+| U49, U50 | 74244 | PT select buffers onto the pointer bus |
+| U51, U52 | 74244 | PT2 select buffers onto the pointer bus |
+| U53 | 74HCT32 | OR — PT2 load strobes `-LDL5`/`-LDH5` |
 
 ## How it works
 
 ### The pointers (74169 cascade)
 Each pointer is **four 74169** synchronous up/down counters, 4 bits apiece. They
 are cascaded for full 16-bit carry/borrow: the master count enable (`-CNTp`) drives
-every slice's `!ENP`, the first slice's `!ENT` is tied to the same enable, and each
-later slice's `!ENT` is fed from the previous slice's active-low ripple carry
-`!RCO`. Because the 74169 is *fully synchronous* (one clock + a direction pin),
+every slice's `!ENP`, the first slice's `!ENT` is tied low (the standard 74169
+cascade), and each later slice's `!ENT` is fed from the previous slice's active-low
+ripple carry `!RCO`. PT and PT2 are built the same way. Because the 74169 is *fully synchronous* (one clock + a direction pin),
 load/increment/decrement all take effect cleanly on the rising clock edge — no
 glitchy dual-clock behaviour like the 74193.
 
 ### Driving the address bus
-PSEL0–1 (from the control card) go into the 74139 decoders (U32/U33). U33's
-select half enables one pointer's eight 74244 buffers (U17–U24), gating that
-pointer's 16 bits onto an on-card **pointer bus**. U25/U26 (74244, permanently
+PSEL0–2 (from the control card) go into the U33 74138, whose one-hot `-SEL0..5`
+enables one pointer's pair of 74244 buffers (U17–U24 for P0–P3, U49/U50 for PT,
+U51/U52 for PT2), gating that pointer's 16 bits onto an on-card **pointer bus**. U25/U26 (74244, permanently
 enabled) drive that pointer bus straight onto backplane **A0–A15**. This card owns
 the address bus — nothing else ever drives it.
 
 ### Increment / decrement
-`PINC` and `PDEC` are NOR'd in U34; if either is asserted, U33's count-decoder half
-is enabled and pulls the selected pointer's `-CNTp` low, so only that pointer
-counts. `PDEC` (inverted in U35 → `UDB`) sets the 74169 up/down direction. The
+`PINC` and `PDEC` are NOR'd in U34; if either is asserted, the U39 count decoder
+(74138, the full 3-bit PSEL) is enabled and pulls the selected pointer's `-CNTp`
+low, so only that pointer counts — PT and PT2 included. `PDEC` (inverted in U35 → `UDB`) sets the 74169 up/down direction. The
 enable and direction reach all four slices so carry/borrow propagates across the
 full 16 bits.
 
 ### Byte load (writing a pointer)
 DLD codes 8 (low) and 9 (high) are decoded by U30 into `-LDL`/`-LDH`, which gate the
-U32 load decoder. Combined with PSEL, U32 produces eight strobes (4 pointers ×
-2 bytes). A byte load asserts `!LOAD` on just the two 74169 slices of that byte; the
+U32 load decoder (gated off by PSEL2 through U40). Combined with PSEL0–1, U32
+produces eight strobes (P0–P3 × 2 bytes); U40 and U53 make PT's and PT2's strobes
+from `-LDL`/`-LDH` and `-SEL4`/`-SEL5`. A byte load asserts `!LOAD` on just the two 74169 slices of that byte; the
 other byte's slices simply hold. The load data comes from the data bus (D0–D7) on
 the 74169 parallel inputs.
 

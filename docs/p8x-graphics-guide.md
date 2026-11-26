@@ -247,8 +247,10 @@ A `.GL` file is the ASCII language verbatim — `gl FILE.GL` streams it.
 Start files with `CA ` (the hex-mode escape is the literal
 space-terminated three bytes) and end with `CX `; lead with a VWPORT.
 The PG-640A manual's examples convert mechanically (its hex files
-carry 4-byte coordinates; re-emit as ASCII). `docs/reference/pg640a.pdf`
-chapter 3 is effectively this engine's extended manual.
+carry 4-byte coordinates; re-emit as ASCII). Chapter 3 of the manual (`docs/reference/pg640a.pdf`,
+kept out of this public repository since 2026-11-20; see
+[reference/README.md](reference/README.md)) is effectively this engine's
+extended manual.
 
 ## 13. Performance model
 

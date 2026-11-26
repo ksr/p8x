@@ -6,7 +6,7 @@ their source in `../basic/`, `../os/`, etc.)
 
 | Document | Description |
 |----------|-------------|
-| [p8x-status.md](p8x-status.md) | Where P8X stands (October 2026): what runs today, the TTL card set's state, what is next. The detail is in [`../BACKLOG.md`](../BACKLOG.md). |
+| [p8x-status.md](p8x-status.md) | Where P8X stands (November 2026): what runs today, the TTL card set's state, what is next. The detail is in [`../BACKLOG.md`](../BACKLOG.md). |
 | [p8x-system-design.md](p8x-system-design.md) | System and card-by-card architecture reference; §3.2 has the as-built control-word layout. |
 | [p8x-card-standards.md](p8x-card-standards.md) | Design rules every plug-in card must follow (form factor, connector, decoupling, etc.). |
 | [p8x-monitor.md](p8x-monitor.md) | ROM monitor command reference and memory map. |
@@ -21,6 +21,7 @@ their source in `../basic/`, `../os/`, etc.)
 | [p8x-programmers-guide.pdf](p8x-programmers-guide.pdf) | Generated instruction-set reference (built by `../microcode/gen_progguide.py`). |
 | [p8x-isa-card.pdf](p8x-isa-card.pdf) | Printable instruction-set quick reference (GENERATED — `generators/gen_isa_card.py`). |
 | [p8x-memory-map.pdf](p8x-memory-map.pdf) | Printable memory map (GENERATED — `generators/gen_memmap_pdf.py`). |
+| [reference/README.md](reference/README.md) | Where the Matrox PG-640A manual (`reference/pg640a.pdf`, named by the graphics docs) is kept: out of this public repository since 2026-11-20. |
 
 The **FPGA** track has its own documentation tree rather than living here:
 [`../fpga/README.md`](../fpga/README.md) (milestones + layout),
@@ -30,10 +31,13 @@ memory/peripheral map, co-sim spec), [`../fpga/sim/README.md`](../fpga/sim/READM
 [`../fpga/tang-nano-20k/README.md`](../fpga/tang-nano-20k/README.md) (board build,
 pinout, flashing).
 
-The PDF is a generated artifact — regenerate it rather than editing:
+The three PDFs are generated artifacts — regenerate them rather than editing
+(from the repository root):
 
 ```sh
-python3 ../microcode/gen_progguide.py      # writes the guide PDF here
+python3 microcode/gen_progguide.py         # the programmer's guide (.md + .pdf)
+python3 generators/gen_isa_card.py         # the instruction-set card (.md + .pdf)
+python3 generators/gen_memmap_pdf.py       # the memory map PDF
 ```
 
 New to the abbreviations and signal names used throughout these docs? See the
