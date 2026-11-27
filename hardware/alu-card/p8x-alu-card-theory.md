@@ -66,8 +66,8 @@ that drive branches are produced.
                    │R0-7                                         │
         ┌──────────▼─────────┐ -DOEALU      ┌────────────────┐   │
         │U16 74244 ALU OUT   ├──► D0-7      │ FLAG REGISTER  │   │
-        └────────────────────┘              │ U17 74175 ZNV  │   │
-                                            │ U26 7474   C   │◄LDF/LDZN/SETC/CLRC
+        └────────────────────┘              │ U17 74175 ZN   │   │
+                                            │ U26 7474  C,V  │◄LDF/LDZN/SETC/CLRC
    A/B/T/T2 OUT buffers (U2/U4/U6/U8,        │ U18/U27 Z-det  │   │
    74244, each gated by -DOEx)  ──► D0-7    │ U34/U35 V-calc │   │
                                             └───────┬────────┘   │
@@ -129,18 +129,26 @@ Four flags, three storage elements:
   microcode asserts `LDZN` so Z/N instead reflect the *bus* byte (bus zero-detect
   `U27` 74260 over `D0–7`, and `D7`). That is how `LDA`/`LDB` set Z/N from the
   byte loaded, not from a stale ALU result.
-- **V (overflow)** also lives in `U17`. It is computed combinationally (rev C) by
+- **V (overflow)** lives in the second half of `U26` (7474). It is computed combinationally (rev C) by
   the sign-bit method: `V = (A7 ^ F7) & (A7 ^ B7 ^ ~ALUS2)`, where `A7`=A sign,
   `B7`=muxed-B sign, `F7`=raw result sign, and `~ALUS2` distinguishes add-like
   from subtract-like ops. `U34` (74HCT86) does the XORs, `U35` (74HCT08) the AND,
-  result `VSRC → U17.D3`. It is ungated by mode, so V is only *meaningful* right
-  after ADD/SUB/CMP (a documented convention).
-- **C** lives in its own `U26` (7474) so it can be force-set/cleared independently:
+  result `VSRC → U26.2D`. It is ungated by mode, so V is only *meaningful* right
+  after ADD/SUB/CMP (a documented convention). V is clocked with C, on `LDF` and
+  the restore only, so a load (`LDZN`) leaves it as it was: the microcode's
+  contract, and what the emulator and the FPGA do. Until 2026-11-27 V sat in
+  `U17.D3` and was clocked on `LDZN` too; every `LDZN` microword leaves the ALU
+  passing A (`F7 = A7`), so `VSRC` was 0 and each load cleared V. That broke the
+  signed result of `ADDW`/`SUBW`/`CMPW a,#` and `a,#w`, whose full-16-bit Z step
+  ends in an `LDZN`: `CMPW` of `$8000` with `$7FFF` read as not-less-than (the
+  `test_isa.asm` case E2).
+- **C** lives in the first half of `U26` (7474) so it can be force-set/cleared independently:
   `SETC`/`CLRC` drive its async preset/clear (via inverters in `U25`), `LDF` clocks
   it from the C-source mux `U29` (which picks the shifter carry-out when shifting,
   else the inverted 74181 carry).
 
-`U17` is clocked by `CLK & (LDF | LDZN | LDFL)` and `U26` by `CLK & (LDF | LDFL)`
+`U17` (Z, N) is clocked by `CLK & (LDF | LDZN | LDFL)` and both halves of `U26`
+(C, V) by `CLK & (LDF | LDFL)`
 (`U31`, with the enables from `U24` and `U37`), so flags update only on
 flag-affecting microsteps; `-RES` clears them.
 
@@ -154,11 +162,12 @@ for the C clock, and the spare OR `U24.3` makes `FENALL = (LDF | LDZN) | FENC` f
 `U17`. Added 2026-11-27: until then no card decoded DLD = 5, so on the TTL build
 RTI left the flags unchanged while the emulator and the FPGA restored them. The
 gate-level simulation (`tools/gatesim/run.sh alu-card`) checks the restore for all
-16 values, that no other DLD code touches the flags, and that LDZN and LDF behave
-as before.
+16 values, that no other DLD code touches the flags, that LDZN and LDF behave
+as before, and (with `VSRC` forced, the 74181s not being modelled) that LDZN keeps
+V while LDF and the restore load it and `SETC`/`CLRC` leave it alone.
 
 ### 3.6 Flag output (U23)
-All four flags (`FQC` from `U26`, `FQZ/FQN/FQV` from `U17`) feed `U23` (74244),
+All four flags (`FQC`/`FQV` from `U26`, `FQZ/FQN` from `U17`) feed `U23` (74244),
 which both (a) drives the flag byte onto `D0–7` when `-DOEFLG` is asserted (so the
 flags can be pushed/pulled, e.g. for interrupts), and (b) continuously drives the
 dedicated bus flag lines `FC/FZ/FN/FV` (A27–A30) that the control card's condition
@@ -193,7 +202,8 @@ mux reads for branches.
 - **V validity:** V is only meaningful after ADD/SUB/CMP (ungated by mode) — a
   software/microcode convention, not a hardware fault.
 - **Spare inputs:** tied to GND (2026-11-23): `U17` D4, `U22` sections 3 and 4, and
-  sections 2 to 4 of `U28`, `U29`, `U30`, 23 pins that floated before. An HCT input
+  sections 2 to 4 of `U28`, `U29`, `U30`, 23 pins that floated before. `U17` D3
+  joined them on 2026-11-27, when V moved to `U26`. An HCT input
   must not float. The pads join the inner GND plane, so no track changed.
 - Confirmed OK: DOE one-hot (no on-card bus contention), 74182 unused groups tied
   off, conventional-carry inversion, Z/N source muxing.

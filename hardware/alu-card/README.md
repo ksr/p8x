@@ -23,7 +23,7 @@ the **FLAGS** register. All arithmetic and logic happens here.
 | U11 | 74182 | Carry-lookahead generator across the two 74181s |
 | U12–U15 | 74157 | Two-stage shifter (pass / <<1 / >>1) |
 | U16 | 74244 | ALU-result bus driver |
-| U17 | 74175 | Z, N and V flag flip-flops |
+| U17 | 74175 | Z and N flag flip-flops (D3, D4 spare) |
 | U18 | 74260 | Zero-detect NOR over the result |
 | U19 | 74HCT08 | AND glue (zero combine, ALU LED) |
 | U20 | 74138 | DOE decoder (codes 1–6) |
@@ -32,7 +32,7 @@ the **FLAGS** register. All arithmetic and logic happens here.
 | U23 | 74244 | FLAGS → data bus driver |
 | U24 | 74HCT32 | OR: flag clock enables (`LDF | LDZN`, and with the restore `LDF | LDZN | LDFL`), any-shift detect |
 | U25 | 74HCT00 | NAND: inverts the 74181 `Cn+4` (net `CFLGI`), `SETC`/`CLRC`/LDF-LED inverters |
-| U26 | 7474 | C flag flip-flop (async preset/clear for `SETC`/`CLRC`) |
+| U26 | 7474 | C flag flip-flop (async preset/clear for `SETC`/`CLRC`); V flag in the second half |
 | U27 | 74260 | Bus zero-detect over `D0–7` (Z on a load) |
 | U28 | 74157 | Shift-out select (bit 0 or bit 7) |
 | U29 | 74157 | C source mux: shift-out when shifting, else inverted `Cn+4` |
@@ -83,7 +83,9 @@ by U16 (74244) when DOE selects the ALU result (code 5).
   (shift-out when shifting, else the inverted `Cn+4`); `SETC`/`CLRC` force it.
 - **V** (overflow): signed overflow since rev C, by the sign-bit method
   `V = (A7^F7) & (A7^B7^~ALUS2)` in U34/U35, ungated by M (meaningful after
-  ADD/SUB/CMP).
+  ADD/SUB/CMP). It sits in U26's second half and is clocked with C, so a load
+  (`LDZN`) leaves it alone. Until 2026-11-27 it was in U17 and every load cleared
+  it, which broke the signed result of `CMPW`/`SUBW`/`ADDW a,#` (`test_isa` E2).
 - **Restore** (DLD code 5, `-LDFL` from U21): RTI loads all four flags from the
   bus byte it popped, in the DOE=6 order (`D0`=C, `D1`=Z, `D2`=N, `D3`=V). The U36
   mux puts `D0–D3` on the four flip-flop D inputs while `-LDFL` is low, and both
@@ -91,7 +93,7 @@ by U16 (74244) when DOE selects the ALU result (code 5).
   so on the TTL build RTI left the flags as they were, unlike the emulator and
   the FPGA.
 
-U17 (Z, N, V) is clocked by `CLK & (LDF | LDZN | LDFL)` and U26 (C) by
+U17 (Z, N) is clocked by `CLK & (LDF | LDZN | LDFL)` and U26 (C, V) by
 `CLK & (LDF | LDFL)` (U24/U31/U37), so other cycles don't disturb the flags;
 `-RES` clears them. U23 (74244) drives FLAGS onto the bus for
 PHP-style pushes (DOE code 6). See

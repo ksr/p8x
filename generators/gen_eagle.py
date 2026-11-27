@@ -1094,7 +1094,7 @@ ic={"U1":("74377V2","A REG"),"U2":("74244","A OUT"),"U3":("74377V2","B REG"),
  "U22":("74157","FLAG MUX"),"U23":("74244","FLAG OUT"),
  "U24":("GATES14","74HCT32"),"U25":("GATES14","74HCT00"),
  # rev B flag-register redesign (split C; LDZN Z/N; SETC/CLRC; carry-coupled shifter)
- "U26":("7474","C FLAG FF"),"U27":("74260","BUS Z-DET"),
+ "U26":("7474","C/V FLAG FF"),"U27":("74260","BUS Z-DET"),
  "U28":("74157","SHIFT-OUT MUX"),"U29":("74157","C-SRC MUX"),
  "U30":("74157","SHIN MUX"),"U31":("GATES14","74HCT08"),
  # rev C: 2nd ALU-input mux. B-side operand = B register (BSEL=0) or T (BSEL=1).
@@ -1170,15 +1170,15 @@ for b in range(3): N(n,"D%d"%(5+b),("U27",["A2","B2","C2"][b]))
 N(n,"GND",("U27","D2"),("U27","E2"))
 N(n,"ZBL",("U27","Y1"),("U19","2A")); N(n,"ZBH",("U27","Y2"),("U19","2B"))
 N(n,"ZBUS",("U19","2Y"))
-# Z,N,V flip-flops in U17 (74175), clocked on (LDF|LDZN|LDFL). Their D inputs
-# (and C's) come through the restore mux U36 (74157, S=-LDFL): B = the normal
+# Z,N flip-flops in U17 (74175), clocked on (LDF|LDZN|LDFL); C and V in U26
+# (7474), clocked on (LDF|LDFL). Their D inputs come through the restore mux U36 (74157, S=-LDFL): B = the normal
 # sources (NC, ZSRC, NSRC, VSRC), A = D0-D3 while DLD=5 restores the flags
 # (RTI; bit order C,Z,N,V = the DOE=6 flag byte). 2026-11-27: before this, DLD=5
 # had no decoder output and no bus path into the flags at all.
 N(n,"-LDFL",("U21","Y5"),("U36","S"),("U37","1B")); N(n,"GND",("U36","!G"))
 for i,(src,dst) in enumerate((("NC","RC"),("ZSRC","RZ"),("NSRC","RN"),("VSRC","RV"))):
     N(n,"D%d"%i,("U36","A%d"%(i+1))); N(n,src,("U36","B%d"%(i+1))); N(n,dst,("U36","Y%d"%(i+1)))
-N(n,"RZ",("U17","D1")); N(n,"RN",("U17","D2")); N(n,"RV",("U17","D3"))
+N(n,"RZ",("U17","D1")); N(n,"RN",("U17","D2"))
 # rev C: V (signed overflow). V = (A7^F7) & (A7^B7^~ALUS2). A7=AQ7, B7=BMX7
 # (muxed B operand), F7=raw ALU result sign. U34 (74HCT86) XORs, U35 (74HCT08) AND.
 N(n,"AQ7",("U34","1A"));   N(n,"F7",("U34","1B"));    N(n,"VX1",("U34","1Y"))   # A7^F7
@@ -1197,7 +1197,11 @@ N(n,"NC",("U29","Y1")); N(n,"GND",("U29","!G"))
 # C flag in its own 7474 (U26): clocked on LDF; SETC/CLRC force via preset/clear
 N(n,"RC",("U26","1D")); N(n,"CLKFC",("U26","1CLK"))
 N(n,"-SETCb",("U26","!1PRE")); N(n,"-CCLR",("U26","!1CLR"))
-N(n,"VCC",("U26","!2PRE"),("U26","!2CLR")); N(n,"GND",("U26","2D"),("U26","2CLK"))
+# V flag in U26's second half (2026-11-27): clocked with C on LDF|LDFL, so a load
+# (LDZN) leaves V alone, as in the emulator and the FPGA. In U17 it was clocked on
+# LDZN too and took VSRC, which is 0 in every LDZN word (ALU passes A).
+N(n,"RV",("U26","2D")); N(n,"CLKFC",("U26","2CLK"))
+N(n,"VCC",("U26","!2PRE")); N(n,"-RES",("U26","!2CLR"))
 # shifter shift-in mux U30 (74157, S=SHCIN): CIN (A1) else current C (B1)
 N(n,"SHCIN",("U30","S")); N(n,"FQC",("U30","B1"))
 N(n,"SHIN",("U30","Y1"),("U12","B1"),("U15","B4")); N(n,"GND",("U30","!G"))
@@ -1214,11 +1218,11 @@ N(n,"CLK",("U31","1A"),("U31","2B")); N(n,"CLKFC",("U31","1Y"))   # CLK & (LDF|L
 N(n,"CLKFZN",("U31","2Y"),("U17","CLK"))          # CLK & (LDF|LDZN|LDFL)
 N(n,"-RES",("U31","3A")); N(n,"-CLRCb",("U31","3B")); N(n,"-CCLR",("U31","3Y"))
 N(n,"GND",("U31","4A"),("U31","4B"))
-# flag outputs -> U23 buffer: FQC from U26, FQZ/FQN/FQV from U17
+# flag outputs -> U23 buffer: FQC/FQV from U26, FQZ/FQN from U17
 N(n,"FQC",("U26","1Q"),("U23","A1"),("U23","A5"))
 N(n,"FQZ",("U17","Q1"),("U23","A2"),("U23","A6"))
 N(n,"FQN",("U17","Q2"),("U23","A3"),("U23","A7"))
-N(n,"FQV",("U17","Q3"),("U23","A4"),("U23","A8"))
+N(n,"FQV",("U26","2Q"),("U23","A4"),("U23","A8"))
 for i in range(4): N(n,"D%d"%i,("U23","Y%d"%(i+1)))
 for i,f in enumerate(("FC","FZ","FN","FV")): N(n,f,("U23","Y%d"%(i+5)))
 N(n,"-DOEFLG",("U20","Y6"),("U23","!G1"))
@@ -1230,7 +1234,7 @@ N(n,"ALUK",("U19","3Y"),("LED4","K"))
 N(n,"LDFK",("U25","3Y"),("LED5","K"))
 N(n,"GND",("U19","4A"),("U19","4B"),("U24","4A"),("U24","4B"),("LED3","K"))
 # spare inputs of U17/U22/U28/U29/U30 to GND: an HCT input must not float (2026-11-23)
-N(n,"GND",("U17","D4"),*[("U22",p) for p in ("A3","B3","A4","B4")],
+N(n,"GND",("U17","D3"),("U17","D4"),*[("U22",p) for p in ("A3","B3","A4","B4")],
   *[(u,p) for u in ("U28","U29","U30") for p in ("A2","B2","A3","B3","A4","B4")])
 N(n,"VCC",("RP1","1"),("R4","1"),("R5","1"))
 N(n,"LEDP",("RP1","2"),("LED3","A"))

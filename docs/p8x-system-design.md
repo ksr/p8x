@@ -187,7 +187,7 @@ RES̄ forces a synchronous load of $0000 into P0 (gates the P0 load strobes and 
 - **A, B, T, T2:** each 74377 (load) + 74244 (bus drive) = 8 chips. A and B feed the 74181 inputs directly
 - **ALU:** 2× 74181 + 74182, function lines straight from backplane
 - **Shifter:** 2× 74157 after the ALU (pass / <<1 / >>1, carry in/out for rotates), then 74244 to the bus
-- **Flags:** 74175 (C, Z, N, V), Z from 74260+gate over the shifter output, latched on LDF. FLAGS↔bus paths for push/pop of status
+- **Flags:** 74175 (Z, N) and 7474 (C, V), Z from 74260+gate over the shifter output, latched on LDF. FLAGS↔bus paths for push/pop of status
 - **Decode:** 1× 74154 for DOE codes 1–6, 1× 74154 for DLD codes 1–5
 
 **BOM:** ≈ **18 chips**
