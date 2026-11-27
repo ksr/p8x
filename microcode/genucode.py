@@ -62,6 +62,12 @@ def op(code,name,shape,*steps):
     assert len(steps)<=15, "%s %s: %d steps (max 15)"%(name,shape,len(steps))
     assert code not in U, "opcode $%02X defined twice (%s)"%(code,name)
     U[code]=[(s,s) if not isinstance(s,tuple) else s for s in steps]
+    # A shift without SHCIN shifts in the CIN pin on the ALU card (U30.A1); the
+    # emulator and the FPGA shift in 0. So such a word must drive CIN pin = 0.
+    for pair in U[code]:
+        for cw in pair:
+            if (cw>>19)&3 and not (cw>>28)&1:
+                assert not (cw>>18)&1, "%s %s: shift without SHCIN needs cin=0"%(name,shape)
     OPC[(name,shape)]=code
 
 NOP=w(urst=1)
