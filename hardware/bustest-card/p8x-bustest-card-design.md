@@ -228,9 +228,10 @@ driven independently.
    `CLKB` is high asserts `-MEMW` *immediately*, while address bytes are still
    arriving — strobing writes into whatever addresses flicker past. Parking at
    `00` gates every strobe off while the word settles.
-2. **Gated clocks.** The ALU's flag register (U17) is clocked by
-   `CLK & (LDF | LDZN)` through U31. Raise `LDF` while `CLK` is already high and
-   that AND gate goes 0→1 — **a manufactured rising edge, latching phantom flags.**
+2. **Gated clocks.** The ALU's flag flip-flops are clocked through U31 (AND):
+   Z and N (U17) by `CLK & (LDF | LDZN | LDFL)`, C and V (U26) by
+   `CLK & (LDF | LDFL)` (LDFL = DLD 5, RTI's restore; since 2026-11-27). Raise `LDF`
+   while `CLK` is already high and that AND gate goes 0→1 — **a manufactured rising edge, latching phantom flags.**
    The real machine cannot do this: its pipeline latches on `CLK̄`, so the control
    word only ever changes as `CLK` falls. This card reproduces that discipline by
    always returning to `CLK`=0 before the word changes.
