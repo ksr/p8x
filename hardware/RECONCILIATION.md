@@ -58,7 +58,12 @@ emulator and/or on the FPGA graphics card.
   The address map (`IR | step | cond`) and sequencer are unchanged; a wider ISA is
   just fuller EPROM contents. Reburn from the current `genucode.py`; no rewire, no
   bigger part. (The CPU address space is still 16-bit/64 KB; word ops use it too.)
-- **Register bank, ALU cards.** No architectural change.
+- **Register bank card.** No architectural change.
+- **ALU card.** No change for the ISA growth. One fault found and fixed before any
+  build (2026-11-27): RTI's flag restore (DLD = 5) had no decoder output and no bus
+  path into the flags, so the TTL build would have left the flags unchanged where
+  the emulator and the FPGA restore them. Two chips added (U36 74HCT157, U37
+  74HCT00); see the ALU card README.
 - **I/O card.** `$FF00` switches / `$FF02` LEDs / `$FF04-05` ACIA unchanged. These
   ports are now named in the single-source memory map (`SWITCHES`, `LEDS`).
 - **CF-IDE card.** `$FF10-$FF17`, unchanged.

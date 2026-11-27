@@ -1101,7 +1101,10 @@ ic={"U1":("74377V2","A REG"),"U2":("74244","A OUT"),"U3":("74377V2","B REG"),
  "U32":("74157","B-MUX LO"),"U33":("74157","B-MUX HI"),
  # rev C: V (signed overflow) derivation — sign-bit method, ungated by M
  # (valid after ADD/SUB/CMP). U34 XORs, U35 ANDs.
- "U34":("GATES14","74HCT86"),"U35":("GATES14","74HCT08")}
+ "U34":("GATES14","74HCT86"),"U35":("GATES14","74HCT08"),
+ # 2026-11-27: RTI's flag restore (DLD=5 -> -LDFL on U21.Y5). U36 puts D0-D3 on
+ # the four flag D inputs during -LDFL; U37.1 widens the flag clock enables.
+ "U36":("74157","FLAG RESTORE"),"U37":("GATES14","74HCT00")}
 sm={"RP1":("RES","1K"),"LED3":("LED","PWR-GRN"),
  "R4":("RES","1K"),"LED4":("LED","ALU-GRN"),"R5":("RES","1K"),"LED5":("LED","LDF-YEL")}
 REGS=(("U1","U2","A","Y1"),("U3","U4","B","Y2"),("U5","U6","T","Y3"),("U7","U8","T2","Y4"))
@@ -1167,8 +1170,15 @@ for b in range(3): N(n,"D%d"%(5+b),("U27",["A2","B2","C2"][b]))
 N(n,"GND",("U27","D2"),("U27","E2"))
 N(n,"ZBL",("U27","Y1"),("U19","2A")); N(n,"ZBH",("U27","Y2"),("U19","2B"))
 N(n,"ZBUS",("U19","2Y"))
-# Z,N,V flip-flops in U17 (74175), clocked on (LDF|LDZN); V hardwired 0
-N(n,"ZSRC",("U17","D1")); N(n,"NSRC",("U17","D2")); N(n,"VSRC",("U17","D3"))
+# Z,N,V flip-flops in U17 (74175), clocked on (LDF|LDZN|LDFL). Their D inputs
+# (and C's) come through the restore mux U36 (74157, S=-LDFL): B = the normal
+# sources (NC, ZSRC, NSRC, VSRC), A = D0-D3 while DLD=5 restores the flags
+# (RTI; bit order C,Z,N,V = the DOE=6 flag byte). 2026-11-27: before this, DLD=5
+# had no decoder output and no bus path into the flags at all.
+N(n,"-LDFL",("U21","Y5"),("U36","S"),("U37","1B")); N(n,"GND",("U36","!G"))
+for i,(src,dst) in enumerate((("NC","RC"),("ZSRC","RZ"),("NSRC","RN"),("VSRC","RV"))):
+    N(n,"D%d"%i,("U36","A%d"%(i+1))); N(n,src,("U36","B%d"%(i+1))); N(n,dst,("U36","Y%d"%(i+1)))
+N(n,"RZ",("U17","D1")); N(n,"RN",("U17","D2")); N(n,"RV",("U17","D3"))
 # rev C: V (signed overflow). V = (A7^F7) & (A7^B7^~ALUS2). A7=AQ7, B7=BMX7
 # (muxed B operand), F7=raw ALU result sign. U34 (74HCT86) XORs, U35 (74HCT08) AND.
 N(n,"AQ7",("U34","1A"));   N(n,"F7",("U34","1B"));    N(n,"VX1",("U34","1Y"))   # A7^F7
@@ -1185,19 +1195,23 @@ N(n,"SH0",("U24","2A")); N(n,"SH1",("U24","2B")); N(n,"SHANY",("U24","2Y"))
 N(n,"SHANY",("U29","S")); N(n,"SHOUT",("U29","B1"))   # CFLGI on A1 (wired above)
 N(n,"NC",("U29","Y1")); N(n,"GND",("U29","!G"))
 # C flag in its own 7474 (U26): clocked on LDF; SETC/CLRC force via preset/clear
-N(n,"NC",("U26","1D")); N(n,"CLKFC",("U26","1CLK"))
+N(n,"RC",("U26","1D")); N(n,"CLKFC",("U26","1CLK"))
 N(n,"-SETCb",("U26","!1PRE")); N(n,"-CCLR",("U26","!1CLR"))
 N(n,"VCC",("U26","!2PRE"),("U26","!2CLR")); N(n,"GND",("U26","2D"),("U26","2CLK"))
 # shifter shift-in mux U30 (74157, S=SHCIN): CIN (A1) else current C (B1)
 N(n,"SHCIN",("U30","S")); N(n,"FQC",("U30","B1"))
 N(n,"SHIN",("U30","Y1"),("U12","B1"),("U15","B4")); N(n,"GND",("U30","!G"))
 # clock gates (U31 AND) and flag forces (U24 OR / U25 NAND inverters)
-N(n,"LDF",("U24","1A"),("U31","1B"),("U25","3A"),("U25","3B")); N(n,"LDZN",("U24","1B"))
-N(n,"FENZN",("U24","1Y"),("U31","2A"))            # LDF | LDZN
+N(n,"LDF",("U24","1A"),("U25","3A"),("U25","3B")); N(n,"LDZN",("U24","1B"))
+N(n,"FENZN",("U24","1Y"),("U24","3A"))            # LDF | LDZN
+N(n,"LDFK",("U37","1A"))                          # -LDF (U25.3, also the LDF LED)
+N(n,"FENC",("U37","1Y"),("U31","1B"),("U24","3B")) # LDF | LDFL = NAND(-LDF,-LDFL)
+N(n,"FENALL",("U24","3Y"),("U31","2A"))           # LDF | LDZN | LDFL
+N(n,"GND",*[("U37",p) for p in ("2A","2B","3A","3B","4A","4B")])
 N(n,"SETC",("U25","1A"),("U25","1B")); N(n,"-SETCb",("U25","1Y"))
 N(n,"CLRC",("U25","4A"),("U25","4B")); N(n,"-CLRCb",("U25","4Y"))
-N(n,"CLK",("U31","1A"),("U31","2B")); N(n,"CLKFC",("U31","1Y"))   # CLK & LDF
-N(n,"CLKFZN",("U31","2Y"),("U17","CLK"))          # CLK & (LDF|LDZN)
+N(n,"CLK",("U31","1A"),("U31","2B")); N(n,"CLKFC",("U31","1Y"))   # CLK & (LDF|LDFL)
+N(n,"CLKFZN",("U31","2Y"),("U17","CLK"))          # CLK & (LDF|LDZN|LDFL)
 N(n,"-RES",("U31","3A")); N(n,"-CLRCb",("U31","3B")); N(n,"-CCLR",("U31","3Y"))
 N(n,"GND",("U31","4A"),("U31","4B"))
 # flag outputs -> U23 buffer: FQC from U26, FQZ/FQN/FQV from U17
@@ -1214,8 +1228,7 @@ for u,fld in (("U20","DOE"),("U21","DLD")):
     N(n,"%s3"%fld,(u,"!G2A")); N(n,"VCC",(u,"G1")); N(n,"GND",(u,"!G2B"))
 N(n,"ALUK",("U19","3Y"),("LED4","K"))
 N(n,"LDFK",("U25","3Y"),("LED5","K"))
-N(n,"GND",("U19","4A"),("U19","4B"),("U24","3A"),
-  ("U24","3B"),("U24","4A"),("U24","4B"),("LED3","K"))
+N(n,"GND",("U19","4A"),("U19","4B"),("U24","4A"),("U24","4B"),("LED3","K"))
 # spare inputs of U17/U22/U28/U29/U30 to GND: an HCT input must not float (2026-11-23)
 N(n,"GND",("U17","D4"),*[("U22",p) for p in ("A3","B3","A4","B4")],
   *[(u,p) for u in ("U28","U29","U30") for p in ("A2","B2","A3","B3","A4","B4")])
@@ -1226,7 +1239,7 @@ card("alu-card","P8X ALU CARD REV B (conventional carry, LDZN, SETC/CLRC, carry-
  {"D%d"%i for i in range(8)}|{"DOE%d"%i for i in range(4)}|{"DLD%d"%i for i in range(4)}|
  {"ALUS0","ALUS1","ALUS2","ALUS3","ALUM","CIN","SH0","SH1","LDF","CLK","-RES",
   "FC","FZ","FN","FV","LDZN","SHCIN","SETC","CLRC","BSEL"},
- labels={"U31":"CLK/FORCE GATES","U34":"V XOR","U35":"V AND"})
+ labels={"U31":"CLK/FORCE GATES","U34":"V XOR","U35":"V AND","U37":"FLAG CLK EN"})
 
 # ===================== I/O CARD ===============================================
 n={}

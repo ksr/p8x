@@ -62,3 +62,28 @@ module dev_74260(input A1,B1,C1,D1,E1,A2,B2,C2,D2,E2,
                  output Y1,Y2, input VCC,GND);
   assign Y1=~(A1|B1|C1|D1|E1); assign Y2=~(A2|B2|C2|D2|E2);
 endmodule
+
+// quad 2:1 mux, S=0 -> A, S=1 -> B; !G high forces the outputs low (2026-11-27)
+module dev_74157(input S,A1,B1,A2,B2,A3,B3,A4,B4,nG,
+                 output Y1,Y2,Y3,Y4, input VCC,GND);
+  assign Y1 = ~nG & (S ? B1 : A1); assign Y2 = ~nG & (S ? B2 : A2);
+  assign Y3 = ~nG & (S ? B3 : A3); assign Y4 = ~nG & (S ? B4 : A4);
+endmodule
+
+// quad D flip-flop, rising CLK, async active-low clear
+module dev_74175(input nCLR,CLK,D1,D2,D3,D4,
+                 output reg Q1,Q2,Q3,Q4, output nQ1,nQ2,nQ3,nQ4, input VCC,GND);
+  always @(posedge CLK or negedge nCLR)
+    if (!nCLR) {Q1,Q2,Q3,Q4} <= 4'b0; else {Q1,Q2,Q3,Q4} <= {D1,D2,D3,D4};
+  assign nQ1=~Q1; assign nQ2=~Q2; assign nQ3=~Q3; assign nQ4=~Q4;
+endmodule
+
+// dual D flip-flop, rising CLK, async active-low preset and clear
+module dev_7474(input n1CLR,P1D,P1CLK,n1PRE,n2CLR,P2D,P2CLK,n2PRE,
+                output reg P1Q,P2Q, output n1Q,n2Q, input VCC,GND);
+  always @(posedge P1CLK or negedge n1CLR or negedge n1PRE)
+    if (!n1CLR) P1Q <= 1'b0; else if (!n1PRE) P1Q <= 1'b1; else P1Q <= P1D;
+  always @(posedge P2CLK or negedge n2CLR or negedge n2PRE)
+    if (!n2CLR) P2Q <= 1'b0; else if (!n2PRE) P2Q <= 1'b1; else P2Q <= P2D;
+  assign n1Q=~P1Q; assign n2Q=~P2Q;
+endmodule

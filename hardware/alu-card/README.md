@@ -27,10 +27,10 @@ the **FLAGS** register. All arithmetic and logic happens here.
 | U18 | 74260 | Zero-detect NOR over the result |
 | U19 | 74HCT08 | AND glue (zero combine, ALU LED) |
 | U20 | 74138 | DOE decoder (codes 1–6) |
-| U21 | 74138 | DLD decoder (codes 1–4, the four registers) |
+| U21 | 74138 | DLD decoder (codes 1–4, the four registers; 5, the flag restore `-LDFL`) |
 | U22 | 74157 | Z/N source mux: ALU result, or the bus byte on a load (`LDZN`) |
 | U23 | 74244 | FLAGS → data bus driver |
-| U24 | 74HCT32 | OR: flag clock enable (`LDF | LDZN`), any-shift detect |
+| U24 | 74HCT32 | OR: flag clock enables (`LDF | LDZN`, and with the restore `LDF | LDZN | LDFL`), any-shift detect |
 | U25 | 74HCT00 | NAND: inverts the 74181 `Cn+4` (net `CFLGI`), `SETC`/`CLRC`/LDF-LED inverters |
 | U26 | 7474 | C flag flip-flop (async preset/clear for `SETC`/`CLRC`) |
 | U27 | 74260 | Bus zero-detect over `D0–7` (Z on a load) |
@@ -41,6 +41,8 @@ the **FLAGS** register. All arithmetic and logic happens here.
 | U32, U33 | 74157 | B-operand mux (`BSEL`): B register or T (rev C) |
 | U34 | 74HCT86 | XOR: V (signed overflow) derivation (rev C) |
 | U35 | 74HCT08 | AND: V derivation (rev C) |
+| U36 | 74157 | Flag restore mux (`-LDFL`): `D0–D3` or the normal C/Z/N/V sources to the flag flip-flops |
+| U37 | 74HCT00 | NAND: C clock enable `LDF | LDFL` = NAND(`-LDF`, `-LDFL`) |
 
 ## How it works
 
@@ -82,9 +84,16 @@ by U16 (74244) when DOE selects the ALU result (code 5).
 - **V** (overflow): signed overflow since rev C, by the sign-bit method
   `V = (A7^F7) & (A7^B7^~ALUS2)` in U34/U35, ungated by M (meaningful after
   ADD/SUB/CMP).
+- **Restore** (DLD code 5, `-LDFL` from U21): RTI loads all four flags from the
+  bus byte it popped, in the DOE=6 order (`D0`=C, `D1`=Z, `D2`=N, `D3`=V). The U36
+  mux puts `D0–D3` on the four flip-flop D inputs while `-LDFL` is low, and both
+  flag clocks are enabled. Added 2026-11-27: before then no card decoded DLD=5,
+  so on the TTL build RTI left the flags as they were, unlike the emulator and
+  the FPGA.
 
-U17 (Z, N, V) is clocked by `CLK & (LDF | LDZN)` (U24/U31), so non-ALU cycles don't
-disturb the flags; `-RES` clears it. U23 (74244) drives FLAGS onto the bus for
+U17 (Z, N, V) is clocked by `CLK & (LDF | LDZN | LDFL)` and U26 (C) by
+`CLK & (LDF | LDFL)` (U24/U31/U37), so other cycles don't disturb the flags;
+`-RES` clears them. U23 (74244) drives FLAGS onto the bus for
 PHP-style pushes (DOE code 6). See
 [p8x-alu-card-theory.md](p8x-alu-card-theory.md) §3.5 for the detail.
 

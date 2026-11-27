@@ -1,6 +1,7 @@
 #!/bin/sh
 # run.sh -- gate-level netlist simulation for the P8X boards.
 #   tools/gatesim/run.sh                 # memory-card address-decode check
+#   tools/gatesim/run.sh alu-card        # alu-card flag-register check
 #   tools/gatesim/run.sh <card>          # emit that card's structural Verilog to stdout
 #
 # Translates a gen_eagle card netlist to structural Verilog (netlist2v.py),
@@ -19,6 +20,12 @@ case "$card" in
     echo "== gate-level sim: memory-card address decode =="
     iverilog -g2012 -o "/tmp/p8x_gatesim_${card}" \
         "$HERE/prims.v" "$DUT" "$HERE/tb_memdecode.v"
+    vvp "/tmp/p8x_gatesim_${card}" 2>/dev/null | grep -v '\$finish'
+    ;;
+  alu-card)
+    echo "== gate-level sim: alu-card flag register =="
+    iverilog -g2012 -o "/tmp/p8x_gatesim_${card}" \
+        "$HERE/prims.v" "$DUT" "$HERE/tb_aluflags.v"
     vvp "/tmp/p8x_gatesim_${card}" 2>/dev/null | grep -v '\$finish'
     ;;
   *)

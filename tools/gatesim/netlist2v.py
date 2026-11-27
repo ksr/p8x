@@ -21,7 +21,8 @@ import gen_eagle as GE
 DEV = GE.DEV
 
 PRIM = {"7430":"dev_7430", "74138":"dev_74138", "HEX14":"dev_HEX14",
-        "7410":"dev_7410", "74260":"dev_74260"}
+        "7410":"dev_7410", "74260":"dev_74260",
+        "74157":"dev_74157", "74175":"dev_74175", "7474":"dev_7474"}
 GATES14 = {"74HCT00":"dev_7400","74HC00":"dev_7400", "74HCT08":"dev_7408","74HC08":"dev_7408",
            "74HCT32":"dev_7432","74HC32":"dev_7432", "74HCT86":"dev_7486","74HC86":"dev_7486"}
 # devices intentionally not modelled (loads / passives / connectors)

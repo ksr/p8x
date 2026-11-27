@@ -140,8 +140,22 @@ Four flags, three storage elements:
   it from the C-source mux `U29` (which picks the shifter carry-out when shifting,
   else the inverted 74181 carry).
 
-`U17` is clocked by `CLK & (LDF | LDZN)` (`U31`) so flags update only on
-flag-affecting microsteps; `-RES` clears it.
+`U17` is clocked by `CLK & (LDF | LDZN | LDFL)` and `U26` by `CLK & (LDF | LDFL)`
+(`U31`, with the enables from `U24` and `U37`), so flags update only on
+flag-affecting microsteps; `-RES` clears them.
+
+**Restore (DLD = 5, `-LDFL`).** RTI pops the saved flag byte into T and then
+drives it back with `DOE`=T, `DLD`=FLAGS. `U21`'s Y5 output is `-LDFL`. It selects
+the A side of `U36` (74157), so the flip-flop D inputs take `D0`→C, `D1`→Z, `D2`→N
+and `D3`→V, the same bit order `U23` drives for DOE = 6; at every other time
+`U36` passes the normal sources (`NC` from `U29`, `ZSRC`/`NSRC` from `U22`, `VSRC`
+from `U35`). The enables: `U37.1` makes `FENC = NAND(-LDF, -LDFL) = LDF | LDFL`
+for the C clock, and the spare OR `U24.3` makes `FENALL = (LDF | LDZN) | FENC` for
+`U17`. Added 2026-11-27: until then no card decoded DLD = 5, so on the TTL build
+RTI left the flags unchanged while the emulator and the FPGA restored them. The
+gate-level simulation (`tools/gatesim/run.sh alu-card`) checks the restore for all
+16 values, that no other DLD code touches the flags, and that LDZN and LDF behave
+as before.
 
 ### 3.6 Flag output (U23)
 All four flags (`FQC` from `U26`, `FQZ/FQN/FQV` from `U17`) feed `U23` (74244),
